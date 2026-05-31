@@ -1,0 +1,9 @@
+# Constant benchmark (Nguyen variants with real-valued constants).
+- {name: Constant-1, suite: constant, expr: "3.39*x0**3 + 2.12*x0**2 + 1.78*x0", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Constant-2, suite: constant, expr: "sin(x0**2)*cos(x0) - 0.75", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Constant-3, suite: constant, expr: "sin(1.5*x0)*cos(0.5*x1)", variables: [x0, x1], train: {sampler: uniform, range: [0, 1], n: 256}, test: {sampler: uniform, range: [0, 1], n: 1024}}
+- {name: Constant-4, suite: constant, expr: "2.7*x0**x1", variables: [x0, x1], train: {sampler: uniform, range: [0, 1], n: 256}, test: {sampler: uniform, range: [0, 1], n: 1024}}
+- {name: Constant-5, suite: constant, expr: "sqrt(1.23*x0)", variables: [x0], train: {sampler: uniform, range: [0, 4], n: 256}, test: {sampler: uniform, range: [0, 4], n: 1024}}
+- {name: Constant-6, suite: constant, expr: "x0**0.426", variables: [x0], train: {sampler: uniform, range: [0, 2], n: 256}, test: {sampler: uniform, range: [0, 2], n: 1024}}
+- {name: Constant-7, suite: constant, expr: "2*sin(1.3*x0)*cos(x1)", variables: [x0, x1], train: {sampler: uniform, range: [0, 1], n: 256}, test: {sampler: uniform, range: [0, 1], n: 1024}}
+- {name: Constant-8, suite: constant, expr: "log(x0 + 1.4) + log(x0**2 + 1.3)", variables: [x0], train: {sampler: uniform, range: [0, 2], n: 256}, test: {sampler: uniform, range: [0, 2], n: 1024}}

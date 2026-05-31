@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Generated artifacts
+/data/
+/checkpoints/
+/results/
+*.pt
+*.ckpt
+
+# External clones (reference / large data; keep code-tracking out)
+/external/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store

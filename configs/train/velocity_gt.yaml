@@ -1,0 +1,28 @@
+seed: 0
+out: checkpoints
+num_tasks: 2000
+eta: 1.0
+max_support: 128
+gen:
+  num_vars: 1
+  max_depth: 4
+  K: 8
+  probe_size: 128
+  ops: [add, sub, mul, sin, cos, square]
+energy:
+  lambda_rank: 0.01
+  lambda_move: 0.01
+  lambda_op: 0.01
+  projection: ridge
+  rho: 0.001
+model:
+  hidden: 128
+  row_layers: 2
+  heads: 4
+train:
+  lr: 0.0003
+  steps: 3000
+  batch_size: 16
+  metric_weight: 0.0
+  grad_clip: 1.0
+  log_every: 50

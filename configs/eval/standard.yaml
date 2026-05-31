@@ -1,0 +1,10 @@
+K: 8
+ops_ids: [0, 1, 2, 5, 6, 7]   # add, sub, mul, sin, cos, square
+rollout:
+  max_steps: 16
+  grid: 5
+  step_size: 0.3
+  eta: 1.0
+  eps: 0.0001
+  greedy: true
+  max_support: 128

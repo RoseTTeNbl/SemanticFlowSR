@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semflow_sr"
+version = "0.1.0"
+description = "Semantic-conditioned local velocity flow for symbolic regression"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "numpy",
+    "scipy",
+    "sympy",
+    "pyyaml",
+    "pandas",
+    "scikit-learn",
+    "tqdm",
+    "einops",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["semflow_sr*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

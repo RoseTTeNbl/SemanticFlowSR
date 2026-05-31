@@ -1,0 +1,8 @@
+# Standard SR formula benchmarks (Nguyen/Constant/Livermore/Jin) + PMLB subset.
+suites: [nguyen, constant, livermore, jin]
+seeds: [0, 1, 2, 3, 4]
+materialized_root: data/materialized
+pmlb:
+  root: external/pmlb
+  pattern: feynman
+  out: data/pmlb/feynman

@@ -1,0 +1,9 @@
+num_tasks: 50000
+max_depth: 5
+max_steps: 16
+num_vars: 3
+probe_size: 128
+K: 8
+ops: [add, sub, mul, sin, cos, square]
+groups: [poly_small, trig_small, mixed_unary, multi_var]
+out: data/local_flow_traces/v0

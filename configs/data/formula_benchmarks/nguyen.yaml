@@ -1,0 +1,13 @@
+# Nguyen benchmark (standard DSR/DiffuSR definitions). x->x0, y->x1.
+- {name: Nguyen-1, suite: nguyen, expr: "x0**3 + x0**2 + x0", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Nguyen-2, suite: nguyen, expr: "x0**4 + x0**3 + x0**2 + x0", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Nguyen-3, suite: nguyen, expr: "x0**5 + x0**4 + x0**3 + x0**2 + x0", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Nguyen-4, suite: nguyen, expr: "x0**6 + x0**5 + x0**4 + x0**3 + x0**2 + x0", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Nguyen-5, suite: nguyen, expr: "sin(x0**2)*cos(x0) - 1", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Nguyen-6, suite: nguyen, expr: "sin(x0) + sin(x0 + x0**2)", variables: [x0], train: {sampler: uniform, range: [-1, 1], n: 256}, test: {sampler: uniform, range: [-1, 1], n: 1024}}
+- {name: Nguyen-7, suite: nguyen, expr: "log(x0 + 1) + log(x0**2 + 1)", variables: [x0], train: {sampler: uniform, range: [0, 2], n: 256}, test: {sampler: uniform, range: [0, 2], n: 1024}}
+- {name: Nguyen-8, suite: nguyen, expr: "sqrt(x0)", variables: [x0], train: {sampler: uniform, range: [0, 4], n: 256}, test: {sampler: uniform, range: [0, 4], n: 1024}}
+- {name: Nguyen-9, suite: nguyen, expr: "sin(x0) + sin(x1**2)", variables: [x0, x1], train: {sampler: uniform, range: [0, 1], n: 256}, test: {sampler: uniform, range: [0, 1], n: 1024}}
+- {name: Nguyen-10, suite: nguyen, expr: "2*sin(x0)*cos(x1)", variables: [x0, x1], train: {sampler: uniform, range: [0, 1], n: 256}, test: {sampler: uniform, range: [0, 1], n: 1024}}
+- {name: Nguyen-11, suite: nguyen, expr: "x0**x1", variables: [x0, x1], train: {sampler: uniform, range: [0, 1], n: 256}, test: {sampler: uniform, range: [0, 1], n: 1024}}
+- {name: Nguyen-12, suite: nguyen, expr: "x0**4 - x0**3 + x1**2/2 - x1", variables: [x0, x1], train: {sampler: uniform, range: [0, 1], n: 256}, test: {sampler: uniform, range: [0, 1], n: 1024}}
