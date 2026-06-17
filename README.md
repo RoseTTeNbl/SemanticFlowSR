@@ -62,33 +62,59 @@ conda run -n semflow python scripts/run_experiment.py \
   --record_diagnostics \
   --record_path \
   --device cpu
+
+# 3. evaluate the future-reward ODE checkpoints on a filtered multivariate subset
+conda run -n semflow python scripts/run_experiment.py \
+  --ckpt_by_vars \
+    1:checkpoints/velocity_rollout_future_ode_d1.pt \
+    2:checkpoints/velocity_rollout_future_ode_d2.pt \
+    3:checkpoints/velocity_rollout_future_ode_d3.pt \
+  --suite nguyen constant livermore jin \
+  --min_vars 2 \
+  --require_all_ckpts \
+  --out results/manual_future_ode_multivar \
+  --tag multivar_seed0 \
+  --support_mode adaptive_full \
+  --support_full_threshold 256 \
+  --max_support 64 \
+  --support_topk 48 \
+  --integration_method semantic_fisher_ode \
+  --ode_steps 4 \
+  --step_size 0.25 \
+  --gram_rank 8 \
+  --target rollout_fitness_advantage \
+  --record_diagnostics
+
+# 4. regenerate paper-facing aggregate tables and compact figures
+conda run -n semflow python scripts/build_paper_results.py --out results/paper
 ```
 
 ## Latest Verified Results
 
-From `results/train_semantic_fisher.log`:
+Paper-facing 87-task benchmark results are under `results/paper/` and summarized in
+`results/baseline_comparison.md`. The full benchmark composition is:
 
-- final `semantic_fisher_velocity_loss`: `0.001397`
-- held-out rollout `reward(r2)`: `0.9282`
+```text
+Nguyen 12 + Constant 8 + Livermore 8 + Jin 6 + Feynman 53 = 87
+variable counts: 1-var 21, 2-var 29, 3-var 37
+```
 
-From `results/semantic_fisher/formula_1var_seed0_summary.json` on 20 one-variable tasks:
+Current 8-method paper table:
 
-- `mean R2`: `0.999041`
-- `median R2`: `0.999999`
-- `solution_rate`: `0.95`
-- `steps_mean`: `4.6`
+| Group | Method | Mean R2 | Solution rate |
+|---|---|---:|---:|
+| Baselines | PySR | 0.9974 | 0.9310 |
+| Baselines | DEAP | 0.9455 | 0.3448 |
+| Baselines | DSO | 0.9544 | 0.5977 |
+| SFSR ablations | Ours one-step reward | 0.9708 | 0.7701 |
+| SFSR ablations | Ours one-step ODE | 0.9505 | 0.7126 |
+| SFSR main | Ours future ODE (no GP) | 0.9505 | 0.7126 |
+| GP variants | GP as rollout policy | 0.9513 | 0.7011 |
+| GP variants | GP policy distillation | 0.8846 | 0.3678 |
 
-Local ranking diagnostics from the same run:
-
-- `selected_reward_rank_mean`: `3.65`
-- `pred_top1_reward_rank_mean`: `3.65`
-- `selected_probability_rank_mean`: `1.0`
-- `exact_semantic_fisher_top1_reward_rank_mean`: `6.4`
-- `plain_fisher_top1_reward_rank_mean`: `15.4`
-
-That is the current reason for the shift: the old plain Fisher-sphere line had
-`solution_rate = 0.15` and `selected_reward_rank_mean = 23.625`; the semantic-Fisher
-pullback version closes most of that gap.
+The earlier 14-task result was a multivariate-only built-in formula subset
+(`Nguyen 4 + Constant 3 + Livermore 1 + Jin 6`) and is not directly comparable to the
+87-task table.
 
 ## Current Entry Points
 

@@ -330,10 +330,17 @@ def _rank_positions(values: torch.Tensor) -> list[int]:
 
 
 def _safe_corr(a: torch.Tensor, b: torch.Tensor) -> float:
-    aa = a.detach().float().cpu()
-    bb = b.detach().float().cpu()
-    if aa.numel() < 2 or float(aa.std(unbiased=False)) < 1e-12 or float(bb.std(unbiased=False)) < 1e-12:
+    aa = a.detach().double().cpu()
+    bb = b.detach().double().cpu()
+    if aa.numel() < 2 or not torch.isfinite(aa).all() or not torch.isfinite(bb).all():
         return 0.0
     aa = aa - aa.mean()
     bb = bb - bb.mean()
-    return float((aa * bb).mean() / (aa.std(unbiased=False) * bb.std(unbiased=False)).clamp(min=1e-12))
+    std_a = aa.std(unbiased=False)
+    std_b = bb.std(unbiased=False)
+    if not torch.isfinite(std_a) or not torch.isfinite(std_b) or float(std_a) < 1e-12 or float(std_b) < 1e-12:
+        return 0.0
+    corr = (aa * bb).mean() / (std_a * std_b).clamp(min=1e-12)
+    if not torch.isfinite(corr):
+        return 0.0
+    return float(corr.clamp(min=-1.0, max=1.0))

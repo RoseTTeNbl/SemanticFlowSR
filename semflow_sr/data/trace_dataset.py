@@ -53,6 +53,7 @@ class VelocityTraceDataset(Dataset):
                  path_name: str = "semantic_fisher_pullback",
                  eta: float | None = None,
                  gamma: float = 0.1,
+                 gram_rank: int | None = None,
                  flow_training: dict | None = None):
         self.records = records
         self.space = action_space
@@ -66,6 +67,7 @@ class VelocityTraceDataset(Dataset):
         self.beta = float(beta)
         self.eta = self.beta  # compatibility alias for older tests/scripts
         self.gamma = float(gamma)
+        self.gram_rank = None if gram_rank is None else int(gram_rank)
         flow_training = flow_training or {}
         self.train_along_path = bool(flow_training.get("train_along_path", False))
         self.target_integration_steps = max(int(flow_training.get("target_integration_steps", 1)), 1)
@@ -134,6 +136,8 @@ class VelocityTraceDataset(Dataset):
                 effect.gram,
                 beta=self.beta,
                 gamma=self.gamma,
+                gram_rank=self.gram_rank,
+                gram_factors=effect.xi,
             )
             z0 = p_start.clamp(min=1e-12).sqrt()
             zdot_target = semantic_fisher_sphere_velocity(z0, w_target)
@@ -216,11 +220,14 @@ class VelocityTraceDataset(Dataset):
                     beta=self.beta,
                     gamma=self.gamma,
                     steps=self.target_integration_steps,
+                    gram_rank=self.gram_rank,
+                    gram_factors=out["xi"],
                 )
                 p_cur = path.policies[step_idx]
                 w_cur = semantic_fisher_lograte(
                     p_cur, out["advantages"], out["gram"],
-                    beta=self.beta, gamma=self.gamma,
+                    beta=self.beta, gamma=self.gamma, gram_rank=self.gram_rank,
+                    gram_factors=out["xi"],
                 )
                 z_cur = p_cur.clamp(min=1e-12).sqrt()
                 zdot_cur = semantic_fisher_sphere_velocity(z_cur, w_cur)

@@ -29,6 +29,13 @@ venv/
 /tests/*
 !/tests/test_group_advantage_target.py
 !/tests/test_support_sampler.py
+!/tests/test_eval_results_plots.py
+!/tests/test_build_paper_results.py
+!/tests/test_gp_event_distillation_script.py
+!/tests/test_rollout_gp_policy.py
+!/tests/test_run_experiment_adaptation.py
+!/tests/test_semantic_fisher_low_rank.py
+!/tests/test_train_curve_outputs.py
 
 # External clones (reference / large data; keep code-tracking out)
 /external/

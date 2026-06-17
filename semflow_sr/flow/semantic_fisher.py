@@ -31,35 +31,39 @@ def semantic_fisher_lograte(
     gram: torch.Tensor,
     beta: torch.Tensor | float,
     gamma: torch.Tensor | float,
+    gram_rank: int | None = None,
+    gram_factors: torch.Tensor | None = None,
     eps: float = EPS,
 ) -> torch.Tensor:
     """Solve the semantic-Fisher linear system for the log-rate ``w``."""
     p = smooth_simplex(p, eps=eps)
     advantage = torch.nan_to_num(advantage.to(device=p.device, dtype=p.dtype))
     gram = torch.nan_to_num(gram.to(device=p.device, dtype=p.dtype))
+    if gram_factors is not None:
+        gram_factors = torch.nan_to_num(gram_factors.to(device=p.device, dtype=p.dtype))
     beta_t = torch.as_tensor(beta, device=p.device, dtype=p.dtype)
     gamma_t = torch.as_tensor(gamma, device=p.device, dtype=p.dtype)
 
     A = p.shape[-1]
-    eye = torch.eye(A, device=p.device, dtype=p.dtype)
-    while eye.dim() < gram.dim():
-        eye = eye.unsqueeze(0)
-    P = torch.diag_embed(p)
     while gamma_t.dim() < p.dim():
         gamma_t = gamma_t.unsqueeze(-1)
-    gamma_matrix = gamma_t.unsqueeze(-1)
-    M = eye + gamma_matrix * (gram @ P)
     ones = torch.ones_like(advantage)
 
-    rhs_adv = _solve_linear(M, advantage.unsqueeze(-1)).squeeze(-1)
-    rhs_ones = _solve_linear(M, ones.unsqueeze(-1)).squeeze(-1)
+    rhs_adv = _solve_pullback_system(
+        gram, p, gamma_t, advantage.unsqueeze(-1), gram_rank, gram_factors, eps
+    ).squeeze(-1)
+    rhs_ones = _solve_pullback_system(
+        gram, p, gamma_t, ones.unsqueeze(-1), gram_rank, gram_factors, eps
+    ).squeeze(-1)
     numerator = (p * rhs_adv).sum(dim=-1, keepdim=True)
     denominator = (p * rhs_ones).sum(dim=-1, keepdim=True).clamp_min(eps)
     nu = -numerator / denominator
 
     while beta_t.dim() < p.dim():
         beta_t = beta_t.unsqueeze(-1)
-    w = beta_t * _solve_linear(M, (advantage + nu * ones).unsqueeze(-1)).squeeze(-1)
+    w = beta_t * _solve_pullback_system(
+        gram, p, gamma_t, (advantage + nu * ones).unsqueeze(-1), gram_rank, gram_factors, eps
+    ).squeeze(-1)
     correction = (p * w).sum(dim=-1, keepdim=True)
     w = w - correction
     return torch.nan_to_num(w)
@@ -104,6 +108,8 @@ def integrate_semantic_fisher_teacher_path(
     gamma: torch.Tensor | float,
     steps: int,
     dt: float | None = None,
+    gram_rank: int | None = None,
+    gram_factors: torch.Tensor | None = None,
     eps: float = EPS,
 ) -> SemanticFisherTeacherPath:
     """Integrate the exact semantic-Fisher teacher field on a fixed local support.
@@ -118,7 +124,10 @@ def integrate_semantic_fisher_teacher_path(
     logrates = []
     sphere_velocities = []
     for _ in range(n_steps):
-        w = semantic_fisher_lograte(p, advantage, gram, beta=beta, gamma=gamma, eps=eps)
+        w = semantic_fisher_lograte(
+            p, advantage, gram, beta=beta, gamma=gamma, gram_rank=gram_rank,
+            gram_factors=gram_factors, eps=eps
+        )
         z = p.clamp_min(eps).sqrt()
         zdot = semantic_fisher_sphere_velocity(z, w)
         logrates.append(w)
@@ -138,3 +147,74 @@ def _solve_linear(matrix: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
         return torch.linalg.solve(matrix, rhs)
     except RuntimeError:
         return torch.linalg.pinv(matrix) @ rhs
+
+
+def _solve_pullback_system(
+    gram: torch.Tensor,
+    p: torch.Tensor,
+    gamma_t: torch.Tensor,
+    rhs: torch.Tensor,
+    gram_rank: int | None,
+    gram_factors: torch.Tensor | None,
+    eps: float,
+) -> torch.Tensor:
+    A = p.shape[-1]
+    rank = None if gram_rank is None else int(gram_rank)
+    if rank is None or rank <= 0 or rank >= A:
+        eye = torch.eye(A, device=p.device, dtype=p.dtype)
+        while eye.dim() < gram.dim():
+            eye = eye.unsqueeze(0)
+        P = torch.diag_embed(p)
+        M = eye + gamma_t.unsqueeze(-1) * (gram @ P)
+        return _solve_linear(M, rhs)
+    try:
+        U = (
+            _low_rank_factor_from_factors(gram_factors, rank)
+            if gram_factors is not None
+            else _low_rank_factor_from_gram(gram, rank)
+        )
+    except RuntimeError:
+        return _solve_pullback_system(gram, p, gamma_t, rhs, None, None, eps)
+    return _woodbury_solve_pullback(U, p, gamma_t, rhs, eps)
+
+
+def _low_rank_factor_from_factors(factors: torch.Tensor, rank: int) -> torch.Tensor:
+    max_rank = min(int(rank), factors.shape[-1])
+    if max_rank >= factors.shape[-1]:
+        return factors
+    try:
+        u, s, _ = torch.linalg.svd(factors, full_matrices=False)
+        max_rank = min(max_rank, s.shape[-1])
+        return u[..., :max_rank] * s[..., :max_rank].unsqueeze(-2)
+    except RuntimeError:
+        return factors[..., :max_rank]
+
+
+def _low_rank_factor_from_gram(gram: torch.Tensor, rank: int) -> torch.Tensor:
+    gram = 0.5 * (gram + gram.transpose(-1, -2))
+    evals, evecs = torch.linalg.eigh(gram)
+    rank = min(int(rank), gram.shape[-1])
+    idx = evals.argsort(dim=-1, descending=True)[..., :rank]
+    gather_idx = idx.unsqueeze(-2).expand(*idx.shape[:-1], gram.shape[-1], rank)
+    top_vecs = torch.gather(evecs, dim=-1, index=gather_idx)
+    top_vals = torch.gather(evals, dim=-1, index=idx).clamp_min(0.0).sqrt().unsqueeze(-2)
+    return top_vecs * top_vals
+
+
+def _woodbury_solve_pullback(
+    factors: torch.Tensor,
+    p: torch.Tensor,
+    gamma_t: torch.Tensor,
+    rhs: torch.Tensor,
+    eps: float,
+) -> torch.Tensor:
+    rank = factors.shape[-1]
+    eye = torch.eye(rank, device=factors.device, dtype=factors.dtype)
+    while eye.dim() < factors.dim():
+        eye = eye.unsqueeze(0)
+    p_col = p.unsqueeze(-1)
+    pu = p_col * factors
+    inner = eye + gamma_t.unsqueeze(-1) * (factors.transpose(-1, -2) @ pu)
+    projected_rhs = factors.transpose(-1, -2) @ (p_col * rhs)
+    coef = _solve_linear(inner, projected_rhs)
+    return rhs - gamma_t.unsqueeze(-1) * (factors @ coef)

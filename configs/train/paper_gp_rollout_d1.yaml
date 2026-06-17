@@ -1,6 +1,6 @@
 seed: 0
 out: checkpoints
-checkpoint_name: velocity_rollout_future_ode_d1.pt
+checkpoint_name: paper_gp_rollout_d1.pt
 num_tasks: 32
 max_support: 12
 eval_every: 20
@@ -43,7 +43,8 @@ rollout_target:
   mode: online
   max_completion_steps: 1
   n_rollouts_per_action: 1
-  rollout_policy: mixed
+  rollout_policy: gp_guided
+  gp_operator_scores: {mul: 0.4, square: 1.0, cube: 0.7, sin: 0.25, cos: 0.25}
   reward_aggregation: topk_mean
   topk: 1
   fitness: normalized_energy_improvement

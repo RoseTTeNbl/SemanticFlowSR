@@ -27,3 +27,27 @@ def test_full_sampler_returns_all_actions_with_unit_proposal():
     assert torch.equal(sample.action_ids, action_ids)
     assert torch.equal(sample.proposal_probs, torch.ones(6))
     assert sample.full_size == 6
+
+
+def test_adaptive_full_sampler_uses_full_simplex_below_threshold():
+    action_ids = torch.arange(10)
+    sampler = SupportSampler(mode="adaptive_full", max_support=4, topk=2, full_threshold=12)
+    sample = sampler.sample(action_ids, rewards=torch.arange(10, dtype=torch.float32))
+
+    assert torch.equal(sample.action_ids, action_ids)
+    assert torch.equal(sample.proposal_probs, torch.ones(10))
+    assert sample.full_size == 10
+    assert sample.mode == "adaptive_full"
+
+
+def test_adaptive_full_sampler_falls_back_to_bounded_support_above_threshold():
+    action_ids = torch.arange(20)
+    rewards = torch.arange(20, dtype=torch.float32)
+    sampler = SupportSampler(mode="adaptive_full", max_support=5, topk=2, full_threshold=8, seed=4)
+    sample = sampler.sample(action_ids, rewards=rewards, sample_index=3)
+
+    assert sample.action_ids.numel() == 5
+    assert 19 in sample.action_ids.tolist()
+    assert 18 in sample.action_ids.tolist()
+    assert sample.full_size == 20
+    assert sample.mode == "adaptive_full"

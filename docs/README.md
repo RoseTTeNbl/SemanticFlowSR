@@ -13,6 +13,7 @@
 | [datasets/deployment.md](datasets/deployment.md) | 数据集和 benchmark 部署命令 |
 | [EVAL_87_ADAPTATION.md](EVAL_87_ADAPTATION.md) | benchmark 适配备注；非主理论文档 |
 | [baselines/](baselines/README.md) | 外部基线说明 |
-| [../results/future_ode_gp_comparison.md](../results/future_ode_gp_comparison.md) | future-ODE 与 GP-guided smoke 评测记录 |
+| [../results/baseline_comparison.md](../results/baseline_comparison.md) | 论文展示用 87-task 总表、分 suite 表、指标和图文件说明 |
+| [../results/future_ode_gp_comparison.md](../results/future_ode_gp_comparison.md) | 历史 future-ODE / GP smoke run 说明；非主结果入口 |
 
 运行方式见仓库根目录 [README.md](../README.md)。

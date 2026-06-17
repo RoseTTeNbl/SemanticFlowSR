@@ -1,9 +1,9 @@
 seed: 0
 out: checkpoints
-checkpoint_name: velocity_rollout_future_ode_d1.pt
-num_tasks: 32
+checkpoint_name: paper_onestep_d3.pt
+num_tasks: 48
 max_support: 12
-eval_every: 20
+eval_every: 25
 path:
   name: semantic_fisher_pullback
   gamma: 0.1
@@ -23,9 +23,9 @@ data:
   cache_static: true
   device: cpu
 gen:
-  num_vars: 1
-  max_depth: 4
-  K: 8
+  num_vars: 3
+  max_depth: 5
+  K: 10
   probe_size: 24
   ops: [add, sub, mul, protected_div, sin, cos, square, cube, exp, protected_log, protected_sqrt]
 energy:
@@ -35,23 +35,11 @@ energy:
   projection: ridge
   rho: 0.001
 target:
-  name: rollout_fitness_advantage
-  advantage_eps: 0.000001
-  advantage_clip: 5.0
-  smoothing: 0.02
-rollout_target:
-  mode: online
-  max_completion_steps: 1
-  n_rollouts_per_action: 1
-  rollout_policy: mixed
-  reward_aggregation: topk_mean
-  topk: 1
-  fitness: normalized_energy_improvement
-  complexity_penalty: 0.01
-  final_complexity_penalty: 0.001
-  eval_topk: 1
-  fallback_scale: 0.25
-  seed: 0
+  name: one_step_advantage
+  center: true
+  normalize: true
+  floor: 0.001
+  importance_correction: true
 support:
   mode: adaptive_full
   full_threshold: 256
@@ -62,10 +50,10 @@ model:
   row_layers: 2
   heads: 4
 train:
-  lr: 0.0005
-  steps: 40
+  lr: 0.0004
+  steps: 50
   batch_size: 4
   loss_name: semantic_fisher_velocity
   sf_step_dt: 0.5
   grad_clip: 1.0
-  log_every: 20
+  log_every: 25

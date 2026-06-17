@@ -110,11 +110,13 @@ def run(cfg: dict, target: str):
                        energy_cfg=ecfg,
                        support_mode=cfg.get("support", {}).get("mode", "mixed_topk_random"),
                        support_topk=cfg.get("support", {}).get("topk"),
+                       support_full_threshold=cfg.get("support", {}).get("full_threshold"),
                        target_kwargs=_target_kwargs(cfg),
                        cache_static=cfg.get("data", {}).get("cache_static", True),
                        data_device=cfg.get("data", {}).get("device", "cpu"),
                        path_name=cfg.get("path", {}).get("name", "semantic_fisher_pullback"),
                        gamma=float(cfg.get("path", {}).get("gamma", 0.1)),
+                       gram_rank=cfg.get("path", {}).get("gram_rank"),
                        flow_training=cfg.get("flow_training", {}))
     model = SemanticTransformer(SemanticTransformerConfig(
         d=gen.num_vars, K=gen.K, hidden=cfg["model"]["hidden"],
@@ -132,15 +134,20 @@ def run(cfg: dict, target: str):
     )
     stats = train_velocity(model, ds, tcfg, device, collate_velocity,
                            eval_fn=eval_fn, eval_every=eval_every)
-    out = Path(cfg.get("out", "checkpoints")) / cfg.get("checkpoint_name", f"velocity_{target}.pt")
+    checkpoint_name = cfg.get("checkpoint_name", f"velocity_{target}.pt")
+    out = Path(cfg.get("out", "checkpoints")) / checkpoint_name
     save_checkpoint(out, model, meta={"final_loss": stats["final_loss"], "cfg": cfg})
-    _save_curves(stats["log_rows"], Path(cfg.get("out", "checkpoints")), target)
+    _save_curves(stats["log_rows"], Path(cfg.get("out", "checkpoints")), Path(checkpoint_name).stem)
     print(f"saved {out}  final_loss={stats['final_loss']}")
 
 
-def _save_curves(rows, out_dir: Path, target: str):
+def target_from_config(cfg: dict, default: str = "gt") -> str:
+    return str(cfg.get("target", {}).get("name", default))
+
+
+def _save_curves(rows, out_dir: Path, run_name: str):
     out_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = out_dir / f"train_curve_{target}.csv"
+    csv_path = out_dir / f"train_curve_{run_name}.csv"
     with open(csv_path, "w", newline="") as f:
         fieldnames = sorted({k for r in rows for k in r.keys()}) if rows else ["step", "epoch", "loss", "reward"]
         for k in ["step", "epoch", "loss", "reward"]:
@@ -160,8 +167,8 @@ def _save_curves(rows, out_dir: Path, target: str):
             ax2 = ax1.twinx()
             ax2.plot([s for s, _ in rw], [v for _, v in rw], "r.-", label="reward(val R²)")
             ax2.set_ylabel("reward (val R²)", color="r")
-        fig.tight_layout(); fig.savefig(out_dir / f"train_curve_{target}.png", dpi=120)
-        print(f"saved curve {out_dir / f'train_curve_{target}.png'}")
+        fig.tight_layout(); fig.savefig(out_dir / f"train_curve_{run_name}.png", dpi=120)
+        print(f"saved curve {out_dir / f'train_curve_{run_name}.png'}")
     except Exception as e:
         print(f"plot skipped: {e}")
 
@@ -170,7 +177,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     a = ap.parse_args()
-    run(yaml.safe_load(Path(a.config).read_text()), target="gt")
+    cfg = yaml.safe_load(Path(a.config).read_text())
+    run(cfg, target=target_from_config(cfg))
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ centered semantic energy
 c = (B, y, S, p_start)
 ```
 
-其中 `S` 是当前 support，`p_start` 是这个 support 上的起点策略。训练和推理都必须显式传入 `action_ids`、`p_start`、`semantic_stats` 和 `gram`，不能把不同 support 上的分布混用。
+理论对象是当前状态下的完整合法动作 simplex。工程实现默认使用 support 近似，并支持 `adaptive_full`：合法动作数不超过阈值时直接使用完整动作分布，超过阈值时回退到 bounded top-k/random support。训练和推理都必须显式传入 `action_ids`、`p_start`、`semantic_stats` 和 `gram`，不能把不同 support 上的分布混用。
 
 ## 1. 局部语义对象
 
@@ -39,6 +39,30 @@ c = (B, y, S, p_start)
 | `proposal_probs` | support sampler 的 proposal 概率 | `actions/support_sampler.py` |
 
 `m` 是 probe 点数，`K` 是 register 数，`A=|S|` 是当前 support 大小。
+
+### 1.1.1 Full simplex 与 adaptive support
+
+`SupportSampler` 当前支持：
+
+| mode | 行为 |
+|---|---|
+| `full` | 总是使用完整合法动作集 |
+| `adaptive_full` | `full_action_size <= full_threshold` 时使用完整动作集，否则回退到 mixed top-k/random |
+| `mixed_topk_random` | 保留 reward top-k，再随机补足 |
+| `topk_reward` | 只保留 reward top-k |
+| `proposal_importance` | 按 reward proposal 抽样 |
+
+推荐主配置：
+
+```yaml
+support:
+  mode: adaptive_full
+  full_threshold: 256
+  topk: 48
+max_support: 64
+```
+
+这样论文叙述可以以完整 simplex 为精确定义，代码在动作数较小时也真正跑 full action distribution；动作数变大时再使用 support 作为计算近似。诊断中通过 `support_size == full_action_size` 判断是否走了完整 simplex。
 
 ### 1.2 Centered energy
 
@@ -116,7 +140,7 @@ R(a) = E(B) - E(B^a) - lambda_op C_op(a)
    advantages = group_standardize(scores)
 
 8. solve semantic-Fisher log-rate:
-   w_target = semantic_fisher_lograte(p_start, advantages, gram, beta, gamma)
+   w_target = semantic_fisher_lograte(p_start, advantages, gram, beta, gamma, gram_rank, xi)
 
 9. convert to sphere tangent and one-step target endpoint:
    z0 = sqrt(p_start)
@@ -178,7 +202,7 @@ provider 只负责给 `scores`。当前支持：
 | one-step | centered energy decrease | 基础训练主线 |
 | rollout | first action 后的 completion fitness 聚合 | 未来价值 target |
 | search | beam / search after first action | search-improvement target |
-| GP interface | GP-induced score 或 policy-derived score | 只保留接口 |
+| GP rollout / distillation | GP completion policy 或 GP event likelihood | future-aware score / online prior |
 
 统一转换为 group advantage：
 
@@ -210,6 +234,35 @@ sum_a p(a) w*(a) ~= 0
 - `gamma`: semantic pullback 权重。`gamma=0` 时退化为普通 Fisher replicator。
 - `K`: 动作效果 Gram，控制语义相近动作之间的几何耦合。
 - `w*`: support-local log-rate，不是概率，也不是 logits 分类标签。
+
+### 2.4 Low-rank Gram / Woodbury 求解
+
+完整求解需要构造：
+
+```text
+M = I + gamma K P
+```
+
+并解 `A x A` 线性系统。为了让 full/adaptive support 可用，配置可打开：
+
+```yaml
+path:
+  gram_rank: 8
+```
+
+实现位置：
+
+- `semflow_sr/flow/semantic_fisher.py::semantic_fisher_lograte`
+- `semflow_sr/flow/semantic_fisher.py::_woodbury_solve_pullback`
+
+当 dataset / inference 已经有 `xi` 时，solver 直接从 `xi` 构造低秩因子，而不是对可能病态的 `K=xi xi^T` 做特征分解：
+
+```text
+K ~= U U^T
+M^{-1}b = b - gamma U (I + gamma U^T P U)^{-1} U^T P b
+```
+
+这样主成本从 `O(A^3)` 下降到 `O(A r^2 + r^3)`。若没有 `xi` 因子，代码才退回到 Gram 的低秩分解；若低秩分解数值失败，则退回完整线性系统，保证训练不中断。
 
 ## 3. 模型输入与输出
 
@@ -387,7 +440,7 @@ w_H = SFLogRate(p, A_H, K, beta, gamma)
 
 ### 5.2 GP-guided rollout policy
 
-GP 当前不改变主 solver。它作为 rollout completion policy 的先验：
+GP 不改变 semantic-Fisher solver。它首先可以作为 rollout completion policy 的先验：
 
 ```text
 rollout_policy = gp_guided
@@ -395,6 +448,88 @@ gp_action_scores[id] or gp_operator_scores[op] -> choose preferred completion ac
 ```
 
 `gp_action_scores` 适合事件回放；`gp_operator_scores` 适合跨状态的轻量先验，例如偏向 `mul/square/protected_div`。这只是 rollout policy 引导，不是 GP target 主链路。
+
+在训练 target 生成时，`RolloutFitnessTarget` 使用这些 GP score 选择 completion action：
+
+```text
+c --first action a--> c^a
+rollout_policy=gp_guided:
+    choose completion action by max(gp_action_score, gp_operator_score)
+Q_H^GP(c,a) = aggregate final fitness over GP-guided completions
+A_H^GP(c,a) = GroupNormalize(Q_H^GP(c,a))
+w_H^GP = SFLogRate(p, A_H^GP, K, beta, gamma)
+```
+
+因此 GP as rollout policy 的作用是改写 future reward provider。它不在推理时直接加分，除非同时启用 online GP prior。
+
+### 5.3 GP policy distillation
+
+第二条 GP 路径是把 GP 运行日志或 baseline 输出中可解/高适应度表达式转换成 action/operator likelihood prior。当前轻量实现不做状态检索，而是从表达式里抽取 operator events：
+
+```bash
+conda run -n semflow python scripts/distill_gp_events_from_results.py \
+  --input results/deap/deap_all_seed0.json \
+  --out results/gp_distill/deap_operator_events.json
+```
+
+事件格式：
+
+```json
+{"task": "Nguyen-1", "op": "mul", "r2": 1.0, "solved": true, "weight": 1.0}
+```
+
+`GPPolicyDistillationPrior` 对每个 `action_id` 或 `op/op_id` 统计带平滑的成功率：
+
+```text
+p_success(k) = (success_count(k) + smoothing) / (total_count(k) + 2 smoothing)
+g_GP(k) = log p_success(k) - log(1 - p_success(k))
+```
+
+得到：
+
+```text
+gp_action_scores: action_id -> log-odds score
+gp_operator_scores: op/op_id -> log-odds score
+```
+
+推理入口：
+
+```bash
+conda run -n semflow python scripts/run_experiment.py \
+  ... \
+  --gp_distill_events results/gp_distill/deap_operator_events.json \
+  --gp_policy_weight 0.5
+```
+
+如果事件来自完整 GP lineage，也可以直接包含 `action_id`；如果只有表达式，当前脚本只能得到 operator-level prior。
+
+### 5.4 Online GP policy prior
+
+如果希望同一个 checkpoint 在推理时直接受 GP prior 影响，需要打开在线策略引导：
+
+```bash
+--gp_operator_scores '{"mul":0.4,"square":1.0,"cube":0.7,"sin":0.25,"cos":0.25}' \
+--gp_policy_weight 0.5
+```
+
+每个 support 上先把 GP action/operator score 标准化成 `g(a)`，然后在模型输出后加入：
+
+```text
+w_guided(a) = w_theta(a) + alpha_gp g(a)
+```
+
+再执行 semantic-Fisher sphere / ODE step。对 potential checkpoint 的 `closed_form` 消融，也会在 potential score 上加入同一个 prior。
+
+这修正了一个容易误读的实验问题：只把 `rollout_policy` 改成 `gp_guided`，但使用同一 checkpoint 且推理不使用 target provider 时，最终动作可能完全不变；在线 GP prior 才会直接改变推理分布。
+
+### 5.5 GP 两种实验组的区别
+
+| 实验组 | 配置入口 | GP 影响位置 | 是否直接改变在线动作 |
+|---|---|---|---|
+| GP as rollout policy | `rollout_policy=gp_guided` + GP scores | target dataset / future reward estimation | 否，除非另开 online prior |
+| GP policy distillation | `--gp_distill_events` + `--gp_policy_weight` | 推理时加到 `w_theta` 的 prior | 是 |
+
+两者都不修改 `K`、`gamma` 或 semantic-Fisher 线性系统。GP 只改变 scalar future score 或 additive policy prior；动作语义几何仍由当前状态下的 `xi` 和 `K=xi xi^T` 定义。
 
 ## 6. 训练样本字段
 
@@ -543,7 +678,21 @@ lambda, p_lambda, dp_dlambda, z_lambda, dz_dlambda, p0, p1
 
 `tangent_error` 应接近 0；如果明显变大，优先检查 mask、padding 或分布归一化。
 
-### 7.7 最终 SR 结果指标
+### 7.7 GP prior 指标
+
+在线 GP policy prior 打开后，推理 diagnostics 额外记录：
+
+| 字段 | 含义 |
+|---|---|
+| `gp_policy_weight` | 在线 GP prior 权重 |
+| `gp_policy_applied` | 当前 step 是否有可用 GP prior 且权重非零 |
+| `selected_gp_prior` | 选中动作的标准化 GP prior score |
+| `selected_gp_prior_rank` | 选中动作在 GP prior 中的排名 |
+| `gp_prior_top1_action` | GP prior 单独最偏好的动作 |
+
+如果 GP 组与 normal 组汇总完全一致，优先检查 `gp_policy_applied` 是否全为 false；若为 false，说明 GP 没有进入在线策略更新。
+
+### 7.8 最终 SR 结果指标
 
 | 指标 | 含义 |
 |---|---|
@@ -623,7 +772,62 @@ conda run -n semflow python scripts/run_experiment.py \
 5. `support_best_reward_gap`
 6. `plain_fisher_top1_reward_rank`
 
-### 8.4 必要消融
+### 8.4 完整多元评测
+
+完整内置多元数据集可由多个 suite 合并后按变量数过滤：
+
+```bash
+conda run -n semflow python scripts/run_experiment.py \
+  --ckpt_by_vars \
+    1:checkpoints/velocity_rollout_future_ode_d1.pt \
+    2:checkpoints/velocity_rollout_future_ode_d2.pt \
+    3:checkpoints/velocity_rollout_future_ode_d3.pt \
+  --suite nguyen constant livermore jin \
+  --min_vars 2 \
+  --require_all_ckpts \
+  --support_mode adaptive_full \
+  --support_full_threshold 256 \
+  --max_support 64 \
+  --support_topk 48 \
+  --integration_method semantic_fisher_ode \
+  --ode_steps 4 \
+  --step_size 0.25 \
+  --gram_rank 8 \
+  --target rollout_fitness_advantage \
+  --record_diagnostics
+```
+
+`scripts/run_experiment.py` 会为每次评测写出：
+
+| 文件 | 含义 |
+|---|---|
+| `<tag>_samples.jsonl` | 每个任务的完整结果和 diagnostics |
+| `<tag>_summary.json` | 聚合指标 |
+| `<tag>_metrics.csv` | 每任务关键指标表 |
+
+默认不再输出每任务曲线，避免结果目录被调试图淹没。只有显式传入：
+
+```bash
+--plot_per_task
+```
+
+才会额外写：
+
+| 文件 | 含义 |
+|---|---|
+| `<tag>_r2_curve.png` | 任务顺序上的 R2 / solved 曲线 |
+| `<tag>_energy_traces.png` | 每个任务的 normalized energy trace |
+
+训练脚本会按 checkpoint stem 保存：
+
+```text
+checkpoints/train_curve_<checkpoint_stem>.csv
+checkpoints/train_curve_<checkpoint_stem>.png
+```
+
+避免 d1/d2/d3 曲线互相覆盖。
+
+### 8.5 必要消融
 
 | 消融 | 做法 | 判断 |
 |---|---|---|
@@ -632,6 +836,7 @@ conda run -n semflow python scripts/run_experiment.py \
 | support size | 扫 `max_support` / `support_topk` | 判断是否 support-limited |
 | rollout target | `target=rollout_fitness_advantage` | 判断 one-step reward 是否短视 |
 | GP-guided rollout | `target_kwargs.rollout_policy=gp_guided` | 判断 GP-style prior 是否改变 completion policy |
+| online GP prior | `--gp_policy_weight > 0` | 判断 GP prior 是否直接改变推理动作 |
 
 ## 9. Proximal / GP 扩展边界
 

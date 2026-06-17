@@ -3,10 +3,11 @@ out: checkpoints
 checkpoint_name: velocity_rollout_future_ode_d2.pt
 num_tasks: 40
 max_support: 12
-eval_every: 1000
+eval_every: 25
 path:
   name: semantic_fisher_pullback
   gamma: 0.1
+  gram_rank: 8
   step_dt: 0.5
 update:
   mode: fixed_beta
@@ -52,7 +53,8 @@ rollout_target:
   fallback_scale: 0.25
   seed: 0
 support:
-  mode: mixed_topk_random
+  mode: adaptive_full
+  full_threshold: 256
   topk: 6
 model:
   output_mode: semantic_fisher_lograte

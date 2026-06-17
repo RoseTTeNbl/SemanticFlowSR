@@ -1,9 +1,9 @@
 seed: 0
 out: checkpoints
-checkpoint_name: velocity_rollout_future_ode_d1.pt
-num_tasks: 32
+checkpoint_name: paper_gp_rollout_d2.pt
+num_tasks: 40
 max_support: 12
-eval_every: 20
+eval_every: 25
 path:
   name: semantic_fisher_pullback
   gamma: 0.1
@@ -23,9 +23,9 @@ data:
   cache_static: true
   device: cpu
 gen:
-  num_vars: 1
-  max_depth: 4
-  K: 8
+  num_vars: 2
+  max_depth: 5
+  K: 10
   probe_size: 24
   ops: [add, sub, mul, protected_div, sin, cos, square, cube, exp, protected_log, protected_sqrt]
 energy:
@@ -43,7 +43,8 @@ rollout_target:
   mode: online
   max_completion_steps: 1
   n_rollouts_per_action: 1
-  rollout_policy: mixed
+  rollout_policy: gp_guided
+  gp_operator_scores: {mul: 0.4, square: 1.0, cube: 0.7, sin: 0.25, cos: 0.25}
   reward_aggregation: topk_mean
   topk: 1
   fitness: normalized_energy_improvement
@@ -62,10 +63,10 @@ model:
   row_layers: 2
   heads: 4
 train:
-  lr: 0.0005
-  steps: 40
+  lr: 0.0004
+  steps: 50
   batch_size: 4
   loss_name: semantic_fisher_velocity
   sf_step_dt: 0.5
   grad_clip: 1.0
-  log_every: 20
+  log_every: 25

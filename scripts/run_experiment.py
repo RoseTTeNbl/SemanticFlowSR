@@ -16,6 +16,7 @@ from semflow_sr.models.semantic_transformer import SemanticTransformer, Semantic
 from semflow_sr.data.benchmark_loader import materialize_formula, PMLBLoader, FeynmanCSVLoader
 from semflow_sr.eval.evaluator import evaluate_task
 from semflow_sr.eval.results import save_results
+from semflow_sr.gp_distill.gp_policy import GPPolicyDistillationPrior
 from semflow_sr.semantics.energy import ActionEnergyConfig
 from semflow_sr.sr.ops import NAME_TO_ID
 
@@ -83,6 +84,25 @@ def parse_target_kwargs(raw: str | None) -> dict:
     return parsed
 
 
+def load_gp_distilled_scores(path: str | None) -> tuple[dict[int, float], dict[int | str, float]]:
+    if not path:
+        return {}, {}
+    events = json.loads(Path(path).read_text())
+    if isinstance(events, dict):
+        events = events.get("events", [])
+    if not isinstance(events, list):
+        raise ValueError("--gp_distill_events must contain a list or {'events': list}")
+    prior = GPPolicyDistillationPrior(events=events)
+    return prior.merged_scores()
+
+
+def merge_score_maps(base: dict | None, extra: dict | None) -> dict:
+    out = dict(base or {})
+    for key, value in (extra or {}).items():
+        out[key] = float(value)
+    return out
+
+
 def select_runner_for_task(num_vars: int, runners: dict[int, ModelRunner]):
     return runners.get(int(num_vars))
 
@@ -92,11 +112,24 @@ def missing_checkpoint_dims(tasks, runners: dict[int, ModelRunner]) -> list[int]
     return sorted(d for d in dims if d not in runners)
 
 
+def task_passes_dim_filter(task, min_vars: int | None = None, max_vars: int | None = None) -> bool:
+    n_vars = int(task.X_train.shape[1])
+    if min_vars is not None and n_vars < int(min_vars):
+        return False
+    if max_vars is not None and n_vars > int(max_vars):
+        return False
+    return True
+
+
 def gather_tasks(args, num_vars=None):
     tasks = []
     for suite in args.suite:
         for entry in yaml.safe_load((CFG_DIR / f"{suite}.yaml").read_text()):
             if num_vars is not None and len(entry["variables"]) != num_vars:
+                continue
+            if getattr(args, "min_vars", None) is not None and len(entry["variables"]) < int(args.min_vars):
+                continue
+            if getattr(args, "max_vars", None) is not None and len(entry["variables"]) > int(args.max_vars):
                 continue
             entry.setdefault("suite", suite)
             tasks.append(materialize_formula(entry, args.seed))
@@ -107,13 +140,17 @@ def gather_tasks(args, num_vars=None):
                 t = loader.load(name, seed=args.seed)
             except Exception as e:
                 print(f"skip {name}: {e}"); continue
-            if num_vars is None or t.X_train.shape[1] == num_vars:
+            if (num_vars is None or t.X_train.shape[1] == num_vars) and task_passes_dim_filter(
+                t, getattr(args, "min_vars", None), getattr(args, "max_vars", None)
+            ):
                 tasks.append(t)
     if args.feynman:
         floader = FeynmanCSVLoader()
         for name in floader.names(n_vars=num_vars):
             try:
-                tasks.append(floader.load(name, seed=args.seed))
+                t = floader.load(name, seed=args.seed)
+                if task_passes_dim_filter(t, getattr(args, "min_vars", None), getattr(args, "max_vars", None)):
+                    tasks.append(t)
             except Exception as e:
                 print(f"skip {name}: {e}")
     return tasks
@@ -125,6 +162,10 @@ def main():
     ap.add_argument("--ckpt_by_vars", nargs="*", default=None,
                     help="dimension-to-checkpoint mapping, e.g. 1:ckpt_1.pt 2:ckpt_2.pt")
     ap.add_argument("--suite", nargs="+", default=["nguyen"])
+    ap.add_argument("--min_vars", type=int, default=None,
+                    help="only evaluate tasks with at least this many variables")
+    ap.add_argument("--max_vars", type=int, default=None,
+                    help="only evaluate tasks with at most this many variables")
     ap.add_argument("--pmlb", nargs="+", default=[])
     ap.add_argument("--pmlb_root", default="external/pmlb")
     ap.add_argument("--feynman", action="store_true", help="纳入物化的 Feynman 任务(按 num_vars 过滤)")
@@ -136,8 +177,10 @@ def main():
     ap.add_argument("--step_size", type=float, default=1.0)
     ap.add_argument("--max_support", type=int, default=128)
     ap.add_argument("--support_mode", default="mixed_topk_random",
-                    choices=["full", "topk_reward", "mixed_topk_random", "proposal_importance"])
+                    choices=["full", "adaptive_full", "topk_reward", "mixed_topk_random", "proposal_importance"])
     ap.add_argument("--support_topk", type=int, default=64)
+    ap.add_argument("--support_full_threshold", type=int, default=None,
+                    help="for adaptive_full: use complete legal action simplex up to this full-action count")
     ap.add_argument("--target", default="one_step_advantage",
                     choices=["one_step_advantage", "group_advantage", "semantic_advantage_flow", "rollout_fitness_advantage",
                              "rollout_fitness", "energy"])
@@ -154,6 +197,16 @@ def main():
                     help="fixed natural-flow update strength; defaults to checkpoint update.beta or 1.0")
     ap.add_argument("--gamma", type=float, default=None,
                     help="semantic-Fisher pullback weight; defaults to checkpoint path.gamma or 0.1")
+    ap.add_argument("--gram_rank", type=int, default=None,
+                    help="optional low-rank Gram rank for exact semantic-Fisher oracle computations")
+    ap.add_argument("--gp_policy_weight", type=float, default=None,
+                    help="weight for online GP action/operator prior added to model scores")
+    ap.add_argument("--gp_action_scores", default=None,
+                    help="JSON action-id score map for online GP policy guidance")
+    ap.add_argument("--gp_operator_scores", default=None,
+                    help="JSON operator-name/id score map for online GP policy guidance")
+    ap.add_argument("--gp_distill_events", default=None,
+                    help="JSON GP event list used to distill action/operator success-likelihood priors")
     ap.add_argument("--update_mode", default="fixed_beta", choices=["fixed_beta", "target_kl"])
     ap.add_argument("--target_kl", type=float, default=0.05)
     ap.add_argument("--beta_max", type=float, default=10.0)
@@ -162,11 +215,26 @@ def main():
                     help="write per-rollout-step support/reward/probability diagnostics into samples")
     ap.add_argument("--record_path", action="store_true",
                     help="with --record_diagnostics, also record per-lambda velocity/path summaries")
+    ap.add_argument("--plot_per_task", action="store_true",
+                    help="also write per-run task-order R2 and energy-trace plots")
     ap.add_argument("--require_all_ckpts", action="store_true",
                     help="fail if --ckpt_by_vars does not cover every loaded task dimension")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     a = ap.parse_args()
     target_kwargs = parse_target_kwargs(a.target_kwargs)
+    gp_action_scores = parse_target_kwargs(a.gp_action_scores) if a.gp_action_scores else target_kwargs.get("gp_action_scores")
+    gp_operator_scores = (
+        parse_target_kwargs(a.gp_operator_scores) if a.gp_operator_scores else target_kwargs.get("gp_operator_scores")
+    )
+    distilled_action_scores, distilled_operator_scores = load_gp_distilled_scores(a.gp_distill_events)
+    gp_action_scores = merge_score_maps(gp_action_scores, distilled_action_scores)
+    gp_operator_scores = merge_score_maps(gp_operator_scores, distilled_operator_scores)
+    if a.gp_policy_weight is None:
+        gp_policy_weight = 1.0 if (
+            target_kwargs.get("rollout_policy") == "gp_guided" and (gp_action_scores or gp_operator_scores)
+        ) else 0.0
+    else:
+        gp_policy_weight = float(a.gp_policy_weight)
 
     device = torch.device(a.device)
     ckpt_by_vars = parse_ckpt_by_vars(a.ckpt_by_vars)
@@ -200,9 +268,14 @@ def main():
                             energy_cfg=ActionEnergyConfig(**runner.energy_cfg), max_steps=a.max_steps,
                             grid=a.grid, step_size=a.step_size, greedy=True, max_support=a.max_support,
                             support_mode=a.support_mode, support_topk=a.support_topk,
+                            support_full_threshold=a.support_full_threshold,
                             target=a.target, target_kwargs=target_kwargs,
                             beta=(a.beta if a.beta is not None else runner.beta),
                             gamma=(a.gamma if a.gamma is not None else _checkpoint_gamma(runner.cfg)),
+                            gram_rank=a.gram_rank,
+                            gp_policy_weight=gp_policy_weight,
+                            gp_action_scores=gp_action_scores,
+                            gp_operator_scores=gp_operator_scores,
                             num_policy_updates=a.num_policy_updates,
                             integration_method=a.integration_method,
                             ode_steps=a.ode_steps,
@@ -215,7 +288,7 @@ def main():
         reports.append(rep)
         print(f"  {rep.name:16s} r2={rep.r2:.4f} acc={rep.acc_tau:.0f} "
               f"steps={rep.steps} cplx={rep.complexity}")
-    summary = save_results(reports, a.out, a.tag)
+    summary = save_results(reports, a.out, a.tag, make_plots=a.plot_per_task)
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     (out / f"{a.tag}_skipped.json").write_text(json.dumps(skipped, indent=2))
     summary["skipped"] = len(skipped)

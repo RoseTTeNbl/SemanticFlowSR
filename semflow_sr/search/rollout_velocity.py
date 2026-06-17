@@ -21,7 +21,7 @@ from ..inference.iterative_policy_update import beta_for_update, closed_form_pol
 from ..endpoints.prior_uniform import UniformPrior
 from ..endpoints.target_group_advantage import GroupAdvantageTarget
 from ..endpoints.target_rollout_fitness import RolloutFitnessTarget
-from ..sr.ops import get_op
+from ..sr.ops import NAME_TO_ID, get_op
 from ..utils.numerical import EPS
 
 
@@ -64,6 +64,55 @@ def _action_record(space: ActionSpace, action_id: int) -> dict:
         "read_2": int(spec.read_2),
         "write": int(spec.write),
     }
+
+
+def _normalize_gp_operator_scores(raw: dict[int | str, float] | None) -> dict[int, float]:
+    out: dict[int, float] = {}
+    for key, value in (raw or {}).items():
+        if isinstance(key, str) and not key.isdigit():
+            if key not in NAME_TO_ID:
+                continue
+            op_id = NAME_TO_ID[key]
+        else:
+            op_id = int(key)
+        out[int(op_id)] = float(value)
+    return out
+
+
+def _gp_policy_prior(
+    space: ActionSpace,
+    action_ids: torch.Tensor,
+    gp_action_scores: dict[int, float] | None,
+    gp_operator_scores: dict[int | str, float] | None,
+    eps: float = EPS,
+) -> torch.Tensor | None:
+    action_scores = {int(k): float(v) for k, v in (gp_action_scores or {}).items()}
+    operator_scores = _normalize_gp_operator_scores(gp_operator_scores)
+    if not action_scores and not operator_scores:
+        return None
+    vals = []
+    matched = False
+    for action in action_ids:
+        action_id = int(action.detach().cpu().item())
+        spec = space.decode(action_id)
+        candidates = []
+        if action_id in action_scores:
+            candidates.append(action_scores[action_id])
+        if int(spec.op_id) in operator_scores:
+            candidates.append(operator_scores[int(spec.op_id)])
+        if candidates:
+            matched = True
+            vals.append(max(candidates))
+        else:
+            vals.append(0.0)
+    if not matched:
+        return None
+    guide = torch.tensor(vals, device=action_ids.device, dtype=torch.float32)
+    guide = guide - guide.mean()
+    std = guide.std(unbiased=False)
+    if float(std.detach().cpu()) > eps:
+        guide = guide / std.clamp(min=eps)
+    return guide
 
 
 def _support_contains(action_ids: torch.Tensor, action_id: int) -> bool:
@@ -117,6 +166,11 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
                      beta_max: float = 10.0,
                      bisection_steps: int = 20,
                      gamma: float = 0.1,
+                     gram_rank: int | None = None,
+                     support_full_threshold: int | None = None,
+                     gp_policy_weight: float = 0.0,
+                     gp_action_scores: dict[int, float] | None = None,
+                     gp_operator_scores: dict[int | str, float] | None = None,
                      record_diagnostics: bool = False,
                      record_path: bool = False) -> RolloutResult:
     model.eval()
@@ -127,7 +181,7 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
     proj = ProjectionBackend(energy_cfg.projection, energy_cfg.rho)
     prior = UniformPrior()
     support_sampler = SupportSampler(mode=support_mode, max_support=max_support,
-                                     topk=support_topk, seed=0)
+                                     topk=support_topk, full_threshold=support_full_threshold, seed=0)
     beta_value = float(eta if beta is None else beta)
     target_kwargs = target_kwargs or {}
     group_target = None
@@ -160,6 +214,7 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
         feats = action_features(space, state, action_ids)
         semantic_stats = _semantic_stats_from_effect(effect)
         gram = effect.gram
+        gp_prior = _gp_policy_prior(space, action_ids, gp_action_scores, gp_operator_scores)
         p = prior.build_p0(B, y, action_ids, {})
         p_start = p.clone()
         p_target = None
@@ -200,6 +255,8 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
                 gram,
                 beta=beta_value,
                 gamma=gamma,
+                gram_rank=gram_rank,
+                gram_factors=effect.xi,
             )
             p_target = semantic_fisher_sphere_step(p_start, exact_lograte, dt=1.0)
             advantages_eff = exact_lograte
@@ -233,14 +290,26 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
                         v = out.v_pred.squeeze(0)
                         if lograte is not None:
                             final_score = lograte.squeeze(0)
+                            if gp_prior is not None and float(gp_policy_weight) != 0.0:
+                                final_score = final_score + float(gp_policy_weight) * gp_prior.to(
+                                    device=final_score.device, dtype=final_score.dtype
+                                )
                             p = semantic_fisher_sphere_step(p, final_score, dt=step_size)
                         else:
                             score = getattr(out, "potential_logits", None)
                             if score is None:
-                                p = semantic_fisher_sphere_step(p, v, dt=step_size)
                                 final_score = v
+                                if gp_prior is not None and float(gp_policy_weight) != 0.0:
+                                    final_score = final_score + float(gp_policy_weight) * gp_prior.to(
+                                        device=final_score.device, dtype=final_score.dtype
+                                    )
+                                p = semantic_fisher_sphere_step(p, final_score, dt=step_size)
                             else:
                                 score_vec = score.squeeze(0)
+                                if gp_prior is not None and float(gp_policy_weight) != 0.0:
+                                    score_vec = score_vec + float(gp_policy_weight) * gp_prior.to(
+                                        device=score_vec.device, dtype=score_vec.dtype
+                                    )
                                 used_beta = beta_for_update(
                                     p,
                                     score_vec,
@@ -277,11 +346,20 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
                     v = out.v_pred.squeeze(0)
                     if score is None:
                         # Compatibility for log-rate-only mocks/checkpoints used in tests.
-                        p = semantic_fisher_sphere_step(p, v, dt=step_size)
-                        score = v.unsqueeze(0)
+                        final_score_vec = v
+                        if gp_prior is not None and float(gp_policy_weight) != 0.0:
+                            final_score_vec = final_score_vec + float(gp_policy_weight) * gp_prior.to(
+                                device=final_score_vec.device, dtype=final_score_vec.dtype
+                            )
+                        p = semantic_fisher_sphere_step(p, final_score_vec, dt=step_size)
+                        score = final_score_vec.unsqueeze(0)
                         used_beta = beta_value
                     else:
                         score_vec = score.squeeze(0)
+                        if gp_prior is not None and float(gp_policy_weight) != 0.0:
+                            score_vec = score_vec + float(gp_policy_weight) * gp_prior.to(
+                                device=score_vec.device, dtype=score_vec.dtype
+                            )
                         used_beta = beta_for_update(
                             p,
                             score_vec,
@@ -365,8 +443,17 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
                 "proposal_prob_max": _float(proposal.max()),
                 "correction_weight_max": _float(inv_prop.max()),
                 "importance_ess": _float(ess),
+                "gp_policy_weight": float(gp_policy_weight),
+                "gp_policy_applied": bool(gp_prior is not None and float(gp_policy_weight) != 0.0),
                 "path": path_diag,
             }
+            if gp_prior is not None:
+                gp_vec = gp_prior.to(device=p.device, dtype=p.dtype)
+                diag.update({
+                    "selected_gp_prior": _float(gp_vec[choice_pos]),
+                    "selected_gp_prior_rank": _rank_desc(gp_vec, choice_pos),
+                    "gp_prior_top1_action": _action_record(space, int(action_ids[int(gp_vec.argmax().detach().cpu().item())])),
+                })
             if advantages is not None:
                 diag.update({
                     "advantage_min": _float(advantages.min()),

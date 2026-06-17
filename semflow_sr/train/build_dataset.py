@@ -26,6 +26,8 @@ def build_dataset(gen: GenConfig, num_tasks: int, target: str = "gt",
                   path_name: str = "semantic_fisher_pullback",
                   eta: float | None = None,
                   gamma: float = 0.1,
+                  gram_rank: int | None = None,
+                  support_full_threshold: int | None = None,
                   flow_training: dict | None = None) -> VelocityTraceDataset:
     if beta is None:
         beta = 1.0 if eta is None else eta
@@ -52,9 +54,10 @@ def build_dataset(gen: GenConfig, num_tasks: int, target: str = "gt",
         tgt = RolloutFitnessTarget(space, energy_cfg or ActionEnergyConfig(), **(target_kwargs or {}))
     else:
         raise ValueError(f"unknown target endpoint: {target}")
-    sampler = SupportSampler(mode=support_mode, max_support=max_support, topk=support_topk, seed=seed)
+    sampler = SupportSampler(mode=support_mode, max_support=max_support, topk=support_topk,
+                             full_threshold=support_full_threshold, seed=seed)
     return VelocityTraceDataset(records, space, prior, tgt, energy_cfg or ActionEnergyConfig(),
                                 beta=beta, seed=seed, max_support=max_support,
                                 support_sampler=sampler, cache_static=cache_static,
                                 data_device=data_device, path_name=path_name,
-                                gamma=gamma, flow_training=flow_training)
+                                gamma=gamma, gram_rank=gram_rank, flow_training=flow_training)

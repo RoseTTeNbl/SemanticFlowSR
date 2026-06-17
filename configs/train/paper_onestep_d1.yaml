@@ -1,6 +1,6 @@
 seed: 0
 out: checkpoints
-checkpoint_name: velocity_rollout_future_ode_d1.pt
+checkpoint_name: paper_onestep_d1.pt
 num_tasks: 32
 max_support: 12
 eval_every: 20
@@ -35,23 +35,11 @@ energy:
   projection: ridge
   rho: 0.001
 target:
-  name: rollout_fitness_advantage
-  advantage_eps: 0.000001
-  advantage_clip: 5.0
-  smoothing: 0.02
-rollout_target:
-  mode: online
-  max_completion_steps: 1
-  n_rollouts_per_action: 1
-  rollout_policy: mixed
-  reward_aggregation: topk_mean
-  topk: 1
-  fitness: normalized_energy_improvement
-  complexity_penalty: 0.01
-  final_complexity_penalty: 0.001
-  eval_topk: 1
-  fallback_scale: 0.25
-  seed: 0
+  name: one_step_advantage
+  center: true
+  normalize: true
+  floor: 0.001
+  importance_correction: true
 support:
   mode: adaptive_full
   full_threshold: 256
