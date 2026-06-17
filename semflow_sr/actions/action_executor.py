@@ -19,16 +19,20 @@ class ActionExecutor:
         m, K = B.shape
         A = action_ids.shape[0]
         out = B.unsqueeze(0).expand(A, m, K).clone()
-        # group by op_id to vectorize the protected op application
-        ids = action_ids.tolist()
-        for idx, aid in enumerate(ids):
-            spec = self.space.decode(int(aid))
-            op = get_op(spec.op_id)
+        specs = [self.space.decode(int(aid)) for aid in action_ids.tolist()]
+        op_ids = torch.tensor([s.op_id for s in specs], device=B.device)
+        r1 = torch.tensor([s.read_1 for s in specs], device=B.device)
+        r2 = torch.tensor([s.read_2 for s in specs], device=B.device)
+        write = torch.tensor([s.write for s in specs], device=B.device)
+        rows = torch.arange(m, device=B.device).unsqueeze(0)
+        for op_id in op_ids.unique().tolist():
+            idx = (op_ids == int(op_id)).nonzero(as_tuple=False).squeeze(-1)
+            op = get_op(int(op_id))
             if op.arity == 1:
-                col = op.fn(B[:, spec.read_1])
+                col = op.fn(B[:, r1[idx]]).transpose(0, 1)       # [n,m]
             else:
-                col = op.fn(B[:, spec.read_1], B[:, spec.read_2])
-            out[idx, :, spec.write] = col
+                col = op.fn(B[:, r1[idx]], B[:, r2[idx]]).transpose(0, 1)
+            out[idx.unsqueeze(1), rows.expand(idx.numel(), -1), write[idx].unsqueeze(1)] = col
         return out
 
     def execute_symbolic(self, state: RegisterState, action_id: int) -> RegisterState:

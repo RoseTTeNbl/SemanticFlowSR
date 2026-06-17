@@ -1,4 +1,9 @@
-"""Abstract endpoint providers. p0 (prior) and p1 (target) define the velocity path."""
+"""Legacy endpoint-provider interfaces.
+
+The current training code names the start and target distributions p_start and
+p_target. These p0/p1 methods remain as compatibility shims for older endpoint
+providers and ablation entry points.
+"""
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import torch

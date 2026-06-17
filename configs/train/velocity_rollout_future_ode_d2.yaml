@@ -1,0 +1,69 @@
+seed: 0
+out: checkpoints
+checkpoint_name: velocity_rollout_future_ode_d2.pt
+num_tasks: 40
+max_support: 12
+eval_every: 1000
+path:
+  name: semantic_fisher_pullback
+  gamma: 0.1
+  step_dt: 0.5
+update:
+  mode: fixed_beta
+  beta: 1.0
+flow_training:
+  train_along_path: true
+  num_time_samples: 2
+  target_integration_steps: 2
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 2
+data:
+  cache_static: true
+  device: cpu
+gen:
+  num_vars: 2
+  max_depth: 5
+  K: 10
+  probe_size: 24
+  ops: [add, sub, mul, protected_div, sin, cos, square, cube, exp, protected_log, protected_sqrt]
+energy:
+  lambda_rank: 0.0
+  lambda_move: 0.0
+  lambda_op: 0.01
+  projection: ridge
+  rho: 0.001
+target:
+  name: rollout_fitness_advantage
+  advantage_eps: 0.000001
+  advantage_clip: 5.0
+  smoothing: 0.02
+rollout_target:
+  mode: online
+  max_completion_steps: 1
+  n_rollouts_per_action: 1
+  rollout_policy: mixed
+  reward_aggregation: topk_mean
+  topk: 1
+  fitness: normalized_energy_improvement
+  complexity_penalty: 0.01
+  final_complexity_penalty: 0.001
+  eval_topk: 1
+  fallback_scale: 0.25
+  seed: 0
+support:
+  mode: mixed_topk_random
+  topk: 6
+model:
+  output_mode: semantic_fisher_lograte
+  hidden: 64
+  row_layers: 2
+  heads: 4
+train:
+  lr: 0.0004
+  steps: 50
+  batch_size: 4
+  loss_name: semantic_fisher_velocity
+  sf_step_dt: 0.5
+  grad_clip: 1.0
+  log_every: 25

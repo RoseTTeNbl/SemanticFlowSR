@@ -15,6 +15,7 @@ from .action_space import ActionSpace
 #                  active_r2, depth_r2, cplx_r2, age_r2,
 #                  active_w,  depth_w,  cplx_w,  age_w]
 ACTION_FEATURE_DIM = 5 + 3 * 4
+SEMANTIC_ACTION_FEATURE_DIM = 8
 
 
 def action_features(space: ActionSpace, state: RegisterState, action_ids: torch.Tensor) -> torch.Tensor:

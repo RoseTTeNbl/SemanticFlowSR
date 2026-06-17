@@ -1,10 +1,16 @@
-K: 8
-ops_ids: [0, 1, 2, 5, 6, 7]   # add, sub, mul, sin, cos, square
+# 注: run_experiment.py 实际从 checkpoint 的 gen.ops 读算子; 此处仅作参考默认。
+K: 16
+ops_ids: [0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11]   # add, sub, mul, protected_div, sin, cos, square, cube, exp, log, sqrt
 rollout:
-  max_steps: 16
-  grid: 5
-  step_size: 0.3
-  eta: 1.0
+  max_steps: 24
+  grid: 1
+  beta: 1.0
   eps: 0.0001
   greedy: true
   max_support: 128
+  support_mode: mixed_topk_random
+  support_topk: 64
+  target: one_step_advantage
+  num_policy_updates: 1
+  integration_method: semantic_fisher_sphere
+  update_mode: fixed_beta

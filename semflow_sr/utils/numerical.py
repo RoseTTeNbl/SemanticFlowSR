@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 
 EPS = 1e-12          # generic positive floor
-SQRT_EPS = 1e-8      # floor used inside chart / sqrt geometry
+SQRT_EPS = 1e-8      # floor used inside sqrt/sphere geometry
 CLAMP_LARGE = 1e6    # saturate protected ops to avoid Inf
 
 

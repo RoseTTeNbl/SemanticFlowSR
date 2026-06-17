@@ -52,24 +52,32 @@ class ActionSpace:
         return ActionSpec(op_id, r1, r2, write)
 
     def valid_mask(self, state: RegisterState) -> torch.Tensor:
-        """Boolean mask [size]. Valid iff: op allowed; read registers active; for unary,
-        read_2 canonical (==0); write register exists (any K). Self-overwrite allowed."""
+        """Boolean mask [size]. 基扩张(append)语义: write 只能写 INACTIVE 槽, 使已建好的
+        基单调累积、不被覆盖。读寄存器须 active; 一元算子 read_2 规范化(==0)。
+        一元算子不可作用于纯常数列(否则 exp(c)/sqrt(c) 等只生成退化常数, 浪费 append 槽)。
+        所有槽都激活时无合法动作(rollout 据此停机)。"""
         K = self.K
         active = state.active.bool()
+        is_const = [e.kind == "const" for e in state.exprs]   # 常数列, 禁止一元算子作用
+        free = [w for w in range(K) if not active[w]]         # 仅空闲槽可写
         mask = torch.zeros(self.size, dtype=torch.bool)
+        if not free:
+            return mask
         for op_id in self.allowed_ops:
             arity = get_op(op_id).arity
             for r1 in range(K):
                 if not active[r1]:
                     continue
                 if arity == 1:
-                    for w in range(K):
+                    if is_const[r1]:                          # 一元算子作用于常数列 -> 退化, 跳过
+                        continue
+                    for w in free:
                         mask[self.encode(ActionSpec(op_id, r1, 0, w))] = True
                 else:
                     for r2 in range(K):
                         if not active[r2]:
                             continue
-                        for w in range(K):
+                        for w in free:
                             mask[self.encode(ActionSpec(op_id, r1, r2, w))] = True
         return mask
 

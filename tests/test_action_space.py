@@ -41,3 +41,19 @@ def test_valid_mask_respects_active():
     for aid in ids.tolist():
         spec = space.decode(aid)
         assert state.active[spec.read_1] and state.active[spec.read_2]
+
+
+def test_append_semantics_write_only_inactive():
+    # 基扩张语义: 合法动作的 write 必须是未激活槽; 已激活的基不可被覆盖
+    state = init_register_state(num_vars=1, K=5)   # active: 0(var),1(const); inactive: 2,3,4
+    space = ActionSpace(K=5, allowed_ops=[2, 7])   # mul, square
+    for aid in space.valid_actions(state).tolist():
+        spec = space.decode(aid)
+        assert not state.active[spec.write], "write 落到了已激活槽(违反 append 语义)"
+
+
+def test_append_no_actions_when_full():
+    state = init_register_state(num_vars=1, K=3)
+    state.active[:] = 1.0                           # 所有槽都激活 -> 无空闲槽
+    space = ActionSpace(K=3, allowed_ops=[2])
+    assert space.valid_actions(state).numel() == 0

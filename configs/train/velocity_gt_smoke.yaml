@@ -1,0 +1,45 @@
+seed: 0
+out: checkpoints
+num_tasks: 400
+max_support: 64
+path:
+  name: semantic_fisher_pullback
+  gamma: 0.1
+  step_dt: 1.0
+update:
+  mode: fixed_beta
+  beta: 1.0
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 2
+data:
+  cache_static: true
+  device: cpu
+gen:
+  num_vars: 1
+  max_depth: 4
+  K: 8
+  probe_size: 64
+  ops: [add, sub, mul, protected_div, sin, cos, square]
+energy:
+  lambda_rank: 0.0
+  lambda_move: 0.0
+  lambda_op: 0.01
+  projection: ridge
+  rho: 0.001
+support:
+  mode: mixed_topk_random
+  topk: 32
+model:
+  output_mode: semantic_fisher_lograte
+  hidden: 64
+  row_layers: 2
+  heads: 4
+train:
+  lr: 0.0005
+  steps: 800
+  batch_size: 16
+  loss_name: semantic_fisher_velocity
+  sf_step_dt: 1.0
+  grad_clip: 1.0
+  log_every: 100

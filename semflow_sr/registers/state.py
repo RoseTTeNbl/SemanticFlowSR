@@ -1,8 +1,9 @@
 """Register state and semantic state dataclasses.
 
-A fixed-register symbolic program holds K register expressions. Actions overwrite a
-register with op(read_1, read_2). Metadata (active/depth/complexity/age) feeds the
-register encoder and action masks.
+A fixed-register symbolic program holds K register expressions. Legal actions use
+append-only writes into inactive registers; execution still replaces the chosen write
+slot with op(read_1, read_2). Metadata (active/depth/complexity/age) feeds the register
+encoder and action masks.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field

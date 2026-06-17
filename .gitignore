@@ -16,9 +16,19 @@ venv/
 # Generated artifacts
 /data/
 /checkpoints/
+/outputs/
 /results/
 *.pt
 *.ckpt
+
+# Local working materials requested to stay out of new tracking.
+# Already tracked docs/tests remain tracked by Git; this only hides new local files.
+/prompts/
+/docs/*
+!/docs/IMPROVEMENT_NOTES.md
+/tests/*
+!/tests/test_group_advantage_target.py
+!/tests/test_support_sampler.py
 
 # External clones (reference / large data; keep code-tracking out)
 /external/

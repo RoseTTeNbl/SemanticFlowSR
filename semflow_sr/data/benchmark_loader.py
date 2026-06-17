@@ -67,3 +67,29 @@ class PMLBLoader:
         idx = rng.permutation(len(y)); cut = int(len(y) * (1 - test_frac))
         tr, te = idx[:cut], idx[cut:]
         return SRTask(name, X[tr], y[tr], X[te], y[te], None, cols, {"source": "pmlb"})
+
+
+class FeynmanCSVLoader:
+    """Load a materialized Feynman task from data/materialized/feynman/<name>/seed_<s>_{train,test}.csv."""
+
+    def __init__(self, root: str | Path = "data/materialized/feynman"):
+        self.root = Path(root)
+
+    def names(self, n_vars: int | None = None) -> list[str]:
+        import json
+        out = []
+        for meta in sorted(self.root.glob("*/metadata.json")):
+            m = json.loads(meta.read_text())
+            if n_vars is None or m["n_vars"] == n_vars:
+                out.append(m["name"])
+        return out
+
+    def load(self, name: str, seed: int = 0) -> SRTask:
+        import pandas as pd
+        d = self.root / name
+        tr = pd.read_csv(d / f"seed_{seed}_train.csv")
+        te = pd.read_csv(d / f"seed_{seed}_test.csv")
+        cols = [c for c in tr.columns if c != "target"]
+        return SRTask(name, tr[cols].to_numpy(float), tr["target"].to_numpy(float),
+                      te[cols].to_numpy(float), te["target"].to_numpy(float),
+                      None, cols, {"suite": "feynman", "seed": seed})

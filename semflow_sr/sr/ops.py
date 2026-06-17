@@ -55,5 +55,10 @@ def op_cost(op_id: int) -> float:
 
 
 def default_op_subset() -> list[str]:
-    """The first-milestone reduced operator set used in the success criteria."""
-    return ["add", "sub", "mul", "sin", "cos", "square"]
+    """Default operator set.
+
+    add/sub are kept because linear readout only combines terminal columns; nonlinear
+    compositions such as sin(x+x^2) require an intermediate add/sub register.
+    """
+    return ["add", "sub", "mul", "protected_div", "sin", "cos", "square", "cube",
+            "exp", "protected_log", "protected_sqrt"]

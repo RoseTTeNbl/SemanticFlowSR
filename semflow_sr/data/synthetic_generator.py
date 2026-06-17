@@ -1,7 +1,8 @@
 """Synthetic expression generator and register-trace sampler.
 
 Generates random expressions over the reduced operator set, samples a probe (x,y), then
-compiles to a register trace. Each trace step is a training sample for velocity matching.
+compiles to a register trace. Each trace step is a local target sample for
+semantic-Fisher local update supervision.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -33,6 +34,9 @@ def _rand_expr(cfg: GenConfig, rng: random.Random, depth: int) -> Expr:
     op_id = NAME_TO_ID[op_name]
     arity = get_op(op_id).arity
     children = tuple(_rand_expr(cfg, rng, depth + 1) for _ in range(arity))
+    # 一元算子不作用于纯常数子节点(与 valid_mask 约束一致, 避免退化子树如 exp(1))
+    if arity == 1 and children[0].kind == "const":
+        return children[0] if cfg.num_vars == 0 else Expr.var(rng.randrange(cfg.num_vars))
     return Expr.op(op_id, children)
 
 

@@ -1,0 +1,63 @@
+seed: 0
+out: checkpoints
+num_tasks: 120
+max_support: 16
+eval_every: 100
+path:
+  name: semantic_fisher_pullback
+  gamma: 0.1
+  step_dt: 1.0
+update:
+  mode: fixed_beta
+  beta: 1.0
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 2
+data:
+  cache_static: true
+  device: cpu
+gen:
+  num_vars: 1
+  max_depth: 4
+  K: 8
+  probe_size: 32
+  ops: [add, sub, mul, protected_div, sin, cos, square, cube, exp, protected_log, protected_sqrt]
+energy:
+  lambda_rank: 0.0
+  lambda_move: 0.0
+  lambda_op: 0.01
+  projection: ridge
+  rho: 0.001
+target:
+  name: rollout_fitness_advantage
+  advantage_eps: 0.000001
+  advantage_clip: 5.0
+  smoothing: 0.02
+rollout_target:
+  mode: online
+  max_completion_steps: 1
+  n_rollouts_per_action: 1
+  rollout_policy: mixed
+  reward_aggregation: topk_mean
+  topk: 1
+  fitness: normalized_energy_improvement
+  complexity_penalty: 0.01
+  eval_topk: 2
+  fallback_scale: 0.25
+  seed: 0
+support:
+  mode: mixed_topk_random
+  topk: 8
+model:
+  output_mode: semantic_fisher_lograte
+  hidden: 48
+  row_layers: 2
+  heads: 4
+train:
+  lr: 0.0005
+  steps: 200
+  batch_size: 8
+  loss_name: semantic_fisher_velocity
+  sf_step_dt: 1.0
+  grad_clip: 1.0
+  log_every: 25

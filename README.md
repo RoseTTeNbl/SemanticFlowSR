@@ -1,79 +1,118 @@
 # SemanticFlowSR
 
-Semantic-conditioned **local velocity flow** for symbolic regression.
+SemanticFlowSR now uses a single main algorithm:
 
-The method defines a velocity flow on the one-step discrete **action simplex** `Δ(A)`,
-conditioned on the current semantic matrix `B`, probe target `y`, and action-induced
-semantic energies. The core chart is the **semantic-conditioned Fisher chart**
-
+```text
+centered semantic energy
+-> action semantic effect vectors
+-> semantic-Fisher pullback metric
+-> exact local log-rate target from a small linear system
+-> square-root sphere update
+-> model learns the local update operator
 ```
-S_{B,y}(p)(a) = w_{B,y}(a)·√p(a) / ( Σ_b w_{B,y}(b)²·p(b) )^{1/2},
-w_{B,y}(a)    = exp(-η/2 · E_{B,y}(a)).
-```
 
-Training is **strict velocity matching** to the closed-form `ṗ_λ` of the semantic Fisher
-slerp path — *not* endpoint KL / action classification. No GP, no graph measure, no
-full-expression-space flow, no STOP action (stop by semantic-energy threshold).
+The main model output is not a free velocity and not a scalar endpoint potential. It
+predicts a support-local semantic-Fisher `lograte` `w_theta(c, a)`. Training matches the
+target square-root sphere tangent `z_dot`, and inference applies one positive sphere
+retraction step.
 
-文档（中文）：[docs/](docs/README.md) — 架构、算法、理论映射、数据集、外部基线。
+Only two legacy comparisons remain: `gamma=0` inside the semantic-Fisher solver
+(no pullback term), and the plain Fisher `closed_form` / `SpherePathLoss` potential
+ablation.
 
 ## Environment
 
-GPU: 3× RTX 3090 (sm_86), CUDA driver 13.2 / nvcc 12.6.
+Run from `SemanticFlowSR/` in the `semflow` environment.
 
 ```bash
 conda create -n semflow python=3.11
 conda activate semflow
 pip install --index-url https://download.pytorch.org/whl/cu126 torch
 pip install numpy scipy sympy pyyaml pandas scikit-learn tqdm einops pytest
-pip install -e .          # from SemanticFlowSR/
-python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
+pip install -e .
 ```
 
-## Run workflow
-
-Four stages: **(0)** test → **(1)** build data → **(2)** train → **(3)** eval. Run from
-`SemanticFlowSR/` in the `semflow` env.
+## Verified Workflow
 
 ```bash
-# 0. verify install (24 correctness tests)
-pytest -q
+# 0. unit tests
+conda run -n semflow pytest -q
 
-# 1a. core velocity-flow trace dataset (the training data)
-python scripts/generate_trace_dataset.py \
-  --num_tasks 2000 --num_vars 1 --max_depth 4 --K 8 --probe_size 128 \
-  --target gt --out data/local_flow_traces/v0
+# 1. train the base semantic-Fisher model
+conda run -n semflow python -m semflow_sr.train.train_base_natural_flow \
+  --config configs/train/base_natural_flow.yaml
 
-# 1b. standard SR formula benchmarks -> per-seed CSVs
-python scripts/materialize_formula_benchmark.py \
-  --suite nguyen constant livermore jin --seeds 0 1 2 3 4 --out data/materialized
-
-# 1c. PMLB Feynman subset (data already in external/pmlb/datasets/)
-python scripts/cache_pmlb_subset.py --pattern feynman --out data/pmlb/feynman
-
-# 2. train the velocity model (strict velocity matching)
-python -m semflow_sr.train.train_velocity_gt --config configs/train/velocity_gt.yaml
-python -m semflow_sr.train.train_velocity_semantic_oracle \
-  --config configs/train/velocity_semantic_oracle.yaml
-
-# 4. baselines (each in its OWN conda env — see docs/baselines/)
-python scripts/run_pysr_baseline.py --data data/materialized/nguyen --out results/pysr
+# 2. evaluate the checkpoint with semantic-Fisher sphere updates
+conda run -n semflow python scripts/run_experiment.py \
+  --ckpt checkpoints/velocity_one_step_advantage.pt \
+  --suite nguyen constant livermore jin \
+  --seed 0 \
+  --out results/semantic_fisher \
+  --tag formula_1var_seed0 \
+  --max_steps 12 \
+  --grid 1 \
+  --step_size 1.0 \
+  --max_support 32 \
+  --support_mode mixed_topk_random \
+  --support_topk 16 \
+  --target one_step_advantage \
+  --integration_method semantic_fisher_sphere \
+  --beta 1.0 \
+  --gamma 0.1 \
+  --record_diagnostics \
+  --record_path \
+  --device cpu
 ```
 
-**Stage 3 (eval)** loads a checkpoint, integrates `v_θ` from `p0` over a λ-grid, executes
-actions until residual energy is small, and reports R²/expression. See the runnable
-snippet in [docs/datasets/adaptation.md](docs/datasets/adaptation.md).
+## Latest Verified Results
 
-Details per stage: data → [docs/datasets/](docs/datasets/README.md); training/eval flags →
-each `configs/{train,eval}/*.yaml`; baselines → [docs/baselines/](docs/baselines/README.md).
+From `results/train_semantic_fisher.log`:
+
+- final `semantic_fisher_velocity_loss`: `0.001397`
+- held-out rollout `reward(r2)`: `0.9282`
+
+From `results/semantic_fisher/formula_1var_seed0_summary.json` on 20 one-variable tasks:
+
+- `mean R2`: `0.999041`
+- `median R2`: `0.999999`
+- `solution_rate`: `0.95`
+- `steps_mean`: `4.6`
+
+Local ranking diagnostics from the same run:
+
+- `selected_reward_rank_mean`: `3.65`
+- `pred_top1_reward_rank_mean`: `3.65`
+- `selected_probability_rank_mean`: `1.0`
+- `exact_semantic_fisher_top1_reward_rank_mean`: `6.4`
+- `plain_fisher_top1_reward_rank_mean`: `15.4`
+
+That is the current reason for the shift: the old plain Fisher-sphere line had
+`solution_rate = 0.15` and `selected_reward_rank_mean = 23.625`; the semantic-Fisher
+pullback version closes most of that gap.
+
+## Current Entry Points
+
+| Purpose | File |
+|---|---|
+| Base training entry | `semflow_sr/train/train_base_natural_flow.py` |
+| Local semantic effects | `semflow_sr/semantics/energy.py` |
+| Semantic-Fisher solver | `semflow_sr/flow/semantic_fisher.py` |
+| Main trainer loss | `semflow_sr/train/losses.py::SemanticFisherVelocityLoss` |
+| Main model | `semflow_sr/models/semantic_transformer.py` |
+| Inference update helpers | `semflow_sr/inference/iterative_policy_update.py` |
+| Search / rollout inference | `semflow_sr/search/rollout_velocity.py` |
+| Benchmark evaluation | `scripts/run_experiment.py` |
+| GP extension interfaces | `semflow_sr/gp_distill/`, `semflow_sr/targets/gp_implicit_target.py` |
 
 ## Layout
 
-```
-configs/   实验配置        semflow_sr/  核心包        scripts/  命令行入口
-tests/     24 个测试        docs/        文档          external/ 参考仓库 + PMLB 数据
+```text
+configs/      experiment configs
+semflow_sr/   core package
+scripts/      data/eval/baseline CLIs
+tests/        correctness and workflow tests
+docs/         algorithm, theory mapping, architecture, dataset notes
+results/      generated experiment reports
 ```
 
-Full directory & file descriptions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-The theoretical core is `semflow_sr/semantics/` (B, projection, energy) and
-`semflow_sr/geometry/` (chart, slerp path, closed-form velocity).
+See [docs/README.md](docs/README.md) for the internal docs index.

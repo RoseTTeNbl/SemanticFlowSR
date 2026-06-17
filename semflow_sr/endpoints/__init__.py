@@ -3,3 +3,5 @@ from .prior_uniform import UniformPrior
 from .prior_grammar import GrammarPrior
 from .target_gt import GTTarget
 from .target_semantic_oracle import SemanticOracleTarget
+from .target_group_advantage import GroupAdvantageTarget
+from .target_rollout_fitness import RolloutFitnessTarget

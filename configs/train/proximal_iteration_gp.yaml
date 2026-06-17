@@ -1,0 +1,27 @@
+outer_loop:
+  num_iterations: 3
+  snapshot_dir: checkpoints/proximal_gp_snapshots
+  target_cache_dir: data/proximal_gp_targets
+policy_start:
+  source: snapshot
+  fallback: grammar
+target:
+  name: gp_implicit_barycenter
+  alpha_gp: 0.3
+update:
+  mode: fixed_beta
+  beta: 1.0
+path:
+  name: semantic_fisher_pullback
+  gamma: 0.1
+  step_dt: 1.0
+gp_distill:
+  event_path: data/gp_events
+  kernel: cosine_semantic
+  topk_events: 128
+  proposal_correction: true
+support:
+  mode: mixed_topk_random
+  max_support: 64
+  topk_one_step: 32
+  random_k: 32

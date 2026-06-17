@@ -18,13 +18,23 @@ from ..utils.numerical import clamp_finite
 
 
 def _gram(B: torch.Tensor) -> torch.Tensor:
-    return B.transpose(-1, -2) @ B            # [...,K,K]
+    return clamp_finite(B.transpose(-1, -2) @ B)            # [...,K,K]; guard overflow
+
+
+def _center_B(B: torch.Tensor) -> torch.Tensor:
+    return B - B.mean(dim=-2, keepdim=True)
 
 
 def _ridge_inv(G: torch.Tensor, rho: float) -> torch.Tensor:
     K = G.shape[-1]
     I = torch.eye(K, device=G.device, dtype=G.dtype).expand_as(G)
-    return torch.linalg.solve(G + rho * I, I)
+    try:
+        return torch.linalg.solve(G + rho * I, I)
+    except Exception:
+        # singular (huge/collinear columns): scale ridge by Gram magnitude, then pinv
+        scale = torch.diagonal(G, dim1=-2, dim2=-1).abs().mean(-1, keepdim=True).clamp(min=1.0)
+        reg = (rho * scale).unsqueeze(-1) * I
+        return torch.linalg.pinv(G + reg)
 
 
 class ProjectionBackend:
@@ -42,15 +52,23 @@ class ProjectionBackend:
         return torch.linalg.pinv(G)
 
     def project_y(self, B: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """Π y. B:[...,m,K], y:[m] or [...,m] -> [...,m]."""
-        Minv = self._Minv(B)
-        By = (B.transpose(-1, -2) @ y.unsqueeze(-1))      # [...,K,1]
-        coeff = Minv @ By                                  # [...,K,1]
-        return clamp_finite((B @ coeff).squeeze(-1))
+        """中心化岭投影: ŷ = ȳ + Π_{B̃}(y−ȳ), B̃/ỹ 为去均值列/目标。
+        截距由去均值隐式吸收, 故常数列无法靠均值偏移获得虚假收益。"""
+        Bc = _center_B(B)                                # 列去均值
+        yc = y - y.mean(dim=-1, keepdim=True)
+        Minv = self._Minv(Bc)
+        By = (Bc.transpose(-1, -2) @ yc.unsqueeze(-1))    # [...,K,1]
+        coeff = Minv @ By
+        fit = (Bc @ coeff).squeeze(-1) + y.mean(dim=-1, keepdim=True)
+        return clamp_finite(fit)
 
     def residual_energy(self, B: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        r = y - self.project_y(B, y)
+        r = self.residual_vector(B, y)
         return 0.5 * (r * r).sum(dim=-1)
+
+    def residual_vector(self, B: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        """Centered residual vector ``y - Π_B y`` on the shared projection backend."""
+        return clamp_finite(y - self.project_y(B, y))
 
     def explained_energy(self, B: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         py = self.project_y(B, y)
@@ -58,8 +76,9 @@ class ProjectionBackend:
 
     def effective_rank(self, B: torch.Tensor) -> torch.Tensor:
         """Tr(Π_{B,ρ}) = Tr((G+ρI)^{-1} G)."""
-        G = _gram(B)
-        Minv = self._Minv(B)
+        Bc = _center_B(B)
+        G = _gram(Bc)
+        Minv = self._Minv(Bc)
         prod = Minv @ G
         return clamp_finite(torch.diagonal(prod, dim1=-2, dim2=-1).sum(dim=-1))
 
@@ -75,17 +94,20 @@ class ProjectionBackend:
     # helpers
     def _trace_proj_sq(self, B: torch.Tensor) -> torch.Tensor:
         """Tr(Π²) = Tr(M G M G) with M=(G+ρI)^{-1}, G=BᵀB."""
-        G = _gram(B)
-        M = self._Minv(B)
+        Bc = _center_B(B)
+        G = _gram(Bc)
+        M = self._Minv(Bc)
         prod = M @ G @ M @ G
         return torch.diagonal(prod, dim1=-2, dim2=-1).sum(dim=-1)
 
     def _trace_cross(self, B1: torch.Tensor, B2: torch.Tensor) -> torch.Tensor:
         """Tr(Π1 Π2) with Πi = Bi Mi Biᵀ, Mi=(Gi+ρI)^{-1}.
         = Tr( M1 (B1ᵀB2) M2 (B2ᵀB1) )."""
-        M1 = self._Minv(B1)
-        M2 = self._Minv(B2)
-        C12 = B1.transpose(-1, -2) @ B2            # [...,K,K]
+        B1c = _center_B(B1)
+        B2c = _center_B(B2)
+        M1 = self._Minv(B1c)
+        M2 = self._Minv(B2c)
+        C12 = B1c.transpose(-1, -2) @ B2c          # [...,K,K]
         C21 = C12.transpose(-1, -2)
         prod = M1 @ C12 @ M2 @ C21
         return torch.diagonal(prod, dim1=-2, dim2=-1).sum(dim=-1)

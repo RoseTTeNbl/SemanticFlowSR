@@ -17,9 +17,16 @@ def test_velocity_model_shapes_and_zero_sum():
     lam = torch.rand(bsz)
     mask = torch.ones(bsz, A, dtype=torch.bool)
     mask[:, -3:] = False
+    semantic_stats = torch.randn(bsz, A, 8)
+    gram = torch.randn(bsz, A, A)
+    gram = gram @ gram.transpose(-1, -2)
     out = model(x=x, y=y, B=B, p_lambda=p_lambda, lambda_value=lam, action_feats=feats,
-                energies=energies, weights=weights, action_mask=mask)
+                energies=energies, weights=weights, semantic_stats=semantic_stats, gram=gram,
+                action_mask=mask)
     assert out.v_pred.shape == (bsz, A)
+    assert out.lograte_logits.shape == (bsz, A)
+    assert out.z_dot_pred.shape == (bsz, A)
     masked_sum = (out.v_pred * mask).sum(-1)
     assert torch.allclose(masked_sum, torch.zeros(bsz), atol=1e-5)
     assert (out.v_pred * (~mask)).abs().sum() < 1e-6   # invalid actions stay zero
+    assert (out.lograte_logits * (~mask)).abs().sum() < 1e-6

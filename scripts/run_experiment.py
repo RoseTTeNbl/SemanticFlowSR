@@ -1,0 +1,227 @@
+#!/usr/bin/env python
+"""Run velocity-rollout evaluation over a benchmark and record sample/stat metrics.
+
+Loads a trained checkpoint, evaluates each task it can fit (num_vars must match the
+checkpoint's gen config), and writes <tag>_samples.jsonl + <tag>_summary.json.
+"""
+from __future__ import annotations
+import argparse
+import json
+from dataclasses import dataclass
+from pathlib import Path
+import yaml
+import torch
+
+from semflow_sr.models.semantic_transformer import SemanticTransformer, SemanticTransformerConfig
+from semflow_sr.data.benchmark_loader import materialize_formula, PMLBLoader, FeynmanCSVLoader
+from semflow_sr.eval.evaluator import evaluate_task
+from semflow_sr.eval.results import save_results
+from semflow_sr.semantics.energy import ActionEnergyConfig
+from semflow_sr.sr.ops import NAME_TO_ID
+
+CFG_DIR = Path(__file__).resolve().parents[1] / "configs" / "data" / "formula_benchmarks"
+
+
+@dataclass
+class ModelRunner:
+    ckpt: str
+    model: SemanticTransformer
+    gen_cfg: dict
+    energy_cfg: dict
+    ops_ids: list[int]
+    cfg: dict
+    beta: float
+
+
+def load_model(ckpt_path: str, device):
+    ck = torch.load(ckpt_path, map_location=device, weights_only=False)
+    cfg = ck["meta"]["cfg"]
+    g = cfg["gen"]
+    m = cfg["model"]
+    model = SemanticTransformer(SemanticTransformerConfig(
+        d=g["num_vars"], K=g["K"], hidden=m["hidden"],
+        row_layers=m["row_layers"], heads=m["heads"],
+        output_mode=m.get("output_mode", "semantic_fisher_lograte")))
+    model.load_state_dict(ck["model"]); model.eval().to(device)
+    return model, g, cfg.get("energy", {}), cfg
+
+
+def load_runner(ckpt_path: str, device) -> ModelRunner:
+    model, g, ecfg, cfg = load_model(ckpt_path, device)
+    return ModelRunner(ckpt=str(ckpt_path), model=model, gen_cfg=g, energy_cfg=ecfg,
+                       ops_ids=[NAME_TO_ID[o] for o in g["ops"]],
+                       cfg=cfg, beta=_checkpoint_beta(cfg))
+
+
+def _checkpoint_beta(cfg: dict) -> float:
+    update = cfg.get("update", {})
+    return float(update.get("beta", cfg.get("beta", cfg.get("eta", 1.0))))
+
+
+def _checkpoint_gamma(cfg: dict) -> float:
+    return float(cfg.get("path", {}).get("gamma", 0.1))
+
+
+def parse_ckpt_by_vars(specs: list[str] | None) -> dict[int, str]:
+    out: dict[int, str] = {}
+    for spec in specs or []:
+        if ":" not in spec:
+            raise ValueError(f"bad --ckpt_by_vars entry {spec!r}; expected N:path")
+        k, v = spec.split(":", 1)
+        if not k.isdigit() or not v:
+            raise ValueError(f"bad --ckpt_by_vars entry {spec!r}; expected N:path")
+        out[int(k)] = v
+    return out
+
+
+def parse_target_kwargs(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError("--target_kwargs must be a JSON object")
+    return parsed
+
+
+def select_runner_for_task(num_vars: int, runners: dict[int, ModelRunner]):
+    return runners.get(int(num_vars))
+
+
+def missing_checkpoint_dims(tasks, runners: dict[int, ModelRunner]) -> list[int]:
+    dims = {int(t.X_train.shape[1]) for t in tasks}
+    return sorted(d for d in dims if d not in runners)
+
+
+def gather_tasks(args, num_vars=None):
+    tasks = []
+    for suite in args.suite:
+        for entry in yaml.safe_load((CFG_DIR / f"{suite}.yaml").read_text()):
+            if num_vars is not None and len(entry["variables"]) != num_vars:
+                continue
+            entry.setdefault("suite", suite)
+            tasks.append(materialize_formula(entry, args.seed))
+    if args.pmlb_root and args.pmlb:
+        loader = PMLBLoader(args.pmlb_root)
+        for name in args.pmlb:
+            try:
+                t = loader.load(name, seed=args.seed)
+            except Exception as e:
+                print(f"skip {name}: {e}"); continue
+            if num_vars is None or t.X_train.shape[1] == num_vars:
+                tasks.append(t)
+    if args.feynman:
+        floader = FeynmanCSVLoader()
+        for name in floader.names(n_vars=num_vars):
+            try:
+                tasks.append(floader.load(name, seed=args.seed))
+            except Exception as e:
+                print(f"skip {name}: {e}")
+    return tasks
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--ckpt", default=None, help="single checkpoint; tasks are filtered to its num_vars")
+    ap.add_argument("--ckpt_by_vars", nargs="*", default=None,
+                    help="dimension-to-checkpoint mapping, e.g. 1:ckpt_1.pt 2:ckpt_2.pt")
+    ap.add_argument("--suite", nargs="+", default=["nguyen"])
+    ap.add_argument("--pmlb", nargs="+", default=[])
+    ap.add_argument("--pmlb_root", default="external/pmlb")
+    ap.add_argument("--feynman", action="store_true", help="纳入物化的 Feynman 任务(按 num_vars 过滤)")
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out", default="results/semflow")
+    ap.add_argument("--tag", default="run")
+    ap.add_argument("--max_steps", type=int, default=16)
+    ap.add_argument("--grid", type=int, default=5)
+    ap.add_argument("--step_size", type=float, default=1.0)
+    ap.add_argument("--max_support", type=int, default=128)
+    ap.add_argument("--support_mode", default="mixed_topk_random",
+                    choices=["full", "topk_reward", "mixed_topk_random", "proposal_importance"])
+    ap.add_argument("--support_topk", type=int, default=64)
+    ap.add_argument("--target", default="one_step_advantage",
+                    choices=["one_step_advantage", "group_advantage", "semantic_advantage_flow", "rollout_fitness_advantage",
+                             "rollout_fitness", "energy"])
+    ap.add_argument("--target_kwargs", default="{}",
+                    help="JSON object forwarded to the rollout target builder")
+    ap.add_argument("--num_policy_updates", type=int, default=1,
+                    help="number of repeated local model-flow policy updates per SR step")
+    ap.add_argument("--integration_method", default="semantic_fisher_sphere",
+                    choices=["semantic_fisher_sphere", "semantic_fisher_ode", "closed_form"],
+                    help="mainline is semantic_fisher_sphere/ode; closed_form is the plain-Fisher potential ablation")
+    ap.add_argument("--ode_steps", type=int, default=1,
+                    help="internal ODE substeps for --integration_method semantic_fisher_ode")
+    ap.add_argument("--beta", type=float, default=None,
+                    help="fixed natural-flow update strength; defaults to checkpoint update.beta or 1.0")
+    ap.add_argument("--gamma", type=float, default=None,
+                    help="semantic-Fisher pullback weight; defaults to checkpoint path.gamma or 0.1")
+    ap.add_argument("--update_mode", default="fixed_beta", choices=["fixed_beta", "target_kl"])
+    ap.add_argument("--target_kl", type=float, default=0.05)
+    ap.add_argument("--beta_max", type=float, default=10.0)
+    ap.add_argument("--bisection_steps", type=int, default=20)
+    ap.add_argument("--record_diagnostics", action="store_true",
+                    help="write per-rollout-step support/reward/probability diagnostics into samples")
+    ap.add_argument("--record_path", action="store_true",
+                    help="with --record_diagnostics, also record per-lambda velocity/path summaries")
+    ap.add_argument("--require_all_ckpts", action="store_true",
+                    help="fail if --ckpt_by_vars does not cover every loaded task dimension")
+    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    a = ap.parse_args()
+    target_kwargs = parse_target_kwargs(a.target_kwargs)
+
+    device = torch.device(a.device)
+    ckpt_by_vars = parse_ckpt_by_vars(a.ckpt_by_vars)
+    if ckpt_by_vars:
+        runners = {dim: load_runner(path, device) for dim, path in sorted(ckpt_by_vars.items())}
+        tasks = gather_tasks(a, num_vars=None)
+        missing = missing_checkpoint_dims(tasks, runners)
+        if a.require_all_ckpts and missing:
+            raise SystemExit(f"missing checkpoints for num_vars: {missing}")
+        print(f"evaluating up to {len(tasks)} tasks with checkpoints for dims {sorted(runners)}")
+    else:
+        if not a.ckpt:
+            raise SystemExit("provide either --ckpt or --ckpt_by_vars")
+        runner = load_runner(a.ckpt, device)
+        runners = {int(runner.gen_cfg["num_vars"]): runner}
+        tasks = gather_tasks(a, runner.gen_cfg["num_vars"])
+        print(f"evaluating {len(tasks)} tasks (num_vars={runner.gen_cfg['num_vars']})")
+
+    reports = []
+    skipped = []
+    for t in tasks:
+        n_vars = int(t.X_train.shape[1])
+        runner = select_runner_for_task(n_vars, runners)
+        if runner is None:
+            skipped.append({"name": t.name, "n_vars": n_vars,
+                            "reason": "missing checkpoint for num_vars"})
+            print(f"  skip {t.name:16s} n_vars={n_vars}: missing checkpoint")
+            continue
+        g = runner.gen_cfg
+        rep = evaluate_task(runner.model, t, K=g["K"], ops_ids=runner.ops_ids, device=device,
+                            energy_cfg=ActionEnergyConfig(**runner.energy_cfg), max_steps=a.max_steps,
+                            grid=a.grid, step_size=a.step_size, greedy=True, max_support=a.max_support,
+                            support_mode=a.support_mode, support_topk=a.support_topk,
+                            target=a.target, target_kwargs=target_kwargs,
+                            beta=(a.beta if a.beta is not None else runner.beta),
+                            gamma=(a.gamma if a.gamma is not None else _checkpoint_gamma(runner.cfg)),
+                            num_policy_updates=a.num_policy_updates,
+                            integration_method=a.integration_method,
+                            ode_steps=a.ode_steps,
+                            update_mode=a.update_mode, target_kl=a.target_kl,
+                            beta_max=a.beta_max, bisection_steps=a.bisection_steps,
+                            record_diagnostics=a.record_diagnostics,
+                            record_path=a.record_path)
+        rep.task_metadata = dict(rep.task_metadata or {})
+        rep.task_metadata.update({"checkpoint": runner.ckpt, "checkpoint_num_vars": int(g["num_vars"])})
+        reports.append(rep)
+        print(f"  {rep.name:16s} r2={rep.r2:.4f} acc={rep.acc_tau:.0f} "
+              f"steps={rep.steps} cplx={rep.complexity}")
+    summary = save_results(reports, a.out, a.tag)
+    out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
+    (out / f"{a.tag}_skipped.json").write_text(json.dumps(skipped, indent=2))
+    summary["skipped"] = len(skipped)
+    (out / f"{a.tag}_summary.json").write_text(json.dumps(summary, indent=2))
+    print("summary:", summary)
+
+
+if __name__ == "__main__":
+    main()
