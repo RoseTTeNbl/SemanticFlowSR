@@ -1,0 +1,35 @@
+methods:
+  SFSR-RiskFlow-H1:
+    execution_mode: global_block_commit
+    block_size: 1
+    trajectory_num_samples: 64
+    trajectory_max_len: 8
+    block_aggregation: mean
+    risk_mode: top_alpha
+    risk_alpha: 0.1
+    risk_normalize: rank
+    global_block_selector: exact
+  SFSR-RiskFlow-H3:
+    execution_mode: global_block_commit
+    block_size: 3
+    trajectory_num_samples: 64
+    trajectory_max_len: 8
+    block_aggregation: mean
+    risk_mode: top_alpha
+    risk_alpha: 0.1
+    risk_normalize: rank
+    global_block_selector: exact
+  SFSR-RiskFlow-H5:
+    execution_mode: global_block_commit
+    block_size: 5
+    trajectory_num_samples: 64
+    trajectory_max_len: 8
+    block_aggregation: mean
+    risk_mode: top_alpha
+    risk_alpha: 0.1
+    risk_normalize: rank
+    global_block_selector: exact
+  SFSR-RiskFlow-FullSelector:
+    execution_mode: full_selector
+    trajectory_num_samples: 64
+    trajectory_max_len: 8

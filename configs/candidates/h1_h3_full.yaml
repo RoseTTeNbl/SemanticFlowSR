@@ -1,0 +1,25 @@
+candidate:
+  block_sizes: [H1, H3, full]
+  budgets:
+    H1: 64
+    H3: 64
+    full: 64
+  block_first_topk: 8
+  block_branch_topk: 4
+  cache:
+    enabled: true
+    path: data/candidate_targets/h1_h3_full.jsonl
+    read: true
+    write: true
+  gp_prior:
+    enabled: false
+    weight: 1.0
+    complexity_weight: 0.0
+    source: null
+
+target:
+  beta: 1.0
+  gamma: 0.1
+  gram_rank: 8
+  advantage_eps: 0.000001
+  advantage_clip: 5.0

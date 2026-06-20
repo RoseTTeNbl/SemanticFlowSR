@@ -1,11 +1,13 @@
-"""Rollout-fitness advantage provider for compatibility experiments.
+"""Legacy action-level rollout-fitness endpoint for compatibility experiments.
 
-The current mainline treats rollout/search as evaluator-based improvement providers:
-they estimate future-value scores on the support, normalize them into advantages,
-and induce a conservative target through the semantic-Fisher pullback solver.
+The current mainline target construction is candidate trajectory flow:
+sample complete candidates, execute each ``omega: B -> B^omega``, score terminal
+residual reward, and build the semantic-Fisher target on that candidate simplex.
 
-This file keeps the old endpoint-style build_p1 API so legacy training/evaluation
-entry points continue to run.
+This file keeps the older endpoint-style ``build_p1`` API so historical
+action-support training/evaluation entry points continue to run. It should be used
+only for legacy ablations unless a caller explicitly wants the old "first action
+then completion rollout" target.
 """
 from __future__ import annotations
 

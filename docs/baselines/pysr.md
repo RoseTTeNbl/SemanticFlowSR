@@ -1,26 +1,32 @@
-# PySR（推荐工程基线）
+# PySR
 
-基于 Julia 后端的高性能符号回归，工程上成熟、易复现。
+PySR 是工程成熟的符号回归 baseline。建议独立环境运行。
 
 ## 环境
 
 ```bash
 conda create -n pysr python=3.11
 conda activate pysr
-pip install pysr           # 首次运行会自动安装 Julia 后端
-pip install -e .           # 在 SemanticFlowSR/ 下，以便 import semflow_sr.eval.baselines
+pip install pysr
+pip install -e .
 ```
 
-## 运行
+## Manifest 运行
 
 ```bash
-python scripts/run_pysr_baseline.py --data data/materialized/nguyen --out results/pysr
+conda run -n pysr python scripts/run_pysr_baseline.py \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --suite srsd_feynman_easy srsd_feynman_medium srsd_feynman_hard \
+  --root data/benchmark_suites \
+  --niterations 100 \
+  --out results/external_baselines \
+  --tag pysr_srsd_main
 ```
 
-- `--data`：物化后的某个套件目录（含 `<name>/seed_k_train.csv`）。
-- `--seed`：使用哪个种子的 CSV（默认 0）。
-- `--niterations`：PySR 迭代数（默认 100）。
+矩阵入口：
 
-产出 `results/pysr/pysr_seed{k}.json`，每个数据集记录拟合表达式与 R²。
-
-适配器：`semflow_sr/eval/baselines.run_pysr`（PySR 依赖惰性导入，不污染核心环境）。
+```bash
+conda run -n semflow python scripts/run_external_baseline_matrix.py \
+  --method PySR \
+  --suite_group srsd_main
+```

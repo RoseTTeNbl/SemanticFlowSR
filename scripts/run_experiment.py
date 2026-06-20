@@ -13,7 +13,8 @@ import yaml
 import torch
 
 from semflow_sr.models.semantic_transformer import SemanticTransformer, SemanticTransformerConfig
-from semflow_sr.data.benchmark_loader import materialize_formula, PMLBLoader, FeynmanCSVLoader
+from semflow_sr.data.benchmark_loader import materialize_formula, PMLBLoader, FeynmanCSVLoader, load_materialized_task
+from semflow_sr.data.benchmark_manifest import load_benchmark_manifest
 from semflow_sr.eval.evaluator import evaluate_task
 from semflow_sr.eval.results import save_results
 from semflow_sr.gp_distill.gp_policy import GPPolicyDistillationPrior
@@ -103,6 +104,22 @@ def merge_score_maps(base: dict | None, extra: dict | None) -> dict:
     return out
 
 
+def resolve_gp_policy_weight(
+    raw_weight: float | None,
+    target_kwargs: dict,
+    gp_action_scores: dict | None,
+    gp_operator_scores: dict | None,
+) -> float:
+    """Resolve online GP bias weight.
+
+    GP scores are now treated primarily as candidate priors. Online additive bias is
+    an explicit low-weight ablation, so it is disabled unless the CLI passes a value.
+    """
+    if raw_weight is None:
+        return 0.0
+    return float(raw_weight)
+
+
 def select_runner_for_task(num_vars: int, runners: dict[int, ModelRunner]):
     return runners.get(int(num_vars))
 
@@ -121,7 +138,43 @@ def task_passes_dim_filter(task, min_vars: int | None = None, max_vars: int | No
     return True
 
 
+def gather_manifest_tasks(
+    manifest: str | Path,
+    *,
+    suites: list[str] | None = None,
+    root: str | Path = ".",
+    min_vars: int | None = None,
+    max_vars: int | None = None,
+    limit: int | None = None,
+):
+    manifest_obj = load_benchmark_manifest(manifest)
+    selected = set(suites or manifest_obj.suites.keys())
+    tasks = []
+    for suite, specs in manifest_obj.suites.items():
+        if suite not in selected:
+            continue
+        for spec in specs:
+            task = load_materialized_task(spec, root=root)
+            if task_passes_dim_filter(task, min_vars=min_vars, max_vars=max_vars):
+                tasks.append(task)
+                if limit is not None and len(tasks) >= int(limit):
+                    return tasks
+    return tasks
+
+
 def gather_tasks(args, num_vars=None):
+    if getattr(args, "manifest", None):
+        tasks = gather_manifest_tasks(
+            args.manifest,
+            suites=getattr(args, "manifest_suite", None),
+            root=getattr(args, "manifest_root", "."),
+            min_vars=getattr(args, "min_vars", None),
+            max_vars=getattr(args, "max_vars", None),
+            limit=getattr(args, "limit_tasks", None),
+        )
+        if num_vars is not None:
+            tasks = [t for t in tasks if int(t.X_train.shape[1]) == int(num_vars)]
+        return tasks
     tasks = []
     for suite in args.suite:
         for entry in yaml.safe_load((CFG_DIR / f"{suite}.yaml").read_text()):
@@ -156,12 +209,20 @@ def gather_tasks(args, num_vars=None):
     return tasks
 
 
-def main():
+def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", default=None, help="single checkpoint; tasks are filtered to its num_vars")
     ap.add_argument("--ckpt_by_vars", nargs="*", default=None,
                     help="dimension-to-checkpoint mapping, e.g. 1:ckpt_1.pt 2:ckpt_2.pt")
     ap.add_argument("--suite", nargs="+", default=["nguyen"])
+    ap.add_argument("--manifest", default=None,
+                    help="unified benchmark manifest JSON; when set, formula --suite is ignored")
+    ap.add_argument("--manifest_suite", nargs="+", default=None,
+                    help="suite names inside --manifest; defaults to all manifest suites")
+    ap.add_argument("--manifest_root", default=".",
+                    help="root directory for relative paths stored in --manifest")
+    ap.add_argument("--limit_tasks", type=int, default=None,
+                    help="optional cap for manifest-loaded tasks, useful for smoke runs")
     ap.add_argument("--min_vars", type=int, default=None,
                     help="only evaluate tasks with at least this many variables")
     ap.add_argument("--max_vars", type=int, default=None,
@@ -183,7 +244,8 @@ def main():
                     help="for adaptive_full: use complete legal action simplex up to this full-action count")
     ap.add_argument("--target", default="one_step_advantage",
                     choices=["one_step_advantage", "group_advantage", "semantic_advantage_flow", "rollout_fitness_advantage",
-                             "rollout_fitness", "energy"])
+                             "rollout_fitness", "global_trajectory", "global_trajectory_marginal",
+                             "trajectory_marginal", "semantic_fisher_risk_flow", "risk_flow", "energy"])
     ap.add_argument("--target_kwargs", default="{}",
                     help="JSON object forwarded to the rollout target builder")
     ap.add_argument("--num_policy_updates", type=int, default=1,
@@ -215,11 +277,35 @@ def main():
                     help="write per-rollout-step support/reward/probability diagnostics into samples")
     ap.add_argument("--record_path", action="store_true",
                     help="with --record_diagnostics, also record per-lambda velocity/path summaries")
+    ap.add_argument("--execution_mode", default="action",
+                    choices=["action", "global_block_commit", "block_commit", "full_selector"],
+                    help="online execution mode: stepwise action, commit a selected block, or select a full trajectory")
+    ap.add_argument("--block_size", type=int, default=3)
+    ap.add_argument("--block_candidate_budget", type=int, default=64)
+    ap.add_argument("--block_aggregation", default="mean",
+                    choices=["mean", "topk_mean", "sum", "max", "softmax_weighted_reward"])
+    ap.add_argument("--block_p0_mode", default="uniform", choices=["uniform", "frequency"])
+    ap.add_argument("--global_block_selector", default="exact", choices=["oracle", "exact", "learned"])
+    ap.add_argument("--risk_mode", default="top_alpha", choices=["top_alpha", "rank", "z_score"])
+    ap.add_argument("--risk_alpha", type=float, default=0.1)
+    ap.add_argument("--risk_normalize", default="rank", choices=["rank", "zscore", "none"])
+    ap.add_argument("--trajectory_num_samples", type=int, default=64)
+    ap.add_argument("--trajectory_max_len", type=int, default=None)
+    ap.add_argument("--trajectory_temperature", type=float, default=1.0)
+    ap.add_argument("--trajectory_exploration", type=float, default=0.0)
+    ap.add_argument("--gp_population_path", default=None,
+                    help="JSON/JSONL action trajectory population for GP-CandidatePool/full selector")
+    ap.add_argument("--gp_sample_mode", default="base_plus_gp", choices=["base_plus_gp", "gp_only"])
     ap.add_argument("--plot_per_task", action="store_true",
                     help="also write per-run task-order R2 and energy-trace plots")
     ap.add_argument("--require_all_ckpts", action="store_true",
                     help="fail if --ckpt_by_vars does not cover every loaded task dimension")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    return ap
+
+
+def main():
+    ap = build_arg_parser()
     a = ap.parse_args()
     target_kwargs = parse_target_kwargs(a.target_kwargs)
     gp_action_scores = parse_target_kwargs(a.gp_action_scores) if a.gp_action_scores else target_kwargs.get("gp_action_scores")
@@ -229,12 +315,9 @@ def main():
     distilled_action_scores, distilled_operator_scores = load_gp_distilled_scores(a.gp_distill_events)
     gp_action_scores = merge_score_maps(gp_action_scores, distilled_action_scores)
     gp_operator_scores = merge_score_maps(gp_operator_scores, distilled_operator_scores)
-    if a.gp_policy_weight is None:
-        gp_policy_weight = 1.0 if (
-            target_kwargs.get("rollout_policy") == "gp_guided" and (gp_action_scores or gp_operator_scores)
-        ) else 0.0
-    else:
-        gp_policy_weight = float(a.gp_policy_weight)
+    gp_policy_weight = resolve_gp_policy_weight(
+        a.gp_policy_weight, target_kwargs, gp_action_scores, gp_operator_scores
+    )
 
     device = torch.device(a.device)
     ckpt_by_vars = parse_ckpt_by_vars(a.ckpt_by_vars)
@@ -282,7 +365,22 @@ def main():
                             update_mode=a.update_mode, target_kl=a.target_kl,
                             beta_max=a.beta_max, bisection_steps=a.bisection_steps,
                             record_diagnostics=a.record_diagnostics,
-                            record_path=a.record_path)
+                            record_path=a.record_path,
+                            execution_mode=a.execution_mode,
+                            block_size=a.block_size,
+                            block_candidate_budget=a.block_candidate_budget,
+                            block_aggregation=a.block_aggregation,
+                            block_p0_mode=a.block_p0_mode,
+                            global_block_selector=a.global_block_selector,
+                            risk_mode=a.risk_mode,
+                            risk_alpha=a.risk_alpha,
+                            risk_normalize=a.risk_normalize,
+                            trajectory_num_samples=a.trajectory_num_samples,
+                            trajectory_max_len=a.trajectory_max_len,
+                            trajectory_temperature=a.trajectory_temperature,
+                            trajectory_exploration=a.trajectory_exploration,
+                            gp_population_path=a.gp_population_path,
+                            gp_sample_mode=a.gp_sample_mode)
         rep.task_metadata = dict(rep.task_metadata or {})
         rep.task_metadata.update({"checkpoint": runner.ckpt, "checkpoint_num_vars": int(g["num_vars"])})
         reports.append(rep)

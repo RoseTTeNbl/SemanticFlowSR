@@ -1,8 +1,33 @@
-# Standard SR formula benchmarks (Nguyen/Constant/Livermore/Jin) + PMLB subset.
-suites: [nguyen, constant, livermore, jin]
-seeds: [0, 1, 2, 3, 4]
-materialized_root: data/materialized
-pmlb:
-  root: external/pmlb
-  pattern: feynman
-  out: data/pmlb/feynman
+# Unified paper benchmark manifest.
+manifest: data/benchmark_suites/benchmark_manifest.json
+index: data/benchmark_suites/benchmark_index.csv
+materialized_root: data/benchmark_suites/materialized
+raw_cache_root: data/benchmark_suites/raw
+
+dev_suites:
+  - nguyen
+  - constant
+  - livermore
+  - jin
+
+main_suites:
+  - srsd_feynman_easy
+  - srsd_feynman_medium
+  - srsd_feynman_hard
+  - pmlb_regression
+
+appendix_suites:
+  - srsd_feynman_easy_dummy
+  - srsd_feynman_medium_dummy
+  - srsd_feynman_hard_dummy
+
+metrics:
+  formula_scientific: [r2, nmse, symbolic_equivalence, complexity]
+  dummy: [r2, nmse, variable_selection, complexity]
+  black_box: [r2, nmse, complexity, runtime]
+
+pmlb_filter:
+  max_samples: 5000
+  max_features: 20
+  limit: 50
+  include_feynman: false

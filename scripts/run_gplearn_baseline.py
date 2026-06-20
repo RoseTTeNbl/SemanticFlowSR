@@ -1,33 +1,40 @@
 #!/usr/bin/env python
 """Run the gplearn baseline on materialized formula benchmarks. Run in the `gplearn` env."""
 from __future__ import annotations
-import argparse, json
+import argparse
 from pathlib import Path
-import pandas as pd
 
 from semflow_sr.eval.baselines import run_gplearn
-
-
-def _load(d: Path, seed: int):
-    tr = pd.read_csv(d / f"seed_{seed}_train.csv"); te = pd.read_csv(d / f"seed_{seed}_test.csv")
-    return (tr.drop(columns=["target"]).to_numpy(), tr["target"].to_numpy(),
-            te.drop(columns=["target"]).to_numpy(), te["target"].to_numpy())
+from semflow_sr.eval.baseline_runner import collect_tasks, run_baseline_records
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", required=True)
+    ap.add_argument("--data", nargs="+", default=None, help="legacy suite dirs")
+    ap.add_argument("--manifest", default=None, help="unified benchmark manifest JSON")
+    ap.add_argument("--suite", nargs="+", default=None, help="manifest suite filter")
+    ap.add_argument("--root", default=".", help="path root for manifest-relative split files")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--generations", type=int, default=20)
+    ap.add_argument("--population_size", type=int, default=1000)
+    ap.add_argument("--max_tasks", "--max-tasks", type=int, default=None,
+                    help="optional task cap for smoke runs")
     ap.add_argument("--out", default="results/gplearn")
+    ap.add_argument("--tag", default="gplearn")
     a = ap.parse_args()
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
-    results = {}
-    for d in sorted(Path(a.data).iterdir()):
-        if not (d / f"seed_{a.seed}_train.csv").exists():
-            continue
-        results[d.name] = run_gplearn(*_load(d, a.seed))
-        print(d.name, results[d.name]["r2"])
-    (out / f"gplearn_seed{a.seed}.json").write_text(json.dumps(results, indent=2))
+    tasks = collect_tasks(data=a.data, manifest=a.manifest, suites=a.suite, root=a.root,
+                          seed=a.seed, limit=a.max_tasks)
+    results = run_baseline_records(
+        tasks,
+        run_gplearn,
+        out_path=out / f"{a.tag}_seed{a.seed}.json",
+        method="gplearn",
+        budget={"generations": a.generations, "population_size": a.population_size},
+        kwargs={"generations": a.generations, "population_size": a.population_size},
+    )
+    for name, item in results.items():
+        print(f"{name:32s} r2={item['r2']:.4f}")
 
 
 if __name__ == "__main__":

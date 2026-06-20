@@ -5,3 +5,5 @@ from .target_gt import GTTarget
 from .target_semantic_oracle import SemanticOracleTarget
 from .target_group_advantage import GroupAdvantageTarget
 from .target_rollout_fitness import RolloutFitnessTarget
+from .target_global_trajectory import GlobalTrajectoryTarget
+from .target_semantic_fisher_risk_flow import SemanticFisherRiskFlowEndpoint

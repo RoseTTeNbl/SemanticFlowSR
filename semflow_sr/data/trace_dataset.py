@@ -124,6 +124,8 @@ class VelocityTraceDataset(Dataset):
         }
         p_start = self.prior.build_p0(B, y, action_ids, ctx)
         plain_p_target = self.target.build_p1(B, y, action_ids, energies, p_start, ctx)
+        if "p_start_override" in ctx:
+            p_start = ctx["p_start_override"].to(device=B.device, dtype=B.dtype)
         target_rewards = ctx.get("rewards", rewards)
         raw_advantages = ctx.get("advantages", torch.zeros_like(target_rewards))
         advantages = effective_advantage_from_target(p_start, plain_p_target, self.beta)

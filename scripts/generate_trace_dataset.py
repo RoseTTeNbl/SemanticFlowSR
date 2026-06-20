@@ -32,7 +32,7 @@ def main():
     ap.add_argument("--target", default="one_step_advantage",
                     choices=["one_step_advantage", "gt", "semantic_oracle", "group_advantage",
                              "semantic_advantage_flow", "rollout_fitness_advantage",
-                             "rollout_fitness"])
+                             "rollout_fitness", "semantic_fisher_risk_flow", "risk_flow"])
     ap.add_argument("--max_support", type=int, default=128)
     ap.add_argument("--support_mode", default="mixed_topk_random",
                     choices=["full", "topk_reward", "mixed_topk_random", "proposal_importance"])

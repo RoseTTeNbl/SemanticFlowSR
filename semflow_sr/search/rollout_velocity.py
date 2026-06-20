@@ -21,8 +21,12 @@ from ..inference.iterative_policy_update import beta_for_update, closed_form_pol
 from ..endpoints.prior_uniform import UniformPrior
 from ..endpoints.target_group_advantage import GroupAdvantageTarget
 from ..endpoints.target_rollout_fitness import RolloutFitnessTarget
+from ..endpoints.target_global_trajectory import GlobalTrajectoryTarget
 from ..sr.ops import NAME_TO_ID, get_op
 from ..utils.numerical import EPS
+from .trajectory_modes import select_and_commit_block, select_full_trajectory, select_global_block_commit
+from ..gp_distill.trajectory_pool import load_gp_trajectory_population
+from ..trajectories.sampler import GrammarTrajectorySampler
 
 
 @dataclass
@@ -172,7 +176,22 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
                      gp_action_scores: dict[int, float] | None = None,
                      gp_operator_scores: dict[int | str, float] | None = None,
                      record_diagnostics: bool = False,
-                     record_path: bool = False) -> RolloutResult:
+                     record_path: bool = False,
+                     execution_mode: str = "action",
+                     block_size: int = 3,
+                     block_candidate_budget: int | None = 64,
+                     trajectory_num_samples: int = 64,
+                     trajectory_max_len: int | None = None,
+                     trajectory_temperature: float = 1.0,
+                     trajectory_exploration: float = 0.0,
+                     block_aggregation: str = "mean",
+                     block_p0_mode: str = "uniform",
+                     global_block_selector: str = "exact",
+                     risk_mode: str = "top_alpha",
+                     risk_alpha: float = 0.1,
+                     risk_normalize: str = "rank",
+                     gp_population_path: str | None = None,
+                     gp_sample_mode: str = "base_plus_gp") -> RolloutResult:
     model.eval()
     space = ActionSpace(K, ops_ids)
     execu = ActionExecutor(space)
@@ -186,16 +205,125 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
     target_kwargs = target_kwargs or {}
     group_target = None
     rollout_target = None
+    global_trajectory_target = None
     if target in {"one_step_advantage", "group_advantage", "semantic_advantage_flow"}:
         group_target = GroupAdvantageTarget(**target_kwargs)
     elif target in {"rollout_fitness_advantage", "rollout_fitness"}:
         rollout_target = RolloutFitnessTarget(space, energy_cfg, **target_kwargs)
+    elif target in {"global_trajectory", "global_trajectory_marginal", "trajectory_marginal",
+                    "semantic_fisher_risk_flow", "risk_flow"}:
+        global_trajectory_target = GlobalTrajectoryTarget(space, energy_cfg, **target_kwargs)
     elif target != "energy":
         raise ValueError(f"unknown rollout target: {target}")
     state = init_register_state(num_vars, K, device)
     x = x.to(device); y = y.to(device)
     trace = [_residual_energy(state, x, y, proj)]
     diagnostics: list[dict] = []
+    if execution_mode == "block_commit":
+        result = select_and_commit_block(
+            state,
+            x,
+            y,
+            space,
+            block_size=min(int(block_size), max(int(max_steps), 1)),
+            budget=block_candidate_budget,
+            energy_cfg=energy_cfg,
+        )
+        diag = dict(result.diagnostics)
+        diag["selected_actions"] = [_action_record(space, a) for a in result.selected_actions]
+        return RolloutResult(
+            state=result.state,
+            energy_trace=result.energy_trace,
+            steps=result.steps_committed,
+            diagnostics=[diag] if record_diagnostics else [],
+        )
+    if execution_mode == "global_block_commit":
+        committed = 0
+        while committed < int(max_steps) and trace[-1] > eps:
+            remaining = max(int(max_steps) - committed, 1)
+            result = select_global_block_commit(
+                state,
+                x,
+                y,
+                space,
+                model_or_policy=model,
+                block_size=min(int(block_size), remaining),
+                num_samples=int(trajectory_num_samples),
+                max_len=int(trajectory_max_len or remaining),
+                temperature=float(trajectory_temperature),
+                exploration=float(trajectory_exploration),
+                aggregation=str(block_aggregation),
+                p0_mode=str(block_p0_mode),
+                selector_mode=str(global_block_selector),
+                beta=beta_value,
+                gamma=float(gamma),
+                eta=float(beta_value),
+                risk_mode=str(risk_mode),
+                risk_alpha=float(risk_alpha),
+                risk_normalize=str(risk_normalize),
+                gram_rank=gram_rank,
+                energy_cfg=energy_cfg,
+            )
+            if result.steps_committed <= 0:
+                break
+            state = result.state
+            committed += int(result.steps_committed)
+            trace.append(float(result.energy_trace[-1]))
+            if record_diagnostics:
+                diag = dict(result.diagnostics)
+                diag["step"] = len(diagnostics)
+                diag["selected_actions"] = [_action_record(space, a) for a in result.selected_actions]
+                diag["steps_committed_total"] = int(committed)
+                diagnostics.append(diag)
+        return RolloutResult(
+            state=state,
+            energy_trace=trace,
+            steps=committed,
+            diagnostics=diagnostics,
+        )
+    if execution_mode == "full_selector":
+        full_trajectories = None
+        if gp_population_path:
+            gp_trajs = load_gp_trajectory_population(
+                gp_population_path,
+                space,
+                state,
+                max_len=int(trajectory_max_len or max_steps),
+            )
+            if gp_sample_mode == "gp_only":
+                full_trajectories = gp_trajs[: int(trajectory_num_samples)]
+            elif gp_sample_mode == "base_plus_gp":
+                base_budget = max(int(trajectory_num_samples) - len(gp_trajs), 0)
+                base_trajs = GrammarTrajectorySampler(space, seed=0).sample(
+                    state,
+                    num_samples=base_budget,
+                    max_len=int(trajectory_max_len or max_steps),
+                )
+                full_trajectories = [*gp_trajs, *base_trajs][: int(trajectory_num_samples)]
+            else:
+                raise ValueError(f"unknown gp_sample_mode: {gp_sample_mode}")
+        result = select_full_trajectory(
+            state,
+            x,
+            y,
+            space,
+            trajectories=full_trajectories,
+            num_samples=int(trajectory_num_samples),
+            max_len=int(trajectory_max_len or max_steps),
+            energy_cfg=energy_cfg,
+        )
+        diag = dict(result.diagnostics)
+        diag["selected_actions"] = [_action_record(space, a) for a in result.selected_actions]
+        diag["gp_population_path"] = str(gp_population_path or "")
+        diag["gp_sample_mode"] = str(gp_sample_mode) if gp_population_path else ""
+        return RolloutResult(
+            state=result.state,
+            energy_trace=result.energy_trace,
+            steps=result.steps_committed,
+            diagnostics=[diag] if record_diagnostics else [],
+        )
+    if execution_mode != "action":
+        raise ValueError(f"unknown execution_mode: {execution_mode}")
 
     for step_idx in range(max_steps):
         if trace[-1] <= eps:
@@ -244,6 +372,19 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
             advantages = p1_context.get("advantages")
             target_rewards = p1_context.get("rollout_rewards", p1_context.get("rewards", one_step_rewards))
             rollout_stats = p1_context.get("rollout_stats")
+        elif global_trajectory_target is not None:
+            p1_context = {
+                "rewards": one_step_rewards,
+                "proposal_probs": proposal,
+                "state": state,
+                "x": x,
+                "y": y,
+                "sample_index": step_idx,
+            }
+            plain_p_target = global_trajectory_target.build_p1(B, y, action_ids, energies, p_start, p1_context)
+            advantages = p1_context.get("advantages")
+            target_rewards = p1_context.get("global_trajectory_rewards", p1_context.get("rewards", one_step_rewards))
+            rollout_stats = {"trajectory_stats": p1_context.get("trajectory_stats", {})}
         else:
             p_target = None
         w = torch.ones_like(p)
@@ -492,6 +633,7 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
             if rollout_stats is not None:
                 per_action = rollout_stats.get("per_action", [])
                 selected_rollout = per_action[choice_pos] if choice_pos < len(per_action) else {}
+                trajectory_stats = rollout_stats.get("trajectory_stats", {})
                 diag.update({
                     "n_rollout_evaluated": int(rollout_stats.get("n_rollout_evaluated", 0)),
                     "rollout_eval_fraction": float(rollout_stats.get("n_rollout_evaluated", 0)) / max(int(action_ids.numel()), 1),
@@ -507,6 +649,10 @@ def rollout_velocity(model, x, y, num_vars, K, ops_ids, device,
                     "selected_rollout_best_score": float(selected_rollout.get("best_score", 0.0)),
                     "selected_rollout_best_final_energy": float(selected_rollout.get("best_final_energy", 0.0)),
                     "selected_rollout_best_final_r2": float(selected_rollout.get("best_final_r2", 0.0)),
+                    "trajectory_target_mode": str(trajectory_stats.get("target_mode", "")),
+                    "trajectory_num_samples": int(trajectory_stats.get("num_trajectories", 0)),
+                    "trajectory_oracle_r2": float(trajectory_stats.get("candidate_oracle_r2", 0.0)),
+                    "trajectory_oracle_reward": float(trajectory_stats.get("candidate_oracle_reward", 0.0)),
                 })
             if p_target is not None:
                 kl = (p_target * (p_target.clamp(min=EPS).log() - p_start.clamp(min=EPS).log())).sum()

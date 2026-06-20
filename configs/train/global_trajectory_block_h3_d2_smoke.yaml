@@ -1,0 +1,59 @@
+seed: 1
+out: checkpoints
+checkpoint_name: global_trajectory_block_h3_d2_smoke.pt
+num_tasks: 8
+max_support: 256
+eval_every: 10
+path:
+  name: semantic_fisher_pullback
+  gamma: 0.1
+  gram_rank: 8
+  step_dt: 0.5
+update:
+  mode: fixed_beta
+  beta: 1.0
+flow_training:
+  train_along_path: true
+  num_time_samples: 2
+  target_integration_steps: 2
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 2
+data:
+  cache_static: true
+  device: cpu
+gen:
+  num_vars: 2
+  max_depth: 3
+  K: 6
+  probe_size: 24
+  ops: [add, sub, mul, square]
+energy:
+  lambda_rank: 0.0
+  lambda_move: 0.0
+  lambda_op: 0.0
+  projection: ridge
+  rho: 0.001
+target:
+  name: global_trajectory
+  num_samples: 12
+  max_len: 3
+  eta: 1.0
+  smoothing: 0.02
+support:
+  mode: adaptive_full
+  full_threshold: 512
+  topk: 64
+model:
+  output_mode: semantic_fisher_lograte
+  hidden: 64
+  row_layers: 2
+  heads: 4
+train:
+  lr: 0.0005
+  steps: 20
+  batch_size: 4
+  loss_name: semantic_fisher_velocity
+  sf_step_dt: 0.5
+  grad_clip: 1.0
+  log_every: 10

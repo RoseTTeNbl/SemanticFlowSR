@@ -1,263 +1,421 @@
-# 修正记录与短板诊断
+# 改进记录：action-flow 主线的问题、指标和下一步
 
-## 1.  为什么现在的“消融”反而更好
+本文档记录 action-flow 主线的实测问题和后续改进建议。旧 87-task 数字来自
+PathPosterior-Frequency target，是历史 baseline；semantic-projection 版本也是
+上一轮理论改写，不是当前主线的新结果。
 
-当前 `results/paper/` 里的消融组不是旧 plain Fisher 分支。它们都已经在新的
-semantic-Fisher pullback 框架内：
-
-```text
-centered residual
--> action semantic effects xi
--> K = xi xi^T
--> semantic-Fisher log-rate target
--> sphere tangent matching
--> semantic_fisher_sphere / semantic_fisher_ode inference
-```
-
-当前 paper 表中：
-
-| Row | 实际含义 |
-|---|---|
-| `Ours one-step reward` | 新 semantic-Fisher 主线，只把 scalar score provider 设为 one-step reward。 |
-| `Ours one-step ODE` | 新 semantic-Fisher 主线，使用 ODE-style local update，但 score/provider 仍很短程。 |
-| `Ours future ODE (no GP)` | 新 semantic-Fisher 主线，训练 target 使用 rollout-fitness provider；当前短预算下与 one-step ODE 结果相同。 |
-| `GP as rollout policy` | GP 只作为 rollout completion policy 影响 future target。 |
-| `GP policy distillation` | GP event likelihood 转成 online action/operator prior，加到 `w_theta`。 |
-
-因此“现在消融之后反而更好”不是矛盾，而是名称造成的口径混淆：
+当前主线是：
 
 ```text
-旧 0.15 = plain Fisher / no semantic pullback / potential endpoint
-当前 one-step reward = semantic-Fisher pullback / lograte / one-step score provider
+Semantic-Fisher Flow Matching
 ```
 
-这两个实验检验的问题不同。
-
-## 3. 当前 87-task 结果
-
-数据集组成：
+即：
 
 ```text
-Nguyen 12 + Constant 8 + Livermore 8 + Jin 6 + Feynman 53 = 87
-1-var 21, 2-var 29, 3-var 37
+prefix state
+-> deterministic action support A_s
+-> deterministic p_init
+-> TargetSampler builds q_hat(a|s)
+-> lambda-dependent log q_hat - log p_lambda
+-> semantic effects xi(a) define geometry only
+-> semantic-Fisher endpoint ODE
+-> flow matching
+-> 推理时 commit 一个 action 或 STOP
 ```
 
-主表：
-
-| Group | Method | Mean R2 | Median R2 | Solution rate |
-|---|---|---:|---:|---:|
-| Baselines | PySR | 0.9974 | 1.0000 | 0.9310 |
-| Baselines | DEAP | 0.9455 | 0.9960 | 0.3448 |
-| Baselines | DSO | 0.9544 | 1.0000 | 0.5977 |
-| SFSR ablations | Ours one-step reward | 0.9708 | 1.0000 | 0.7701 |
-| SFSR ablations | Ours one-step ODE | 0.9505 | 1.0000 | 0.7126 |
-| SFSR main | Ours future ODE (no GP) | 0.9505 | 1.0000 | 0.7126 |
-| GP variants | GP as rollout policy | 0.9513 | 1.0000 | 0.7011 |
-| GP variants | GP policy distillation | 0.8846 | 0.9417 | 0.3678 |
-
-当前最强 SFSR 行是 `Ours one-step reward`，不是 future/GP 行。
-
-## 4. 通过指标看到的主要短板
-
-### 4.1 模型 ranking 仍然是第一短板
-
-虽然最终 R2 不低，但局部 action rank 仍偏差明显。
-
-| Method | selected rank mean | median | top-5 fraction | rank > 20 fraction |
-|---|---:|---:|---:|---:|
-| Ours one-step reward | 27.25 | 13 | 0.413 | 0.446 |
-| Ours one-step ODE | 29.66 | 17 | 0.348 | 0.473 |
-| Ours future ODE (no GP) | 29.66 | 17 | 0.348 | 0.473 |
-| GP as rollout policy | 32.13 | 21 | 0.327 | 0.501 |
-| GP policy distillation | 42.56 | 50 | 0.095 | 0.745 |
-
-结论：
-
-- 搜索成功很大程度上仍依赖多步过程和 affine readout 的纠错能力。
-- 模型每步 `selected_probability_rank=1` 时，动作 reward rank 仍经常不是 top action。
-- 下一步优化应继续围绕 action ranking，而不是只看 final R2。
-
-### 4.2 Teacher / exact target 与模型之间仍有 gap
-
-当前 exact target 的 rank 明显好于模型选择，说明模型还没充分学到 target field。
-
-| Method | selected rank mean | exact semantic-Fisher top1 rank mean | exact top-5 fraction |
-|---|---:|---:|---:|
-| Ours one-step reward | 27.25 | 21.80 | 0.590 |
-| Ours one-step ODE | 29.66 | 16.39 | 0.676 |
-| Ours future ODE (no GP) | 29.66 | 16.39 | 0.676 |
-| GP as rollout policy | 32.13 | 19.34 | 0.651 |
-| GP policy distillation | 42.56 | 17.48 | 0.675 |
-
-判断：
-
-- exact semantic-Fisher target 不是完美 oracle，但通常比模型实际选择更好。
-- 当前瓶颈不是单纯 `K` 或 solver 无效，而是 model imitation / generalization 不足。
-- 应优先增加 model capacity、训练步数、hard-state mining、rank-aware auxiliary diagnostics，而不是先扩大 GP 分支。
-
-### 4.3 ODE / future target 当前没有带来收益
-
-`Ours one-step ODE` 与 `Ours future ODE (no GP)` 结果完全相同：
-
-| Method | Mean R2 | Solution rate | one-step/rollout corr |
-|---|---:|---:|---:|
-| Ours one-step ODE | 0.9505 | 0.7126 | 0.7103 |
-| Ours future ODE (no GP) | 0.9505 | 0.7126 | 0.7103 |
-
-并且 rollout 相关诊断显示：
+已废弃的历史路线包括：
 
 ```text
-one-step/rollout corr mean = 0.7103
-low-corr (<0.3) fraction ~= 0.234
+PathPosterior-Frequency: risk-weighted visited-action frequency q*(a|s)
+Terminal Semantic Projection: terminal residual direction -> semantic projection q*(a|s)
 ```
 
-判断：
+---
 
-- 当前 rollout target 太弱，`eval_topk=1`、`max_completion_steps=1`、`n_rollouts_per_action=1` 只能提供非常浅的 future signal。
-- 在约 76.6% 的 rollout steps 上，one-step 与 rollout score 仍高度一致或至少不冲突。
-- 这解释了 future ODE 没有明显超过 one-step ODE。
+## 1. 当前实现状态
 
-后续建议：
-
-1. 提高 rollout budget，只对 top-L + random subset 做 progressive rollout。
-2. 把 `max_completion_steps` 从 1 提到 2/3，先离线缓存 target。
-3. 记录 `rollout_rank_shift_abs_mean` 与 solved gain 的相关性，确认 future provider 是否真在纠正短视动作。
-
-### 4.4 Feynman 是当前主失败来源
-
-按 suite 看，SFSR 的弱项集中在 Feynman 和 Jin：
-
-| Method | Nguyen | Constant | Livermore | Jin | Feynman |
-|---|---:|---:|---:|---:|---:|
-| Ours one-step reward | 0.917 | 0.625 | 0.875 | 0.667 | 0.755 |
-| Ours one-step ODE | 0.917 | 0.875 | 0.875 | 0.667 | 0.623 |
-| Ours future ODE (no GP) | 0.917 | 0.875 | 0.875 | 0.667 | 0.623 |
-| GP as rollout policy | 0.917 | 0.875 | 0.875 | 0.667 | 0.604 |
-| GP policy distillation | 0.917 | 0.750 | 0.875 | 0.500 | 0.094 |
-
-判断：
-
-- Nguyen / Livermore 基本已稳定。
-- Jin 只有 6 个任务，波动大，但仍显示多元组合结构难点。
-- Feynman 任务数量最多，直接决定总表；GP distillation 在 Feynman 上几乎崩溃，是总分下降的主因。
-
-后续建议：
-
-1. 分 suite 训练或至少分 suite 校准 operator prior。
-2. 对 Feynman 单独检查 operator set、变量尺度、protected ops 与 complexity penalty。
-3. 把 final expression complexity / active columns 加入主诊断表，避免高 R2 但表达式臃肿。
-
-### 4.5 GP distillation 当前 prior 过粗，在线干预过强
-
-GP distillation 行：
+已经落地：
 
 ```text
-solution_rate = 0.3678
-Feynman solution_rate = 0.0943
-selected rank mean = 42.56
-top-5 fraction = 0.095
-rank > 20 fraction = 0.745
-gp_policy_applied = 495 / 495 steps
-selected_gp_prior_rank_mean = 1.14
+action 作为唯一主生成单位；
+虚拟 STOP action；
+推理和训练的数值健康过滤；
+每个 state 的 support budget；
+多轮 on-policy trajectory resampling；
+deterministic p_init with step-dependent STOP bias；
+TargetSampler endpoint q_hat；
+OneStepTarget 实验组；
+FutureGroup-L3Target 实验组；
+CachedTrajectoryFitnessTarget 可选实验组；
+GPCandidateFitnessTarget 可选实验组；
+ImportanceSamplingTarget / MCMCShapeTarget 可选实验组；
+lambda-dependent endpoint log-ratio；
+训练/推理 support cap 一致；
+teacher path 上多个 p_lambda 的 flow matching record；
+CPU thread limit；
+dataset build / target sampler timing diagnostics；
 ```
 
-判断：
-
-- GP prior 几乎每步都主导了动作选择。
-- 当前 event extraction 主要是 operator-level prior，不含状态相似度、action slot、read/write context。
-- 它会把局部语义上不合适的 operator 强行推到 top，尤其伤害 Feynman。
-
-后续建议：
-
-1. 降低 `gp_policy_weight`，做 `[0.05, 0.1, 0.2, 0.5]` 扫描。
-2. GP distillation 必须加入 state-conditioned retrieval；只用 operator likelihood 不够。
-3. 将 GP prior 从 additive hard bias 改成 gating / tie-breaker：只在模型 margin 小时启用。
-4. 分 suite 蒸馏 GP prior，避免 DEAP-style operator frequency 迁移到 Feynman 时失真。
-
-### 4.6 当前 best row 说明 one-step geometry 仍很强
-
-`Ours one-step reward` 是当前 SFSR 最好行：
+关键代码：
 
 ```text
-Mean R2 = 0.9708
-Solution rate = 0.7701
+semflow_sr/path_posterior/action_support.py
+semflow_sr/path_posterior/sampler.py
+semflow_sr/path_posterior/dataset.py
+semflow_sr/train/train_path_posterior_flow.py
+scripts/run_path_posterior_flow.py
+configs/train/semantic_fisher_flow_87_one_step.yaml
+configs/train/semantic_fisher_flow_87_future_group_l3.yaml
 ```
 
-这说明 semantic-Fisher pullback 的局部几何修正本身是有效的。当前不应该把问题简单归因于“缺 GP”或“缺 rollout”。更直接的问题是：
+---
+
+## 2. 当前训练配置
+
+当前非 smoke 配置：
 
 ```text
-score provider / model ranking / GP prior calibration
+configs/train/semantic_fisher_flow_87_future_group_l3.yaml
 ```
 
-还没有比 one-step semantic-Fisher local update 更稳。
-
-## 5. 下一步优先级
-
-### P0: 重新定义必要消融，避免口径混乱
-
-必须同时保留两类消融：
-
-| 消融 | 检验问题 |
-|---|---|
-| old plain Fisher potential / closed-form | 没有 `K` 和 semantic pullback 时会怎样；历史 0.15 属于这一类。 |
-| current one-step reward | 在 semantic-Fisher 主线内，仅替换 score provider 为 one-step reward。 |
-
-文档和图表中不要把这两类都叫 “one-step ablation”。
-
-### P1: 提升 model imitation
-
-目标：
+主要参数：
 
 ```text
-selected_reward_rank_mean < 10
-top-5 fraction > 0.65
-rank > 20 fraction < 0.2
+num_tasks = 16
+target_mode = future_group_l3
+num_trajectories = 8
+max_states_per_task = 4
+on_policy_iterations = 2
+steps_per_iteration = 40
+max_steps = 6
+K = 10
+rollout_depth = 3
+rollouts_per_action = 1
+max_rollout_support = 8
+teacher_steps = 2
+max_support_size = 32
+enable_stop = true
+max_abs_semantic = 1e6
+max_energy_growth = 100
+torch_num_threads = 4
+torch_num_interop_threads = 1
 ```
 
-建议：
-
-- 增加训练 steps 和任务数，当前 paper configs 只有 40 steps / 32 tasks per dim。
-- 做 hard-state replay：收集 `selected_reward_rank > 20` 的状态反复训练。
-- 加 rank-aware diagnostics 或辅助 pairwise ranking loss 做 ablation，但主损失仍保留 sphere tangent matching。
-
-### P2: 让 future provider 真正 future-aware
-
-当前 rollout 太浅。下一版应优先使用 offline target cache：
+以下训练日志属于旧 frequency-target 87-task run，保留作 baseline：
 
 ```text
-top-L first actions + random actions
-max_completion_steps = 2 or 3
-n_rollouts_per_action > 1
-top-k mean aggregation
+iter 0 step 0   loss 0.034816
+iter 0 step 20  loss 0.050343
+iter 0 step 40  loss 0.038733
+iter 0 step 60  loss 0.039471
+iter 1 step 80  loss 0.044101
+iter 1 step 100 loss 0.009531
+iter 1 step 120 loss 0.018311
+iter 1 step 140 loss 0.016703
+iter 2 step 160 loss 0.009958
+iter 2 step 180 loss 0.006318
+iter 2 step 200 loss 0.005752
+iter 2 step 220 loss 0.004095
+iter 3 step 240 loss 0.008077
+iter 3 step 260 loss 0.004410
+iter 3 step 280 loss 0.006006
+iter 3 step 300 loss 0.011457
 ```
 
-并把 `one_step_rollout_corr`、`rollout_rank_shift_abs_mean` 和 final solved gain 联合报告。
+checkpoint：
 
-### P3: 重做 GP prior
+```text
+checkpoints/semantic_fisher_flow_future_group_l3_87.pt
+```
 
-当前 GP distillation 是 operator-level prior，只能作为负面诊断。下一版 GP 应至少包含：
+---
 
-- state embedding / residual similarity retrieval；
-- action_id 或 action template 级别统计；
-- suite-conditioned prior；
-- margin-gated online injection。
+## 3. 已清理的旧 frequency-target 87-task 记录
 
-### P4: 诊断表继续精简但要更稳
+旧 `PathPosterior-Frequency` 结果文件已从当前结果目录清理；以下数字只作为历史
+诊断说明，不再作为当前实验入口或可复现实验 tag。
 
-保留论文图：
+```text
+n_tasks = 87
+skipped = 0
+mean R2 = 0.7229
+median R2 = 0.8709
+mean NMSE = 0.2771
+median NMSE = 0.1291
+solution_rate@R2>=0.999 = 0.0
+mean complexity = 38.85
+median complexity = 39.0
+mean steps = 6.0
+median steps = 6.0
+energy_decrease_mean = -1.173e11
+energy_decrease_median = -0.0141
+stop_task_fraction = 0.0
+stop_decision_count = 0
+filtered_action_fraction_mean = 0.0163
+```
 
-- total R2 / solution rate；
-- per-suite R2 / solution rate；
-- action ranking；
-- train loss / reward。
+和上一版 tiny smoke checkpoint 相比，mean/median R2 基本没有改善：
 
-同时在 CSV 中保留：
+```text
+tiny smoke 87-task mean R2 ~= 0.7233
+旧 frequency-target 正常配置 mean R2 ~= 0.7229
+```
 
-- `selected_reward_rank_mean`
-- `predicted_top1_reward_rank_mean`
-- `exact_semantic_fisher_top1_reward_rank_mean`
-- `one_step_rollout_corr_mean`
-- `gp_policy_applied`
-- final complexity / active columns
+这说明 frequency posterior 的主要瓶颈不是单纯训练步数太少，而是 target 本身
+缺少对当前 support 的 dense counterfactual ranking。
 
-`support_best_reward_gap` 在数值极端 reward 下容易被尺度污染；后续更推荐报告 `full_best_in_support_rate` 和 clipped/median gap。
+---
+
+## 4. 指标解读
+
+### 4.1 R2 和 solution rate
+
+`mean R2 ~= 0.723`，`median R2 ~= 0.871` 表示模型经常能构造出有一定解释力的列空间，但离精确解很远。
+
+`solution_rate = 0.0` 是最关键问题。旧 one-step action 语义 reward 方法在 archived 87-task 表上曾达到明显更高的 solution rate。因此当前方法不能只用“理论更干净”解释，必须继续修训练信号和推理策略。
+
+### 4.2 NMSE
+
+`mean NMSE ~= 0.277`，`median NMSE ~= 0.129` 与 R2 一致：不少任务有中等拟合质量，但高精度任务数量不足。
+
+### 4.3 complexity
+
+`mean complexity ~= 38.85`，`median complexity ~= 39`。复杂度不算失控，但因为 STOP 从未被选中，所有任务都跑满 6 步，表达式没有真正学会早停。
+
+### 4.4 steps 和 STOP
+
+```text
+mean steps = 6.0
+stop_task_fraction = 0.0
+stop_decision_count = 0
+```
+
+这说明 STOP 虽然进入 support，但当前模型没有学会选择 STOP。可能原因：
+
+```text
+STOP 在大 support 中初始概率很低；
+训练轨迹里早停样本覆盖不足；
+当前 path weight 不显式奖励“已经足够好就停止”；
+STOP feature 太弱，只是一个虚拟 action row；
+推理时从 uniform p0 起步，STOP 没有先验优势。
+```
+
+STOP 需要进一步加强，但不能用局部 residual reward 伪造目标。更合理的是增加 STOP 的 on-policy 覆盖和显式长度/复杂度在 terminal reward 中的作用。
+
+### 4.5 filtered_action_fraction
+
+```text
+filtered_action_fraction_mean ~= 0.0163
+```
+
+健康过滤比例很低，说明当前过滤没有大规模删掉候选，也没有解释性能差。它主要防止极端无效 action。
+
+### 4.6 energy_decrease
+
+```text
+energy_decrease_mean = -1.173e11
+energy_decrease_median = -0.0141
+```
+
+median 接近 0，但 mean 巨大负数，说明少数任务仍有严重数值异常或 energy 爆炸。当前健康过滤只过滤单步候选语义和单步 energy growth，但没有完全防住多步组合后的病态列空间。
+
+这应作为数值稳定性问题处理：
+
+```text
+更强的候选健康过滤；
+最终 active column 健康选择；
+readout 前剔除病态列；
+报告 outlier task；
+限制 exp/cube 的重复组合。
+```
+
+不要把 local residual reward 加回主 target。
+
+---
+
+## 5. 为什么旧 frequency target 理论更干净但结果没好
+
+当前理论修正解决的是“目标定义脏”的问题：
+
+```text
+不再把完整轨迹 reward 硬压成 block reward；
+不再用 H×A/zeta 近似作为主线；
+不再混入 local residual reward；
+用 q*(a|s) 做 path-posterior 条件边缘。
+```
+
+但它没有自动解决三个工程/统计问题。
+
+### 5.1 path-posterior 估计方差仍然高
+
+旧 frequency target 的 `q*(a|s)` 只来自采样到的轨迹访问。当时每轮：
+
+```text
+32 tasks x 24 trajectories
+```
+
+仍然偏少。很多 state/action 的访问次数很低，`q*` 估计噪声大。
+
+### 5.2 behavior policy 初期太弱
+
+如果 behavior model 早期采不到高质量轨迹，那么 risk-weighted path measure 只能在低质量样本中重加权。它比旧 dense one-step oracle 更依赖采样覆盖。
+
+### 5.3 推理和训练分布仍不完全一致
+
+旧版本训练时每个 state 使用 capped support：
+
+```text
+max_support_size = 64 + STOP
+```
+
+旧版本推理时默认使用完整健康 support + STOP。当前版本已经让推理默认读取
+checkpoint 的 `max_support_size`，按训练顺序执行 deterministic support cap、
+health filter、STOP append。
+
+---
+
+## 6. 当前新增 support budget 的意义
+
+full action support 在 `K=10` 时仍然会产生很大的 Gram 和 record：
+
+```text
+Gram size = |A_s| x |A_s|
+```
+
+不做 support budget 时，正常训练配置会产生数 GB 级别 records，甚至无法完成。当前加入：
+
+```text
+max_support_size = 32
+```
+
+这是计算 support 限制，不是 reward 近似。它的代价是：
+
+```text
+q_hat(a|s) 只在 capped local support 上定义；
+未进入 support 的 action 没有本轮 target。
+```
+
+这个近似必须在论文或实验文档中诚实说明。
+
+---
+
+## 7. 下一步优先级
+
+### P0：让训练和推理使用同一个 support builder
+
+已实现：推理默认读取 checkpoint 中的 `max_support_size`，并按训练 sampler 的顺序执行：
+
+```text
+deterministic support cap
+health filter
+STOP append
+feature/effect construction
+```
+
+这样训练和推理看到的 action simplex 一致。
+
+### P1：增强 STOP 学习
+
+建议先做不污染目标的改动：
+
+```text
+terminal reward 加复杂度/长度惩罚；
+提高 STOP 在 behavior support 中的覆盖；
+记录 STOP 出现次数、STOP q*、STOP rank；
+训练/推理统一 STOP prior 或初始化 bias；
+评估 STOP oracle：如果当前 active columns 已足够好，STOP 是否应成为 q* top action。
+```
+
+### P2：加入 oracle / exact / learned 三层诊断
+
+必须拆开：
+
+```text
+sampled trajectory oracle R2
+path-posterior exact teacher rollout R2
+learned model rollout R2
+```
+
+否则无法判断差距来自：
+
+```text
+采样覆盖差
+q* 估计差
+semantic-Fisher teacher 差
+模型拟合差
+推理策略差
+```
+
+### P3：数值稳定性
+
+建议新增：
+
+```text
+active column health report
+readout 前健康列筛选日志
+energy outlier task list
+operator repetition limits for exp/cube/protected_div
+final semantic max_abs / condition number diagnostics
+```
+
+这些是 validity / diagnostics，不应进入 reward 主目标。
+
+### P4：提高 on-policy 样本效率
+
+当前配置能跑，但还偏小。扩大前先优化：
+
+```text
+dataset streaming
+state/support cache
+semantic effect cache
+训练进度日志
+按 task 分批构建 records
+```
+
+然后再提高：
+
+```text
+num_tasks
+num_trajectories
+on_policy_iterations
+teacher_steps
+```
+
+### P5：旧 one-step 方法作为 regression baseline
+
+旧 one-step residual 方法不再作为主线目标，但保留为 `OneStepTarget`
+sanity baseline。当前新增的 `FutureGroup-L3Target` 把旧 one-step 奖励扩展为
+短 horizon group rollout 评分，用作独立实验组；它和主理论共享同一个
+semantic-Fisher ODE。
+
+---
+
+## 8. 当前结论
+
+当前 Semantic-Fisher Flow Matching 改动把理论对象进一步解耦：
+
+```text
+TargetSampler/reward/search -> q_hat
+semantic effects -> geometry
+flow matching -> lambda-time velocity
+```
+
+它删除了旧 frequency target 的主动实现，也不再把 terminal semantic projection
+作为主线。当前 `FutureGroup-L3Target` 87-task 结果保存在：
+
+```text
+results/semantic_fisher_flow_87/semantic_fisher_flow_future_group_l3_87_seed0_summary.json
+```
+
+剩余风险是：
+
+```text
+采样覆盖
+STOP 学习
+support 一致性
+数值 outlier
+oracle/exact/learned 诊断缺失
+```
+
+下一轮不应回退到 local residual reward，而应先补上述诊断和一致性问题。

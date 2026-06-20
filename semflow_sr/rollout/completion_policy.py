@@ -1,4 +1,4 @@
-"""Completion policy descriptors for rollout/search target construction.
+"""Completion policy descriptors for legacy rollout/search target construction.
 
 The current online evaluator implements random, semantic_greedy and mixed policies.
 This module keeps the policy names explicit so proximal target metadata can state
@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-VALID_COMPLETION_POLICIES = {"random", "semantic_greedy", "mixed"}
+VALID_COMPLETION_POLICIES = {"random", "semantic_greedy", "mixed", "gp_guided"}
 
 
 @dataclass(frozen=True)

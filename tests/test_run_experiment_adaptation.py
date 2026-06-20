@@ -2,6 +2,9 @@ import pytest
 import importlib.util
 import sys
 from pathlib import Path
+import json
+
+import pandas as pd
 
 
 def _load_run_experiment():
@@ -21,6 +24,8 @@ select_runner_for_task = run_experiment.select_runner_for_task
 missing_checkpoint_dims = run_experiment.missing_checkpoint_dims
 task_passes_dim_filter = run_experiment.task_passes_dim_filter
 load_gp_distilled_scores = run_experiment.load_gp_distilled_scores
+resolve_gp_policy_weight = run_experiment.resolve_gp_policy_weight
+gather_manifest_tasks = run_experiment.gather_manifest_tasks
 
 
 def test_parse_ckpt_by_vars_maps_dimensions_to_paths():
@@ -45,6 +50,12 @@ def test_parse_target_kwargs_reads_json_object():
     parsed = parse_target_kwargs('{"max_completion_steps": 1, "eval_topk": 4}')
 
     assert parsed == {"max_completion_steps": 1, "eval_topk": 4}
+
+
+def test_run_experiment_accepts_global_block_commit_mode():
+    choices = run_experiment.build_arg_parser()._option_string_actions["--execution_mode"].choices
+
+    assert "global_block_commit" in choices
 
 
 def test_parse_target_kwargs_rejects_non_object():
@@ -86,3 +97,44 @@ def test_load_gp_distilled_scores_reads_event_likelihoods(tmp_path):
 
     assert action_scores[3] > action_scores[4]
     assert operator_scores["square"] > operator_scores["sin"]
+
+
+def test_gp_policy_weight_defaults_to_disabled_for_candidate_prior_path():
+    assert resolve_gp_policy_weight(None, {"rollout_policy": "gp_guided"}, {"1": 2.0}, {"square": 1.0}) == 0.0
+    assert resolve_gp_policy_weight(0.1, {"rollout_policy": "gp_guided"}, {"1": 2.0}, {"square": 1.0}) == 0.1
+
+
+def test_gather_manifest_tasks_loads_new_benchmark_split(tmp_path):
+    task_dir = tmp_path / "materialized" / "toy_suite" / "toy"
+    task_dir.mkdir(parents=True)
+    pd.DataFrame({"x0": [0.0, 1.0], "target": [0.0, 1.0]}).to_csv(task_dir / "train.csv", index=False)
+    pd.DataFrame({"x0": [2.0], "target": [4.0]}).to_csv(task_dir / "test.csv", index=False)
+    manifest_path = tmp_path / "benchmark_manifest.json"
+    manifest_path.write_text(json.dumps({
+        "version": "1.0",
+        "suites": {
+            "toy_suite": [{
+                "task_id": "toy_suite/toy",
+                "suite": "toy_suite",
+                "num_vars": 1,
+                "variable_names": ["x0"],
+                "train_path": "materialized/toy_suite/toy/train.csv",
+                "test_path": "materialized/toy_suite/toy/test.csv",
+                "target_column": "target",
+                "ground_truth": "x0**2",
+            }]
+        },
+    }))
+
+    tasks = gather_manifest_tasks(
+        manifest_path,
+        suites=["toy_suite"],
+        root=tmp_path,
+        min_vars=1,
+        max_vars=1,
+        limit=1,
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0].name == "toy_suite/toy"
+    assert tasks[0].metadata["suite"] == "toy_suite"

@@ -1,0 +1,84 @@
+# External comparison baseline matrix.
+#
+# DEAP and gplearn may also be installed in the main semflow environment for
+# GP-assisted SFSR tooling and smoke checks. Paper-comparison runs should still
+# be treated as external baseline jobs with their own method tags and budgets.
+
+manifest: data/benchmark_suites/benchmark_manifest.json
+root: data/benchmark_suites
+out: results/external_baselines
+
+suite_groups:
+  formula_dev:
+    - nguyen
+    - constant
+    - livermore
+    - jin
+  srsd_main:
+    - srsd_feynman_easy
+    - srsd_feynman_medium
+    - srsd_feynman_hard
+  srsd_dummy:
+    - srsd_feynman_easy_dummy
+    - srsd_feynman_medium_dummy
+    - srsd_feynman_hard_dummy
+  pmlb:
+    - pmlb_regression
+  all_complete:
+    - nguyen
+    - constant
+    - livermore
+    - jin
+    - srsd_feynman_easy
+    - srsd_feynman_medium
+    - srsd_feynman_hard
+    - srsd_feynman_easy_dummy
+    - srsd_feynman_medium_dummy
+    - srsd_feynman_hard_dummy
+    - pmlb_regression
+
+methods:
+  - id: DEAP
+    role: external_comparison
+    env: deap
+    script: scripts/run_deap_baseline.py
+    args:
+      generations: 40
+      population_size: 1000
+
+  - id: gplearn
+    role: external_comparison
+    env: gplearn
+    script: scripts/run_gplearn_baseline.py
+    args:
+      generations: 20
+      population_size: 1000
+
+  - id: PySR
+    role: external_comparison
+    env: pysr
+    script: scripts/run_pysr_baseline.py
+    args:
+      niterations: 100
+
+  - id: DSO
+    role: external_comparison
+    env: dso37
+    script: scripts/run_dsr_baseline.py
+    args:
+      n_samples: 100000
+
+  - id: TPSR
+    enabled: false
+    role: native_protocol_reference
+    env: tpsr
+    script: external/TPSR/run.py
+    accepts_manifest: false
+    args:
+      eval_on_pmlb: true
+      beam_type: sampling
+      beam_size: 10
+      n_trees_to_refine: 10
+      max_input_points: 200
+      max_number_bags: 10
+      save_results: true

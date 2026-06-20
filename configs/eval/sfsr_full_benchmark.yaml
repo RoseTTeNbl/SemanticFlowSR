@@ -1,0 +1,74 @@
+# Full-manifest SFSR evaluation matrix.
+#
+# This file only wires existing SFSR execution modes over the benchmark manifest.
+# It does not change the algorithm. Pass real checkpoints with --ckpt_by_vars,
+# e.g. 1:checkpoints/d1.pt 2:checkpoints/d2.pt 3:checkpoints/d3.pt.
+
+manifest: data/benchmark_suites/benchmark_manifest.json
+root: data/benchmark_suites
+out: results/sfsr_full_benchmark
+
+suite_groups:
+  formula_dev:
+    - nguyen
+    - constant
+    - livermore
+    - jin
+  srsd_main:
+    - srsd_feynman_easy
+    - srsd_feynman_medium
+    - srsd_feynman_hard
+  srsd_dummy:
+    - srsd_feynman_easy_dummy
+    - srsd_feynman_medium_dummy
+    - srsd_feynman_hard_dummy
+  pmlb:
+    - pmlb_regression
+  all_complete:
+    - nguyen
+    - constant
+    - livermore
+    - jin
+    - srsd_feynman_easy
+    - srsd_feynman_medium
+    - srsd_feynman_hard
+    - srsd_feynman_easy_dummy
+    - srsd_feynman_medium_dummy
+    - srsd_feynman_hard_dummy
+    - pmlb_regression
+
+common_args:
+  target: semantic_fisher_risk_flow
+  execution_mode: global_block_commit
+  integration_method: semantic_fisher_sphere
+  trajectory_num_samples: 128
+  trajectory_max_len: 8
+  trajectory_temperature: 1.0
+  trajectory_exploration: 0.05
+  block_candidate_budget: 128
+  block_aggregation: mean
+  block_p0_mode: uniform
+  risk_mode: top_alpha
+  risk_alpha: 0.1
+  risk_normalize: rank
+  global_block_selector: exact
+  support_mode: adaptive_full
+  support_full_threshold: 512
+  gram_rank: 16
+  max_steps: 16
+  record_diagnostics: true
+
+methods:
+  - id: SFSR-RiskFlow-H1
+    args:
+      block_size: 1
+  - id: SFSR-RiskFlow-H3
+    args:
+      block_size: 3
+  - id: SFSR-RiskFlow-H5
+    args:
+      block_size: 5
+  - id: SFSR-RiskFlow-FullSelector
+    args:
+      execution_mode: full_selector
+      block_size: full

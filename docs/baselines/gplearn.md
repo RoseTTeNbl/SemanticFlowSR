@@ -1,22 +1,36 @@
-# gplearn（遗传编程基线）
+# gplearn
 
-经典遗传编程符号回归，纯 Python，轻量易装。
+`gplearn` 有两个用途，必须分开记录：
 
-## 环境
+- 主 `semflow` 环境中的安装：用于 GP-assisted SFSR 工具和 smoke。
+- 外部 baseline：作为独立方法写入 `results/external_baselines`。
+
+## 独立环境
 
 ```bash
 conda create -n gplearn python=3.11
 conda activate gplearn
 pip install gplearn scikit-learn pandas
-pip install -e .           # 在 SemanticFlowSR/ 下
+pip install -e .
 ```
 
-## 运行
+## Manifest 运行
 
 ```bash
-python scripts/run_gplearn_baseline.py --data data/materialized/nguyen --out results/gplearn
+conda run -n gplearn python scripts/run_gplearn_baseline.py \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --suite nguyen constant livermore jin \
+  --root data/benchmark_suites \
+  --generations 20 \
+  --population_size 1000 \
+  --out results/external_baselines \
+  --tag gplearn_formula_dev
 ```
 
-- `--data`：物化套件目录；`--seed`：种子（默认 0）。
+也可以通过矩阵入口生成命令：
 
-产出 `results/gplearn/gplearn_seed{k}.json`。适配器：`semflow_sr/eval/baselines.run_gplearn`。
+```bash
+conda run -n semflow python scripts/run_external_baseline_matrix.py \
+  --method gplearn \
+  --suite_group formula_dev
+```

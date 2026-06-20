@@ -12,6 +12,8 @@ from ..endpoints.target_gt import GTTarget
 from ..endpoints.target_semantic_oracle import SemanticOracleTarget
 from ..endpoints.target_group_advantage import GroupAdvantageTarget
 from ..endpoints.target_rollout_fitness import RolloutFitnessTarget
+from ..endpoints.target_global_trajectory import GlobalTrajectoryTarget
+from ..endpoints.target_semantic_fisher_risk_flow import SemanticFisherRiskFlowEndpoint
 from ..sr.ops import NAME_TO_ID
 
 
@@ -50,6 +52,10 @@ def build_dataset(gen: GenConfig, num_tasks: int, target: str = "gt",
         tgt = SemanticOracleTarget()
     elif target in {"one_step_advantage", "group_advantage", "semantic_advantage_flow"}:
         tgt = GroupAdvantageTarget(**(target_kwargs or {}))
+    elif target in {"global_trajectory", "global_trajectory_marginal", "trajectory_marginal"}:
+        tgt = GlobalTrajectoryTarget(space, energy_cfg or ActionEnergyConfig(), **(target_kwargs or {}))
+    elif target in {"semantic_fisher_risk_flow", "risk_flow"}:
+        tgt = SemanticFisherRiskFlowEndpoint(space, energy_cfg or ActionEnergyConfig(), **(target_kwargs or {}))
     elif target in {"rollout_fitness_advantage", "rollout_fitness"}:
         tgt = RolloutFitnessTarget(space, energy_cfg or ActionEnergyConfig(), **(target_kwargs or {}))
     else:

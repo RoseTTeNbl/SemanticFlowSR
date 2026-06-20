@@ -9,6 +9,32 @@ import numpy as np
 from .metrics import r2_score, nmse
 
 
+def _affine_refit_predictions(train_pred, y_train, test_pred):
+    train_pred = np.nan_to_num(np.asarray(train_pred, dtype=float).reshape(-1))
+    test_pred = np.nan_to_num(np.asarray(test_pred, dtype=float).reshape(-1))
+    A = np.stack([train_pred, np.ones_like(train_pred)], axis=1)
+    try:
+        coef = np.linalg.lstsq(A, np.asarray(y_train, dtype=float), rcond=None)[0]
+    except np.linalg.LinAlgError:
+        coef = np.array([1.0, 0.0])
+    return coef[0] * test_pred + coef[1]
+
+
+def _result_with_affine_refit(y_train, train_pred, y_test, test_pred, expression: str) -> dict:
+    test_pred = np.nan_to_num(np.asarray(test_pred, dtype=float))
+    train_pred = np.nan_to_num(np.asarray(train_pred, dtype=float))
+    refit_pred = _affine_refit_predictions(train_pred, y_train, test_pred)
+    raw_r2 = r2_score(y_test, test_pred)
+    return {
+        "r2": raw_r2,
+        "r2_raw": raw_r2,
+        "r2_affine_refit": r2_score(y_test, refit_pred),
+        "nmse": nmse(y_test, test_pred),
+        "nmse_affine_refit": nmse(y_test, refit_pred),
+        "expression": expression,
+    }
+
+
 def run_pysr(X_train, y_train, X_test, y_test, **kw):
     from pysr import PySRRegressor
     model = PySRRegressor(
@@ -18,9 +44,9 @@ def run_pysr(X_train, y_train, X_test, y_test, **kw):
         progress=False, verbosity=0,
     )
     model.fit(X_train, y_train)
+    train_pred = model.predict(X_train)
     pred = model.predict(X_test)
-    return {"r2": r2_score(y_test, pred), "nmse": nmse(y_test, pred),
-            "expression": str(model.sympy())}
+    return _result_with_affine_refit(y_train, train_pred, y_test, pred, str(model.sympy()))
 
 
 def run_gplearn(X_train, y_train, X_test, y_test, **kw):
@@ -32,9 +58,9 @@ def run_gplearn(X_train, y_train, X_test, y_test, **kw):
         verbose=0,
     )
     model.fit(X_train, y_train)
+    train_pred = model.predict(X_train)
     pred = model.predict(X_test)
-    return {"r2": r2_score(y_test, pred), "nmse": nmse(y_test, pred),
-            "expression": str(model._program)}
+    return _result_with_affine_refit(y_train, train_pred, y_test, pred, str(model._program))
 
 
 def run_deap(X_train, y_train, X_test, y_test, **kw):
@@ -83,9 +109,11 @@ def run_deap(X_train, y_train, X_test, y_test, **kw):
     algorithms.eaSimple(pop, tb, cxpb=0.7, mutpb=0.2,
                         ngen=kw.get("generations", 40), halloffame=hof, verbose=False)
     best = tb.compile(expr=hof[0])
+    train_pred = np.array([best(*row) for row in X_train], dtype=float)
     pred = np.array([best(*row) for row in X_test], dtype=float)
+    train_pred = np.nan_to_num(train_pred, nan=0.0, posinf=0.0, neginf=0.0)
     pred = np.nan_to_num(pred, nan=0.0, posinf=0.0, neginf=0.0)
-    return {"r2": r2_score(y_test, pred), "nmse": nmse(y_test, pred), "expression": str(hof[0])}
+    return _result_with_affine_refit(y_train, train_pred, y_test, pred, str(hof[0]))
 
 
 def run_dso(X_train, y_train, X_test, y_test, **kw):
@@ -97,6 +125,6 @@ def run_dso(X_train, y_train, X_test, y_test, **kw):
               "training": {"n_samples": kw.get("n_samples", 100000), "verbose": False}}
     model = DeepSymbolicRegressor(config)
     model.fit(X_train, y_train)
+    train_pred = np.nan_to_num(np.asarray(model.predict(X_train), dtype=float))
     pred = np.nan_to_num(np.asarray(model.predict(X_test), dtype=float))
-    return {"r2": r2_score(y_test, pred), "nmse": nmse(y_test, pred),
-            "expression": str(model.program_.pretty())}
+    return _result_with_affine_refit(y_train, train_pred, y_test, pred, str(model.program_.pretty()))

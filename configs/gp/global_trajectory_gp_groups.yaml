@@ -1,0 +1,46 @@
+groups:
+  GP-CandidatePool:
+    description: GP final-population samples are appended to base trajectory samples, then re-evaluated by the same terminal reward and risk-flow credit path.
+    target: semantic_fisher_risk_flow
+    gp_mode: candidate_pool
+    sample_source: base_plus_gp
+    changes_prior: false
+    changes_target_formula: false
+    target_kwargs:
+      num_samples: 64
+      max_len: 8
+      prior_mode: uniform
+      smoothing: 0.02
+  GP-PriorReplacement:
+    description: GP final population replaces the base trajectory sample source; results are still converted through risk-flow trajectory advantages.
+    target: semantic_fisher_risk_flow
+    gp_mode: prior_replacement
+    sample_source: gp_only
+    changes_prior: true
+    changes_target_formula: false
+    target_kwargs:
+      num_samples: 64
+      max_len: 8
+      prior_mode: gp_frequency
+      prior_smoothing: 0.02
+      smoothing: 0.02
+  GP-PosteriorLikelihood:
+    description: GP final population with explicit event likelihood diagnostics; likelihood-aware weighting remains appendix-only.
+    target: semantic_fisher_risk_flow
+    gp_mode: posterior_likelihood
+    sample_source: gp_only
+    changes_prior: true
+    changes_target_formula: false
+    target_kwargs:
+      num_samples: 64
+      max_len: 8
+      prior_mode: gp_frequency
+      prior_smoothing: 0.02
+      likelihood_kappa: 0.25
+      likelihood_clip: 4.0
+      smoothing: 0.02
+    likelihood:
+      diagnostic_key: gp_logprob
+      appendix_weighting:
+        enabled: true
+        kappa: [0.25, 0.5]

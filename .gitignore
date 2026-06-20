@@ -17,7 +17,8 @@ venv/
 /data/
 /checkpoints/
 /outputs/
-/results/
+/results/*
+!/results/README.md
 *.pt
 *.ckpt
 
@@ -31,6 +32,10 @@ venv/
 !/tests/test_support_sampler.py
 !/tests/test_eval_results_plots.py
 !/tests/test_build_paper_results.py
+!/tests/test_baseline_manifest_runner.py
+!/tests/test_benchmark_manifest.py
+!/tests/test_candidate_flow.py
+!/tests/test_path_posterior_flow.py
 !/tests/test_gp_event_distillation_script.py
 !/tests/test_rollout_gp_policy.py
 !/tests/test_run_experiment_adaptation.py

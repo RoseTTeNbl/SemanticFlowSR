@@ -1,56 +1,62 @@
 # 数据集部署
 
-所有命令在 `SemanticFlowSR/` 下、`semflow` 环境中执行。
+所有命令在 `SemanticFlowSR/` 下执行。
 
-## S1：局部 semantic-Fisher target
-
-Trainer 可以在线生成；如果要单独落盘 trace dataset，主配置应该与当前算法一致：
+## 1. 生成完整 benchmark
 
 ```bash
-python scripts/generate_trace_dataset.py \
-  --num_tasks 2000 \
-  --num_vars 1 \
-  --max_depth 4 \
-  --K 8 \
-  --probe_size 128 \
-  --target one_step_advantage \
-  --max_support 128 \
-  --support_mode mixed_topk_random \
-  --out data/local_flow_traces/train
+conda run -n semflow python scripts/prepare_benchmark_suites.py \
+  --sources formula_dev srsd_main srsd_dummy pmlb \
+  --pmlb-fetch-missing \
+  --pmlb-limit 50 \
+  --pmlb-max-samples 5000 \
+  --pmlb-max-features 20 \
+  --out-root data/benchmark_suites/materialized \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --index data/benchmark_suites/benchmark_index.csv
 ```
 
-当前主链不再依赖闭式 path sample。核心是：
+生成后目录应包含：
 
-- centered residual backend
-- `xi`
-- `gram`
-- `w_target`
-- `zdot_target`
+```text
+data/benchmark_suites/benchmark_manifest.json
+data/benchmark_suites/benchmark_index.csv
+data/benchmark_suites/materialized/
+```
 
-## S2：公式 benchmark 物化
+## 2. 校验 manifest
 
 ```bash
-python scripts/materialize_formula_benchmark.py \
-  --suite nguyen constant livermore jin \
-  --seeds 0 1 2 3 4 \
-  --out data/materialized
+conda run -n semflow python scripts/validate_benchmark_manifest.py \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --root data/benchmark_suites \
+  --out results/dataset_validation \
+  --fail-on-error
 ```
 
-## 评测主命令
+这一步必须在 SFSR 或 baseline 长跑前通过。
+
+## 3. 生成 SFSR 评测命令
 
 ```bash
-python scripts/run_experiment.py \
-  --ckpt checkpoints/velocity_one_step_advantage.pt \
-  --suite nguyen constant livermore jin \
-  --seed 0 \
-  --out results/semantic_fisher \
-  --tag formula_1var_seed0 \
-  --integration_method semantic_fisher_sphere \
-  --step_size 1.0 \
-  --beta 1.0 \
-  --gamma 0.1
+conda run -n semflow python scripts/run_sfsr_benchmark_matrix.py \
+  --suite_group formula_dev srsd_main srsd_dummy pmlb \
+  --ckpt_by_vars \
+    1:checkpoints/d1.pt \
+    2:checkpoints/d2.pt \
+    3:checkpoints/d3.pt \
+  --plan_out results/benchmark_plans/sfsr_risk_flow_commands.json
 ```
 
-## PMLB / SRBench
+确认命令后加 `--execute`。正式完整评测需要补齐更高维 checkpoint；缺失维度会在
+`*_skipped.json` 中记录。
 
-PMLB loader 与缓存脚本仍可用。它们只是 benchmark 输入源，不会改变 semantic-Fisher target 的构造方式。
+## 4. 生成外部 baseline 命令
+
+```bash
+conda run -n semflow python scripts/run_external_baseline_matrix.py \
+  --suite_group formula_dev srsd_main srsd_dummy pmlb \
+  --plan_out results/benchmark_plans/external_baseline_commands.json
+```
+
+外部 baseline 的环境和预算在 `configs/eval/external_baselines.yaml` 里统一维护。

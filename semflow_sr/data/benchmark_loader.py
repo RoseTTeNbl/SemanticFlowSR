@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import numpy as np
 
+from .benchmark_manifest import BenchmarkTaskSpec
+
 
 @dataclass
 class SRTask:
@@ -93,3 +95,43 @@ class FeynmanCSVLoader:
         return SRTask(name, tr[cols].to_numpy(float), tr["target"].to_numpy(float),
                       te[cols].to_numpy(float), te["target"].to_numpy(float),
                       None, cols, {"suite": "feynman", "seed": seed})
+
+
+def load_materialized_task(spec: BenchmarkTaskSpec, root: str | Path = ".") -> SRTask:
+    """Load a task described by the unified benchmark manifest."""
+    import pandas as pd
+    root = Path(root)
+    train_path = root / spec.train_path
+    test_path = root / spec.test_path
+    if not train_path.exists():
+        raise FileNotFoundError(train_path)
+    if not test_path.exists():
+        raise FileNotFoundError(test_path)
+    tr = pd.read_csv(train_path)
+    te = pd.read_csv(test_path)
+    cols = [c for c in spec.variable_names if c in tr.columns]
+    if len(cols) != len(spec.variable_names):
+        missing = sorted(set(spec.variable_names) - set(cols))
+        raise ValueError(f"missing variable columns in {train_path}: {missing}")
+    y_col = spec.target_column
+    if y_col not in tr.columns or y_col not in te.columns:
+        raise ValueError(f"missing target column {y_col!r} for {spec.task_id}")
+    metadata = {
+        "suite": spec.suite,
+        "domain": spec.domain,
+        "has_dummy_vars": spec.has_dummy_vars,
+        "ground_truth": spec.ground_truth,
+        "metrics": spec.metrics,
+        "split": spec.split,
+        **spec.metadata,
+    }
+    return SRTask(
+        spec.task_id,
+        tr[cols].to_numpy(float),
+        tr[y_col].to_numpy(float),
+        te[cols].to_numpy(float),
+        te[y_col].to_numpy(float),
+        spec.ground_truth,
+        list(spec.variable_names),
+        metadata,
+    )

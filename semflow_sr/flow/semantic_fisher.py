@@ -142,6 +142,65 @@ def integrate_semantic_fisher_teacher_path(
     )
 
 
+def integrate_semantic_fisher_endpoint_path(
+    p_start: torch.Tensor,
+    q_target: torch.Tensor,
+    gram: torch.Tensor,
+    beta: torch.Tensor | float,
+    gamma: torch.Tensor | float,
+    steps: int,
+    dt: float | None = None,
+    gram_rank: int | None = None,
+    gram_factors: torch.Tensor | None = None,
+    q_smoothing: float = 1e-3,
+    eps: float = EPS,
+) -> SemanticFisherTeacherPath:
+    """Integrate a target-sampled endpoint flow toward ``q_target``.
+
+    Unlike ``integrate_semantic_fisher_teacher_path``, the driving log-ratio is
+    recomputed at each lambda-time policy:
+
+        r_lambda = log(q_eps) - log(p_lambda).
+    """
+    n_steps = max(int(steps), 1)
+    step_dt = float(1.0 / n_steps if dt is None else dt)
+    p0 = smooth_simplex(p_start, eps=eps)
+    q = smooth_simplex(q_target.to(device=p0.device, dtype=p0.dtype), eps=eps)
+    q_eps = smooth_simplex((1.0 - float(q_smoothing)) * q + float(q_smoothing) * p0, eps=eps)
+    gram = gram.to(device=p0.device, dtype=p0.dtype)
+    if gram_factors is not None:
+        gram_factors = gram_factors.to(device=p0.device, dtype=p0.dtype)
+
+    p = p0
+    policies = [p]
+    logrates = []
+    sphere_velocities = []
+    for _ in range(n_steps):
+        advantage = torch.nan_to_num(q_eps.clamp_min(eps).log() - p.clamp_min(eps).log())
+        w = semantic_fisher_lograte(
+            p,
+            advantage,
+            gram,
+            beta=beta,
+            gamma=gamma,
+            gram_rank=gram_rank,
+            gram_factors=gram_factors,
+            eps=eps,
+        )
+        z = p.clamp_min(eps).sqrt()
+        zdot = semantic_fisher_sphere_velocity(z, w)
+        logrates.append(w)
+        sphere_velocities.append(zdot)
+        p = semantic_fisher_sphere_step(p, w, dt=step_dt, eps=eps)
+        policies.append(p)
+    return SemanticFisherTeacherPath(
+        policies=policies,
+        logrates=logrates,
+        sphere_velocities=sphere_velocities,
+        dt=step_dt,
+    )
+
+
 def _solve_linear(matrix: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
     try:
         return torch.linalg.solve(matrix, rhs)

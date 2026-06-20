@@ -1,4 +1,4 @@
-"""Rollout evaluator wrappers for future-value advantage estimation."""
+"""Compatibility wrappers for the legacy action-level rollout evaluator."""
 
 from ..endpoints.target_rollout_fitness import CompletionResult, RolloutEvaluator
 

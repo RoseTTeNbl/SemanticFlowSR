@@ -1,0 +1,52 @@
+seed: 0
+out: checkpoints
+checkpoint_name: semantic_fisher_flow_future_group_l3_87.pt
+num_tasks: 16
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 1
+gen:
+  num_vars: 3
+  max_depth: 5
+  K: 10
+  probe_size: 32
+  ops: [add, sub, mul, protected_div, sin, cos, square, cube, exp, protected_log, protected_sqrt]
+energy:
+  lambda_rank: 0.0
+  lambda_move: 0.0
+  lambda_op: 0.0
+  projection: ridge
+  rho: 0.001
+path_posterior:
+  target_mode: future_group_l3
+  num_trajectories: 8
+  max_states_per_task: 4
+  max_steps: 6
+  weight_eta: 2.5
+  target_smoothing: 0.001
+  stop_bias_base: -2.0
+  stop_bias_slope: 0.35
+  rollout_depth: 3
+  rollouts_per_action: 1
+  rollout_topk: 1
+  max_rollout_support: 8
+  beta: 1.0
+  gamma: 0.1
+  gram_rank: 8
+  teacher_steps: 2
+  enable_stop: true
+  max_support_size: 32
+  max_abs_semantic: 1000000.0
+  max_energy_growth: 100.0
+  terminal_op_penalty: 0.0
+model:
+  hidden: 128
+  row_layers: 1
+  heads: 4
+train:
+  lr: 0.0004
+  on_policy_iterations: 2
+  steps_per_iteration: 40
+  batch_size: 8
+  grad_clip: 1.0
+  log_every: 20

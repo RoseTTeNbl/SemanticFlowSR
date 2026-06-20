@@ -1,0 +1,41 @@
+seed: 0
+out: checkpoints
+checkpoint_name: block_risk_flow_h3_87.pt
+num_tasks: 16
+gen:
+  num_vars: 3
+  max_depth: 4
+  K: 10
+  probe_size: 24
+  ops: [add, sub, mul, protected_div, sin, cos, square, cube, exp, protected_log, protected_sqrt]
+energy:
+  lambda_rank: 0.0
+  lambda_move: 0.0
+  lambda_op: 0.001
+  projection: ridge
+  rho: 0.001
+block:
+  size: 3
+sampling:
+  num_trajectories: 8
+  max_blocks: 2
+  block_pool_budget: 24
+risk:
+  mode: top_alpha
+  alpha: 0.25
+  normalize: rank
+flow:
+  beta: 1.0
+  gamma: 0.1
+  gram_rank: 8
+  num_time_samples: 1
+model:
+  hidden: 96
+train:
+  lr: 0.0005
+  steps: 90
+  on_policy_iterations: 3
+  steps_per_iteration: 30
+  batch_size: 2
+  grad_clip: 1.0
+  log_every: 20

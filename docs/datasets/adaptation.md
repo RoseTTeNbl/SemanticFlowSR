@@ -1,77 +1,121 @@
 # 数据集适配
 
-所有数据集最终通过 `semflow_sr/data/benchmark_loader.py` 统一成 `SRTask`，再被
-`eval/evaluator.evaluate_task` 与各基线脚本消费。
-
-## 统一接口 `SRTask`
+所有数据集先转成统一 `SRTask`，再交给 SFSR 和外部 baseline。
 
 ```python
 @dataclass
 class SRTask:
     name: str
-    X_train: np.ndarray        # [n_train, d]
-    y_train: np.ndarray        # [n_train]
-    X_test:  np.ndarray        # [n_test, d]
-    y_test:  np.ndarray        # [n_test]
-    expression: str | None     # 已知公式（PMLB 为 None）
-    variable_names: list[str]  # 长度 d
+    X_train: np.ndarray
+    y_train: np.ndarray
+    X_test: np.ndarray
+    y_test: np.ndarray
+    expression: str | None
+    variable_names: list[str]
     metadata: dict
 ```
 
-## 列约定（所有 CSV / TSV）
+## CSV 约定
 
-`[特征列..., target]`：最后一列名为 `target`，其余为特征（变量）列。
-公式基准用 `x0, x1, ...`；PMLB 沿用原始物理量名（如 `m_0, v, c`）。
+每个 split 是普通 CSV：
 
-## 三类来源的加载方式
-
-| 来源 | 入口 | 说明 |
-|---|---|---|
-| 公式基准 YAML | `materialize_formula(entry, seed)` | sympy 求值采样，返回 `SRTask` |
-| 物化 CSV | `pd.read_csv` + 手工组 `SRTask` | 见 README「阶段 3」示例 |
-| PMLB | `PMLBLoader(root).load(name)` | 读 `datasets/<name>/<name>.tsv.gz`，按 `test_frac` 随机划分 |
-
-## PMLB 适配要点（与本仓库实测一致）
-
-`PMLBLoader.load(name)`：
-1. 路径 `external/pmlb/datasets/<name>/<name>.tsv.gz`；
-2. `pd.read_csv(sep='\t', compression='gzip')`；
-3. `target` 列作 `y`，其余列作 `X`、列名作 `variable_names`；
-4. 随机划分（默认 `test_frac=0.25`、`seed=0`）。
-
-**已实测**：`feynman_I_10_7`（3 变量 `m_0,v,c`，75000/25000）、`feynman_I_6_2a`（1 变量
-`theta`）、`cache_pmlb_subset.py --pattern feynman` 均正常。无 `.tsv.gz` 的目录
-（如 strogatz、缺数据的 3 个 feynman）会触发 `FileNotFoundError`，被
-`cache_pmlb_subset.py` 的 try/except 跳过。
-
-## 把 PMLB 数据接入评估
-
-PMLB 任务无已知端点分布，评估走与公式基准相同的 rollout 路径：
-
-```python
-import torch
-from semflow_sr.data.benchmark_loader import PMLBLoader
-from semflow_sr.eval.evaluator import evaluate_task
-from semflow_sr.sr.ops import NAME_TO_ID
-from semflow_sr.models.semantic_transformer import SemanticTransformer, SemanticTransformerConfig
-
-ck = torch.load("checkpoints/velocity_gt.pt", map_location="cpu", weights_only=False)
-m = SemanticTransformer(SemanticTransformerConfig(d=3, K=8, hidden=128, row_layers=2, heads=4))
-m.load_state_dict(ck["model"]); m.eval()
-
-task = PMLBLoader("external/pmlb").load("feynman_I_10_7")
-ops = [NAME_TO_ID[o] for o in ("add","sub","mul","sin","cos","square")]
-rep = evaluate_task(m, task, K=8, ops_ids=ops, device=torch.device("cpu"),
-                    max_steps=16, grid=5, greedy=True, max_support=128)
-print(rep.r2, rep.expression)
+```text
+x0,x1,...,target
 ```
 
-> 注意：`SemanticTransformerConfig.d` 必须等于该任务的变量数（PMLB 各数据集不同），
-> `K`/`ops_ids` 需与训练时一致。多变量任务建议用 `--num_vars` 匹配的 checkpoint。
+PMLB 原始列名会保存在 metadata，但 manifest 里的 `variable_names` 统一为
+`x0, x1, ...`，方便 SFSR checkpoint 按维度选择。
 
-## 新增数据源的适配清单
+## 主要模块
 
-1. 整理成 `[特征..., target]` 的表格（CSV/TSV）；
-2. 写一个返回 `SRTask` 的小 loader（或复用 `PMLBLoader` 的目录约定）；
-3. 确认 `variable_names` 长度 = `X` 列数；
-4. 用上面的 rollout 片段跑通一次评估即完成适配。
+| 模块 | 作用 |
+|---|---|
+| `semflow_sr/data/benchmark_manifest.py` | manifest schema、读写、index |
+| `semflow_sr/data/benchmark_loader.py` | `BenchmarkTaskSpec -> SRTask` |
+| `semflow_sr/data/benchmark_validate.py` | 全量校验 split、列、finite 数值 |
+| `scripts/prepare_benchmark_suites.py` | 物化 Formula / SRSD-Feynman / PMLB |
+| `scripts/validate_benchmark_manifest.py` | 写验证报告 |
+
+## 生成或重修 manifest
+
+```bash
+conda run -n semflow python scripts/prepare_benchmark_suites.py \
+  --sources formula_dev srsd_main srsd_dummy pmlb \
+  --pmlb-fetch-missing \
+  --pmlb-limit 50 \
+  --pmlb-max-samples 5000 \
+  --pmlb-max-features 20 \
+  --out-root data/benchmark_suites/materialized \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --index data/benchmark_suites/benchmark_index.csv
+```
+
+然后立刻校验：
+
+```bash
+conda run -n semflow python scripts/validate_benchmark_manifest.py \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --root data/benchmark_suites \
+  --out results/dataset_validation \
+  --fail-on-error
+```
+
+## SFSR 矩阵
+
+SFSR 不需要按 suite 手写命令。先生成命令计划：
+
+```bash
+conda run -n semflow python scripts/run_sfsr_benchmark_matrix.py \
+  --suite_group formula_dev srsd_main srsd_dummy pmlb \
+  --ckpt_by_vars \
+    1:checkpoints/d1.pt \
+    2:checkpoints/d2.pt \
+    3:checkpoints/d3.pt \
+  --plan_out results/benchmark_plans/sfsr_risk_flow_commands.json
+```
+
+确认后加 `--execute`。如果 checkpoint map 缺少某个维度，`run_experiment.py` 会跳过
+对应任务并写 `<tag>_skipped.json`；正式主表建议补齐 d1 / d2 / d3 / d4+ checkpoint。
+
+当前矩阵方法：
+
+```text
+SFSR-RiskFlow-H1
+SFSR-RiskFlow-H3
+SFSR-RiskFlow-H5
+SFSR-RiskFlow-FullSelector
+```
+
+## 外部 baseline 矩阵
+
+```bash
+conda run -n semflow python scripts/run_external_baseline_matrix.py \
+  --suite_group formula_dev srsd_main srsd_dummy pmlb \
+  --plan_out results/benchmark_plans/external_baseline_commands.json
+```
+
+确认环境后执行指定方法：
+
+```bash
+conda run -n semflow python scripts/run_external_baseline_matrix.py \
+  --method DEAP gplearn PySR DSO \
+  --suite_group formula_dev \
+  --execute
+```
+
+说明：主环境中的 `deap` / `gplearn` 安装服务于 GP-assisted SFSR 工具和 smoke。
+作为论文 baseline 时，它们仍按 `configs/eval/external_baselines.yaml` 的独立方法记录。
+
+## GP Population 文件
+
+GP-CandidatePool / GP-PriorReplacement / GP-PosteriorLikelihood 需要 action trajectory：
+
+```json
+{"actions": [12, 31, 44], "gp_logprob": -4.2, "fitness": 0.98}
+```
+
+加载入口：
+
+```python
+from semflow_sr.gp_distill.trajectory_pool import load_gp_trajectory_population
+```

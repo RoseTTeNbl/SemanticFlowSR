@@ -64,9 +64,10 @@ def _make_eval_fn(gen, ecfg, device, seed, n=8, gamma: float = 0.1, step_dt: flo
 
 def _target_kwargs(cfg: dict) -> dict:
     out = dict(cfg.get("target", {}))
-    out.pop("name", None)
+    target_name = out.pop("name", None)
     beta = _update_beta(cfg)
-    out.setdefault("eta_adv", beta)  # legacy endpoint API; beta is the single main strength.
+    if target_name not in {"semantic_fisher_risk_flow", "risk_flow"}:
+        out.setdefault("eta_adv", beta)  # legacy endpoint API; beta is the single main strength.
     rollout_cfg = dict(cfg.get("rollout_target", {}))
     # Offline rollout target data is a future dataset mode; online target construction
     # consumes only the rollout-scoring knobs.

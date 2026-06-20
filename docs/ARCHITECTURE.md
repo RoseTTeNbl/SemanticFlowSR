@@ -1,109 +1,134 @@
-# 项目架构与目录说明
+# Architecture
 
-当前代码按四层看最清楚：
+This document maps the current Semantic-Fisher Flow Matching implementation.
 
-```text
-semantic state + centered projection
--> action effect extraction
--> semantic-Fisher geometry
--> learned local update operator
-```
-
-## 顶层结构
+Main flow:
 
 ```text
-SemanticFlowSR/
-├── configs/
-├── semflow_sr/
-├── scripts/
-├── tests/
-├── docs/
-├── checkpoints/   # generated
-└── results/       # generated
+behavior trajectories
+-> prefix states
+-> deterministic support and p_init
+-> TargetSampler endpoint q_hat
+-> exact action semantic effects and Gram
+-> lambda-dependent semantic-Fisher endpoint teacher
+-> SemanticTransformer flow-matching loss
+-> inference integrates predicted velocity and commits action or STOP
 ```
 
-## 关键模块
+## Main Package
 
-### `semflow_sr/semantics/`
+### `semflow_sr/path_posterior/action_support.py`
 
-- `projection.py`: centered ridge projection backend, including `residual_vector`.
-- `energy.py`: one-step reward and `action_semantic_effects`.
+Defines STOP, STOP features/effects, health filtering, and support helpers. The
+current efficient order is deterministic cap first, health filtering second,
+STOP append last.
 
-### `semflow_sr/actions/`
+### `semflow_sr/path_posterior/target.py`
 
-- `action_space.py`: legal action enumeration.
-- `action_executor.py`: symbolic / semantic action execution.
-- `action_features.py`: static action features.
-- `support_sampler.py`: support approximation.
-
-### `semflow_sr/flow/`
-
-- `natural_path.py`: old exponential Fisher path utilities; now ablation/support code.
-- `semantic_fisher.py`: current mainline solver and sphere step.
-
-### `semflow_sr/models/`
-
-- `semantic_transformer.py`: row/register/action encoders plus main `lograte` head.
-- `action_encoder.py`: action-relation mixing using `gram`.
-- `velocity_model.py`: bridges raw head output to `lograte_logits`, `v_pred`, `z_dot_pred`.
-
-### `semflow_sr/data/`
-
-- `trace_dataset.py`: builds semantic-Fisher target records.
-- `collate.py`: pads support-local tensors including `gram`, `xi`, `semantic_stats`.
-
-### `semflow_sr/train/`
-
-- `trainer_velocity.py`: current main trainer.
-- `losses.py`: `SemanticFisherVelocityLoss` mainline; `SpherePathLoss` retained for the plain Fisher ablation.
-- `build_dataset.py`: synthetic trace dataset builder.
-- `train_velocity_gt.py`, `train_base_natural_flow.py`: train entry points.
-
-### `semflow_sr/inference/` and `semflow_sr/search/`
-
-- `iterative_policy_update.py`: semantic-Fisher and closed-form update helpers.
-- `rollout_velocity.py`: actual SR rollout and diagnostics; default is `semantic_fisher_sphere`.
-
-### `semflow_sr/targets/` and `semflow_sr/gp_distill/`
-
-These are providers and extensions:
-
-- one-step / rollout / search targets provide scalar scores
-- GP modules expose interfaces but do not alter the main geometry
-
-## 当前主数据流
-
-### 训练
+Contains only prefix collection records:
 
 ```text
-trace step
--> B, y, support S
--> centered residual e and action effects xi
--> Gram K and semantic_stats
--> provider scores R(a)
--> normalized advantage A(a)
--> exact log-rate w_target
--> sphere tangent z_dot_target
--> model predicts w_theta
--> semantic_fisher_velocity loss
+PathDecision
+PathTrajectory
 ```
 
-### 推理
+The old PathPosterior-Frequency conditional code has been removed.
+
+### `semflow_sr/path_posterior/target_sampler.py`
+
+Defines target endpoint builders:
 
 ```text
-state
--> support S
--> centered residual / action effects / gram
--> model log-rate w_theta
--> semantic_fisher_sphere_step
--> argmax / sample action
+PriorConfig
+build_p_init
+TargetShape
+OneStepTargetSampler
+FutureGroupTargetSampler
+CachedTrajectoryFitnessTargetSampler
+GPCandidateFitnessTargetSampler
+ShapeSamplingTargetSampler
 ```
 
-## 仍保留但不是主线
+Target samplers produce `q_hat`, `target_scores`, and diagnostics. They do not
+compute semantic effects or semantic-Fisher fields.
 
-- `gamma=0` semantic-Fisher no-pullback setting.
-- `closed_form_policy_update` for the plain Fisher potential endpoint ablation.
-- `SpherePathLoss` for plain Fisher sphere-path training comparisons.
-- `endpoints/` 的旧 `p0/p1` 兼容接口，用于旧数据/脚本读写。
+### `semflow_sr/path_posterior/sampler.py`
 
-这些分支现在只服务于回归测试、旧 checkpoint 兼容或明确 ablation。
+Samples behavior trajectories to collect prefix states. It records support and
+the behavior policy at each visited state. Support construction now caps raw
+actions before health filtering to avoid evaluating hundreds of actions before
+the approximation cap.
+
+### `semflow_sr/path_posterior/dataset.py`
+
+Builds flow-matching records:
+
+```text
+synthetic task
+-> behavior model samples root trajectories
+-> collect selected prefix states
+-> build p_init
+-> target sampler builds q_hat
+-> compute xi / Gram
+-> integrate endpoint semantic-Fisher path
+-> emit lambda-time records
+```
+
+Records keep compatibility with `collate_velocity`.
+
+## Flow
+
+### `semflow_sr/flow/semantic_fisher.py`
+
+Important functions:
+
+```text
+semantic_fisher_lograte
+semantic_fisher_sphere_step
+integrate_semantic_fisher_endpoint_path
+```
+
+The endpoint path recomputes:
+
+```text
+log q_eps - log p_lambda
+```
+
+at each lambda-time state.
+
+## Training
+
+### `semflow_sr/train/train_path_posterior_flow.py`
+
+Runs iterative behavior refresh and CPU-limited training. Config field:
+
+```yaml
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 1
+```
+
+Checkpoint metadata uses algorithm names such as:
+
+```text
+semantic_fisher_flow_matching_future_group_l3
+```
+
+## Evaluation
+
+### `scripts/run_path_posterior_flow.py`
+
+Loads a checkpoint and uses the same support cap and deterministic `p_init`
+STOP-bias rule as training. It does not call TargetSampler at inference time.
+
+## Deprecated Diagnostics
+
+The old block-flow and legacy endpoint paths remain for comparison:
+
+```text
+semflow_sr/blocks/
+semflow_sr/flow/semantic_fisher_table.py
+semflow_sr/models/block_flow_model.py
+semflow_sr/train/train_block_flow.py
+scripts/run_block_risk_flow.py
+```
