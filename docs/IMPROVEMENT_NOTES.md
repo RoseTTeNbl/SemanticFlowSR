@@ -1,421 +1,539 @@
-# 改进记录：action-flow 主线的问题、指标和下一步
+# Improvement Notes
 
-本文档记录 action-flow 主线的实测问题和后续改进建议。旧 87-task 数字来自
-PathPosterior-Frequency target，是历史 baseline；semantic-projection 版本也是
-上一轮理论改写，不是当前主线的新结果。
-
-当前主线是：
+Current mainline:
 
 ```text
-Semantic-Fisher Flow Matching
+Edge-Parameterized Semantic Flow Matching
 ```
 
-即：
+The action-level TSSF/SFFM direction is now legacy. Its main theoretical
+failure was not only target construction noise; the probability object itself
+was local:
 
 ```text
-prefix state
--> deterministic action support A_s
--> deterministic p_init
--> TargetSampler builds q_hat(a|s)
--> lambda-dependent log q_hat - log p_lambda
--> semantic effects xi(a) define geometry only
--> semantic-Fisher endpoint ODE
--> flow matching
--> 推理时 commit 一个 action 或 STOP
+state s_t -> action simplex A_s -> commit one action
 ```
 
-已废弃的历史路线包括：
+That structure encouraged building overcomplete register dictionaries and then
+using dense readout-like fitting to recover high R2. It did not directly model
+a distribution over compact complete expressions.
+
+---
+
+## 1. New Diagnosis
+
+The algorithm should search over complete executable expressions. The new
+object is:
 
 ```text
-PathPosterior-Frequency: risk-weighted visited-action frequency q*(a|s)
-Terminal Semantic Projection: terminal residual direction -> semantic projection q*(a|s)
+Theta -> q_Theta(e)
+```
+
+where `Theta` is a low-dimensional product of edge-choice simplexes and
+`q_Theta` is the induced distribution over full expression DAGs.
+
+This changes the failure surface:
+
+```text
+old bottleneck: local support / action target / local teacher imitation
+new bottleneck: template coverage / expression sampling / elite projection / edge-flow imitation
 ```
 
 ---
 
-## 1. 当前实现状态
+## 2. Current Implementation Checkpoint
 
-已经落地：
-
-```text
-action 作为唯一主生成单位；
-虚拟 STOP action；
-推理和训练的数值健康过滤；
-每个 state 的 support budget；
-多轮 on-policy trajectory resampling；
-deterministic p_init with step-dependent STOP bias；
-TargetSampler endpoint q_hat；
-OneStepTarget 实验组；
-FutureGroup-L3Target 实验组；
-CachedTrajectoryFitnessTarget 可选实验组；
-GPCandidateFitnessTarget 可选实验组；
-ImportanceSamplingTarget / MCMCShapeTarget 可选实验组；
-lambda-dependent endpoint log-ratio；
-训练/推理 support cap 一致；
-teacher path 上多个 p_lambda 的 flow matching record；
-CPU thread limit；
-dataset build / target sampler timing diagnostics；
-```
-
-关键代码：
+Implemented smoke stack:
 
 ```text
-semflow_sr/path_posterior/action_support.py
-semflow_sr/path_posterior/sampler.py
-semflow_sr/path_posterior/dataset.py
-semflow_sr/train/train_path_posterior_flow.py
-scripts/run_path_posterior_flow.py
-configs/train/semantic_fisher_flow_87_one_step.yaml
-configs/train/semantic_fisher_flow_87_future_group_l3.yaml
+RegisterOperatorTemplate
+EdgeDistribution
+CircuitSampler
+RewardEvaluator
+EliteProjection
+Fisher-slerp teacher
+EdgeFlowModel
+train_edge_flow smoke CLI
+run_edge_flow smoke CLI
 ```
+
+Smoke command:
+
+```bash
+env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
+  taskset -c 0-3 conda run -n semflow \
+  python -m semflow_sr.edge_flow.train_edge_flow \
+  --config configs/train/edge_flow_smoke.yaml
+```
+
+Smoke evaluation command:
+
+```bash
+env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
+  taskset -c 0-3 conda run -n semflow \
+  python scripts/run_edge_flow.py \
+  --ckpt checkpoints/edge_flow_smoke.pt \
+  --out results/edge_flow_smoke \
+  --tag edge_flow_smoke
+```
+
+The smoke run is not a benchmark result. It only confirms that the new data
+format and flow path execute.
 
 ---
 
-## 2. 当前训练配置
+## 3. Current 87-Task Signal
 
-当前非 smoke 配置：
-
-```text
-configs/train/semantic_fisher_flow_87_future_group_l3.yaml
-```
-
-主要参数：
+The first full 87-task Edge Flow run was:
 
 ```text
-num_tasks = 16
-target_mode = future_group_l3
-num_trajectories = 8
-max_states_per_task = 4
-on_policy_iterations = 2
-steps_per_iteration = 40
-max_steps = 6
-K = 10
-rollout_depth = 3
-rollouts_per_action = 1
-max_rollout_support = 8
-teacher_steps = 2
-max_support_size = 32
-enable_stop = true
-max_abs_semantic = 1e6
-max_energy_growth = 100
-torch_num_threads = 4
-torch_num_interop_threads = 1
+configs/train/edge_flow_87_basic.yaml
+results/edge_flow_87_basic/
 ```
 
-以下训练日志属于旧 frequency-target 87-task run，保留作 baseline：
+Headline metrics:
 
 ```text
-iter 0 step 0   loss 0.034816
-iter 0 step 20  loss 0.050343
-iter 0 step 40  loss 0.038733
-iter 0 step 60  loss 0.039471
-iter 1 step 80  loss 0.044101
-iter 1 step 100 loss 0.009531
-iter 1 step 120 loss 0.018311
-iter 1 step 140 loss 0.016703
-iter 2 step 160 loss 0.009958
-iter 2 step 180 loss 0.006318
-iter 2 step 200 loss 0.005752
-iter 2 step 220 loss 0.004095
-iter 3 step 240 loss 0.008077
-iter 3 step 260 loss 0.004410
-iter 3 step 280 loss 0.006006
-iter 3 step 300 loss 0.011457
+R2 mean            0.7931
+solution rate      0.0690
+skeleton accuracy  0.0230
+complexity mean    3.1264
+valid fraction     0.9988
+unique fraction    0.6968
 ```
 
-checkpoint：
+The important reading is not that the mean R2 is unusable. It is that low
+complexity and high validity were achieved by choosing simple correlated
+complete expressions, not by recovering symbolic structure. Only two tasks have
+exact skeleton match under the current 0/1 skeleton metric:
 
 ```text
-checkpoints/semantic_fisher_flow_future_group_l3_87.pt
+constant/Constant-5
+nguyen/Nguyen-8
 ```
+
+This confirms the user's observation: many outputs look qualitatively close on
+some examples, but the algorithm mostly learns low-dimensional semantic
+surrogates rather than the target expression skeleton.
+
+The next diagnostic run was:
+
+```text
+configs/train/edge_flow_87_h4_l3_k8.yaml
+results/edge_flow_87_h4_l3_k8/
+```
+
+It changed the structure and training target in the intended direction:
+
+```text
+H=4 mixture modes
+L=3 layers
+K=8 registers
+per-mode top-k hard projection
+validation-split robust target rewards
+decoder budget curve
+prior and theta_star oracle diagnostics
+```
+
+Headline metrics:
+
+```text
+R2 mean            0.8185
+solution rate      0.0920
+skeleton accuracy  0.0230
+complexity mean    4.0460
+valid fraction     0.9976
+unique fraction    0.6271
+```
+
+This improves numeric fit over the basic run, but it does not improve the main
+structural failure:
+
+```text
+basic H1/L2/K5:  R2 0.7931, solution 0.0690, skeleton 0.0230
+H4/L3/K8:        R2 0.8185, solution 0.0920, skeleton 0.0230
+```
+
+### 3.1 What The Metrics Say
+
+`complexity_mean=3.13` means the new complete-DAG output structure did address
+the previous dense-readout over-complexity symptom. The output is no longer a
+large affine combination of many register columns.
+
+`valid_expression_fraction_mean=0.9988` means numerical protection and template
+execution are not the dominant problem for this configuration.
+
+`unique_expression_fraction_mean=0.6968` is acceptable for a smoke-level
+sampling decoder, but it also shows that the final distribution still collapses
+onto repeated simple structures.
+
+`solution_rate=0.0690` and `skeleton_accuracy=0.0230` identify the real
+bottleneck: the search distribution rarely puts enough mass on the correct
+complete expression family. High R2 cases often come from single-term
+approximations:
+
+```text
+polynomial target -> x0**3 or x0**2 surrogate
+trigonometric product -> sin(x0) or cos(cos(x0)) surrogate
+multi-variable target -> one-variable projection
+nonlinear physical law -> low-dimensional correlated proxy
+```
+
+The subset split is also diagnostic:
+
+```text
+num_vars=1: R2 0.9219, skeleton 0.0952
+num_vars=2: R2 0.8196, skeleton 0.0000
+num_vars=3: R2 0.6993, skeleton 0.0000
+jin:      R2 0.5808, skeleton 0.0000
+feynman:  R2 0.7530, skeleton 0.0000
+```
+
+So the model can find simple one-dimensional correlates, but it is not
+assembling multi-variable and multi-operator structures.
+
+### 3.2 What The New Module Diagnostics Say
+
+The H4/L3/K8 run added four direct bottleneck probes.
+
+Decoder budget:
+
+```text
+sample 256:   R2 0.7707, skeleton 0.0115
+sample 1024:  R2 0.8273, skeleton 0.0230
+sample 4096:  R2 0.8678, skeleton 0.0230
+```
+
+Increasing the decode budget recovers better semantic fits, but it does not
+recover correct skeletons. This means ordinary sampling budget is a numeric
+fit bottleneck, not the primary structure bottleneck.
+
+Prior and projection oracles:
+
+```text
+prior oracle best R2 mean       0.8491
+theta_star decode best R2 mean  0.8743
+theta_star projection drop     -0.0252
+prior skeleton accuracy         0.0230
+theta_star skeleton accuracy    0.0345
+model skeleton accuracy         0.0230
+```
+
+The target projection is not destroying high-R2 elites on average. In fact,
+sampling from `theta_star` improves mean best R2. However, both prior and
+`theta_star` still find the same wrong structural family. Therefore the most
+important failure is upstream of neural flow imitation:
+
+```text
+reward + template + sampled expression family still prefer correlated proxy
+expressions over correct skeletons.
+```
+
+Mixture diagnostics:
+
+```text
+per-mode elite count total: [696, 696, 696, 696]
+per-mode nonzero elite tasks: [87, 87, 87, 87]
+mean per-mode best reward: approximately 0.79 to 0.80
+```
+
+Hard per-mode projection avoids empty modes in this configuration. It does not
+by itself create structurally distinct modes. The modes currently discover
+similar proxy families.
+
+Reward robustness and calibration:
+
+```text
+median calibration gain               1.4676
+tasks with calibration gain > 0.1      82.8%
+tasks with calibration gain > 1.0      55.2%
+median raw uncalibrated test R2       -0.8453
+median train-test R2 gap               0.0004
+```
+
+The validation split reduced obvious train/test overfit, but it did not remove
+the proxy-expression problem. Most high-scoring expressions still depend
+heavily on affine calibration:
+
+```text
+single expression g(x) is often poor by itself,
+but a*g(x)+b becomes a high-R2 local surrogate.
+```
+
+Variable dependency:
+
+```text
+mean used variable count           1.6092
+1-variable full dependency frac    1.0000
+2-variable full dependency frac    0.7241
+3-variable full dependency frac    0.0270
+```
+
+The 3-variable tasks are the clearest failure mode. The final expressions
+almost never use all required variables, so multi-variable physics-style
+structure is not being assembled.
+
+### 3.3 Current Diagnosis After H4/L3/K8
+
+The bottleneck ordering is now:
+
+```text
+1. reward/output selection accepts affine-calibrated proxy expressions;
+2. template/decode underuse all variables, especially in 3D tasks;
+3. mixture modes do not yet specialize into different structural families;
+4. neural flow imitation is secondary until theta_star skeleton improves.
+```
+
+This is different from the old action-level failure. The new method fixed the
+dense-readout complexity symptom, but it now searches too comfortably inside a
+space of compact correlated surrogates.
+
+## 4. Current Bottlenecks
+
+### 4.1 Template Expressivity Is Too Shallow
+
+The 87-basic run uses:
+
+```text
+num_layers=2
+num_registers=5
+H=1
+```
+
+This keeps outputs compact, but many 87-task targets require compositions,
+products of subexpressions, or multiple active terms. With the current template,
+a sampled expression often becomes a single primitive chain or a simple carried
+register. This explains why complexity is low but skeleton accuracy is near
+zero.
+
+Next change:
+
+```text
+Keep L/K diagnostics active, but do not blindly increase capacity. The H4/L3/K8
+run shows that larger capacity improves R2 without improving skeleton. Future
+template changes must specifically increase multi-term and multi-variable
+composition:
+
+  output slots over composite nodes,
+  explicit top-level add/mul/div composition nodes,
+  forced opportunities for all active input variables,
+  dimension-specific templates.
+```
+
+### 4.2 Reward Optimizes Semantic Fit, Not Structure
+
+Reward is currently:
+
+```text
+R2(affine_calibrated single expression) - lambda_c * complexity
+```
+
+This rewards any expression whose curve is correlated with the target on the
+sampled domain. It does not distinguish:
+
+```text
+correct skeleton with poor constants
+wrong skeleton with high local correlation
+one-variable projection of a multi-variable target
+```
+
+The new skeleton metric shows this directly: high R2 does not imply structural
+recovery.
+
+Next change:
+
+```text
+Treat affine calibration as a diagnostic and a final refit tool, not the main
+training signal. Candidate changes:
+
+  score with a blend of raw R2 and calibrated R2,
+  penalize excessive calibration_gain,
+  require validation/probe robustness,
+  add variable coverage and operator-family diagnostics before any reward term.
+```
+
+The auxiliary terms should be diagnostics first. Do not hard-code skeleton
+reward from ground truth into training except for supervised ablation.
+
+### 4.3 The Target Projection Is Too Crude
+
+Top-k weighted edge counts project elite samples independently per edge group.
+This breaks dependencies between edges. A correct expression is a coordinated
+set of choices; marginal edge counts can average incompatible circuits into a
+distribution that samples plausible but wrong fragments.
+
+Next change:
+
+```text
+H=4 hard per-mode projection is now implemented and stable enough to run. It
+does not yet produce structural mode diversity. Next projection work should
+measure and preserve dependencies:
+
+  edge co-occurrence / mutual information among elites,
+  elite skeleton diversity,
+  mode-specific root/operator histograms,
+  replay elites by full expression, not local fragments.
+```
+
+### 4.4 Sampling Decode Is Still Weak
+
+The current decoder samples 256 complete expressions from the final
+distribution. That is too small for the combinatorial template, especially when
+the learned distribution is diffuse or has wrong marginal dependencies.
+
+Next change:
+
+```text
+Sample-budget curves are now recorded. They show numeric R2 improves strongly
+with budget, while skeleton does not. Beam decoding is still useful, but it is
+not expected to solve skeleton accuracy unless the target distribution changes.
+
+Next decoder work:
+
+  add beam decode for high-probability circuits,
+  report reward-only vs reward + eta log q selection,
+  keep budget curves as a standard output file.
+```
+
+### 4.5 Single d=3 Checkpoint Is A Compromise
+
+The 87-basic run pads 1D/2D tasks into a single d=3 template. This is convenient
+for one configuration group, but it confounds:
+
+```text
+true variable structure
+dummy variable edges
+template candidate counts
+data encoder statistics
+```
+
+Next change:
+
+```text
+Train d1/d2/d3 Edge Flow checkpoints or make the template dynamically sized.
+Compare per-dimension checkpoints against padded d=3.
+```
+
+## 5. Key New Bottlenecks To Measure
+
+### 5.1 Template Coverage
+
+The template defines the reachable expression family. Record:
+
+```text
+num_layers
+num_registers
+primitive set
+num edge groups
+candidate count distribution
+```
+
+If the template cannot express a task compactly, flow quality cannot fix it.
+
+### 5.2 Sampling Coverage
+
+For every task:
+
+```text
+num_sampled_expressions
+valid_expression_fraction
+unique_expression_fraction
+duplicate_expression_fraction
+best_reward
+median_reward
+average_complexity
+used_variable_count
+output_depth
+active_operator_histogram
+```
+
+If uniform/prior sampling never sees useful expressions, elite projection will
+be biased.
+
+### 5.3 Elite Projection Quality
+
+Record:
+
+```text
+elite_k
+target_ESS
+target_edge_entropy_mean
+mode_entropy
+per_mode_elite_count
+per_mode_best_reward
+edge_target_entropy_by_group_type
+elite_skeleton_diversity
+```
+
+These replace old `full_best_in_support` and `support_best_reward_gap`
+diagnostics because local action support is gone.
+
+### 5.4 Flow Imitation
+
+Record:
+
+```text
+loss_mixture
+loss_groups
+velocity_norm
+simplex_mass_error
+endpoint distance
+```
+
+If elite targets are good but model integration cannot reproduce them, the
+bottleneck is model capacity or edge-state features.
 
 ---
 
-## 3. 已清理的旧 frequency-target 87-task 记录
+### 5.5 Structural Metrics
 
-旧 `PathPosterior-Frequency` 结果文件已从当前结果目录清理；以下数字只作为历史
-诊断说明，不再作为当前实验入口或可复现实验 tag。
-
-```text
-n_tasks = 87
-skipped = 0
-mean R2 = 0.7229
-median R2 = 0.8709
-mean NMSE = 0.2771
-median NMSE = 0.1291
-solution_rate@R2>=0.999 = 0.0
-mean complexity = 38.85
-median complexity = 39.0
-mean steps = 6.0
-median steps = 6.0
-energy_decrease_mean = -1.173e11
-energy_decrease_median = -0.0141
-stop_task_fraction = 0.0
-stop_decision_count = 0
-filtered_action_fraction_mean = 0.0163
-```
-
-和上一版 tiny smoke checkpoint 相比，mean/median R2 基本没有改善：
+The evaluation now records:
 
 ```text
-tiny smoke 87-task mean R2 ~= 0.7233
-旧 frequency-target 正常配置 mean R2 ~= 0.7229
+gt_skeleton
+pred_skeleton
+skeleton_match
+skeleton_accuracy
 ```
 
-这说明 frequency posterior 的主要瓶颈不是单纯训练步数太少，而是 target 本身
-缺少对当前 support 的 dense counterfactual ranking。
+The skeleton metric ignores numeric constants and affine calibration, strips
+protected `Abs`, and preserves variables plus discrete exponent/operator
+structure. It is intentionally a strict 0/1 structural check.
+
+Future structural diagnostics should add softer variants:
+
+```text
+operator multiset F1
+variable-set accuracy
+tree edit distance
+subtree recall
+term-count error
+```
+
+## 6. Immediate Next Steps
+
+1. Add a raw-vs-calibrated reward ablation:
+   `R = raw_R2 + alpha * calibrated_R2 - beta * calibration_gain - lambda_c*C`.
+2. Add dimension-specific Edge Flow templates/checkpoints for d1/d2/d3.
+3. Add beam decode and compare against sample 4096 on the existing H4/L3/K8
+   checkpoint.
+4. Add variable-dependency diagnostics to projection elites, not only final
+   selected expressions.
+5. Add edge co-occurrence / mutual information diagnostics for top elites.
+6. Add replay elites as complete DAGs with validation reward and skeleton
+   diversity metadata.
+7. Only after theta_star skeleton improves, spend effort on larger neural model
+   capacity or semantic geometry.
 
 ---
 
-## 4. 指标解读
-
-### 4.1 R2 和 solution rate
-
-`mean R2 ~= 0.723`，`median R2 ~= 0.871` 表示模型经常能构造出有一定解释力的列空间，但离精确解很远。
-
-`solution_rate = 0.0` 是最关键问题。旧 one-step action 语义 reward 方法在 archived 87-task 表上曾达到明显更高的 solution rate。因此当前方法不能只用“理论更干净”解释，必须继续修训练信号和推理策略。
-
-### 4.2 NMSE
-
-`mean NMSE ~= 0.277`，`median NMSE ~= 0.129` 与 R2 一致：不少任务有中等拟合质量，但高精度任务数量不足。
-
-### 4.3 complexity
-
-`mean complexity ~= 38.85`，`median complexity ~= 39`。复杂度不算失控，但因为 STOP 从未被选中，所有任务都跑满 6 步，表达式没有真正学会早停。
-
-### 4.4 steps 和 STOP
-
-```text
-mean steps = 6.0
-stop_task_fraction = 0.0
-stop_decision_count = 0
-```
-
-这说明 STOP 虽然进入 support，但当前模型没有学会选择 STOP。可能原因：
-
-```text
-STOP 在大 support 中初始概率很低；
-训练轨迹里早停样本覆盖不足；
-当前 path weight 不显式奖励“已经足够好就停止”；
-STOP feature 太弱，只是一个虚拟 action row；
-推理时从 uniform p0 起步，STOP 没有先验优势。
-```
-
-STOP 需要进一步加强，但不能用局部 residual reward 伪造目标。更合理的是增加 STOP 的 on-policy 覆盖和显式长度/复杂度在 terminal reward 中的作用。
-
-### 4.5 filtered_action_fraction
-
-```text
-filtered_action_fraction_mean ~= 0.0163
-```
-
-健康过滤比例很低，说明当前过滤没有大规模删掉候选，也没有解释性能差。它主要防止极端无效 action。
-
-### 4.6 energy_decrease
-
-```text
-energy_decrease_mean = -1.173e11
-energy_decrease_median = -0.0141
-```
-
-median 接近 0，但 mean 巨大负数，说明少数任务仍有严重数值异常或 energy 爆炸。当前健康过滤只过滤单步候选语义和单步 energy growth，但没有完全防住多步组合后的病态列空间。
-
-这应作为数值稳定性问题处理：
-
-```text
-更强的候选健康过滤；
-最终 active column 健康选择；
-readout 前剔除病态列；
-报告 outlier task；
-限制 exp/cube 的重复组合。
-```
-
-不要把 local residual reward 加回主 target。
-
----
-
-## 5. 为什么旧 frequency target 理论更干净但结果没好
-
-当前理论修正解决的是“目标定义脏”的问题：
-
-```text
-不再把完整轨迹 reward 硬压成 block reward；
-不再用 H×A/zeta 近似作为主线；
-不再混入 local residual reward；
-用 q*(a|s) 做 path-posterior 条件边缘。
-```
-
-但它没有自动解决三个工程/统计问题。
-
-### 5.1 path-posterior 估计方差仍然高
-
-旧 frequency target 的 `q*(a|s)` 只来自采样到的轨迹访问。当时每轮：
-
-```text
-32 tasks x 24 trajectories
-```
-
-仍然偏少。很多 state/action 的访问次数很低，`q*` 估计噪声大。
-
-### 5.2 behavior policy 初期太弱
-
-如果 behavior model 早期采不到高质量轨迹，那么 risk-weighted path measure 只能在低质量样本中重加权。它比旧 dense one-step oracle 更依赖采样覆盖。
-
-### 5.3 推理和训练分布仍不完全一致
-
-旧版本训练时每个 state 使用 capped support：
-
-```text
-max_support_size = 64 + STOP
-```
-
-旧版本推理时默认使用完整健康 support + STOP。当前版本已经让推理默认读取
-checkpoint 的 `max_support_size`，按训练顺序执行 deterministic support cap、
-health filter、STOP append。
-
----
-
-## 6. 当前新增 support budget 的意义
-
-full action support 在 `K=10` 时仍然会产生很大的 Gram 和 record：
-
-```text
-Gram size = |A_s| x |A_s|
-```
-
-不做 support budget 时，正常训练配置会产生数 GB 级别 records，甚至无法完成。当前加入：
-
-```text
-max_support_size = 32
-```
-
-这是计算 support 限制，不是 reward 近似。它的代价是：
-
-```text
-q_hat(a|s) 只在 capped local support 上定义；
-未进入 support 的 action 没有本轮 target。
-```
-
-这个近似必须在论文或实验文档中诚实说明。
-
----
-
-## 7. 下一步优先级
-
-### P0：让训练和推理使用同一个 support builder
-
-已实现：推理默认读取 checkpoint 中的 `max_support_size`，并按训练 sampler 的顺序执行：
-
-```text
-deterministic support cap
-health filter
-STOP append
-feature/effect construction
-```
-
-这样训练和推理看到的 action simplex 一致。
-
-### P1：增强 STOP 学习
-
-建议先做不污染目标的改动：
-
-```text
-terminal reward 加复杂度/长度惩罚；
-提高 STOP 在 behavior support 中的覆盖；
-记录 STOP 出现次数、STOP q*、STOP rank；
-训练/推理统一 STOP prior 或初始化 bias；
-评估 STOP oracle：如果当前 active columns 已足够好，STOP 是否应成为 q* top action。
-```
-
-### P2：加入 oracle / exact / learned 三层诊断
-
-必须拆开：
-
-```text
-sampled trajectory oracle R2
-path-posterior exact teacher rollout R2
-learned model rollout R2
-```
-
-否则无法判断差距来自：
-
-```text
-采样覆盖差
-q* 估计差
-semantic-Fisher teacher 差
-模型拟合差
-推理策略差
-```
-
-### P3：数值稳定性
-
-建议新增：
-
-```text
-active column health report
-readout 前健康列筛选日志
-energy outlier task list
-operator repetition limits for exp/cube/protected_div
-final semantic max_abs / condition number diagnostics
-```
-
-这些是 validity / diagnostics，不应进入 reward 主目标。
-
-### P4：提高 on-policy 样本效率
-
-当前配置能跑，但还偏小。扩大前先优化：
-
-```text
-dataset streaming
-state/support cache
-semantic effect cache
-训练进度日志
-按 task 分批构建 records
-```
-
-然后再提高：
-
-```text
-num_tasks
-num_trajectories
-on_policy_iterations
-teacher_steps
-```
-
-### P5：旧 one-step 方法作为 regression baseline
-
-旧 one-step residual 方法不再作为主线目标，但保留为 `OneStepTarget`
-sanity baseline。当前新增的 `FutureGroup-L3Target` 把旧 one-step 奖励扩展为
-短 horizon group rollout 评分，用作独立实验组；它和主理论共享同一个
-semantic-Fisher ODE。
-
----
-
-## 8. 当前结论
-
-当前 Semantic-Fisher Flow Matching 改动把理论对象进一步解耦：
-
-```text
-TargetSampler/reward/search -> q_hat
-semantic effects -> geometry
-flow matching -> lambda-time velocity
-```
-
-它删除了旧 frequency target 的主动实现，也不再把 terminal semantic projection
-作为主线。当前 `FutureGroup-L3Target` 87-task 结果保存在：
-
-```text
-results/semantic_fisher_flow_87/semantic_fisher_flow_future_group_l3_87_seed0_summary.json
-```
-
-剩余风险是：
-
-```text
-采样覆盖
-STOP 学习
-support 一致性
-数值 outlier
-oracle/exact/learned 诊断缺失
-```
-
-下一轮不应回退到 local residual reward，而应先补上述诊断和一致性问题。
+## 7. Retired Result Interpretation
+
+The old `results/sffm_87_20260620/` and
+`results/external_baselines_87_20260620/` directories were removed from the
+active result layout. Those numbers belonged to the action-level mainline and
+should not be mixed with Edge Flow results.
+
+External baselines remain relevant for future comparisons, but they should be
+rerun or copied into a new result matrix once Edge Flow has a real 87-task
+configuration.

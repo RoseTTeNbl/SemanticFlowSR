@@ -153,15 +153,27 @@ def integrate_semantic_fisher_endpoint_path(
     gram_rank: int | None = None,
     gram_factors: torch.Tensor | None = None,
     q_smoothing: float = 1e-3,
+    teacher_mode: str = "endpoint_matching",
     eps: float = EPS,
 ) -> SemanticFisherTeacherPath:
     """Integrate a target-sampled endpoint flow toward ``q_target``.
 
-    Unlike ``integrate_semantic_fisher_teacher_path``, the driving log-ratio is
-    recomputed at each lambda-time policy:
+    In ``endpoint_matching`` mode, the driving log-ratio is recomputed at each
+    lambda-time policy:
 
         r_lambda = log(q_eps) - log(p_lambda).
+
+    In ``fixed_potential_from_q`` mode, the endpoint defines a fixed potential:
+
+        phi = log(q_eps) - log(p_start),
+
+    and the semantic-Fisher field is recomputed at each ``p_lambda`` using that
+    potential. This preserves lambda-time geometry while matching archive-style
+    fixed advantage teachers.
     """
+    mode = str(teacher_mode).strip().lower()
+    if mode not in {"endpoint_matching", "fixed_potential_from_q"}:
+        raise ValueError(f"unknown teacher_mode: {teacher_mode}")
     n_steps = max(int(steps), 1)
     step_dt = float(1.0 / n_steps if dt is None else dt)
     p0 = smooth_simplex(p_start, eps=eps)
@@ -172,11 +184,15 @@ def integrate_semantic_fisher_endpoint_path(
         gram_factors = gram_factors.to(device=p0.device, dtype=p0.dtype)
 
     p = p0
+    fixed_potential = torch.nan_to_num(q_eps.clamp_min(eps).log() - p0.clamp_min(eps).log())
     policies = [p]
     logrates = []
     sphere_velocities = []
     for _ in range(n_steps):
-        advantage = torch.nan_to_num(q_eps.clamp_min(eps).log() - p.clamp_min(eps).log())
+        if mode == "fixed_potential_from_q":
+            advantage = fixed_potential
+        else:
+            advantage = torch.nan_to_num(q_eps.clamp_min(eps).log() - p.clamp_min(eps).log())
         w = semantic_fisher_lograte(
             p,
             advantage,

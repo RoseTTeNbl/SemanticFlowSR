@@ -1,0 +1,2 @@
+{"task_id": "synthetic_0", "ground_truth": "2*x0**2 + 2*x0 + 1.0", "expression": "2.188*(x0) + 3.758", "r2": 0.6028858423233032, "nmse": 0.39090925455093384, "reward": 0.6018858551979065, "complexity": 1, "valid_expression_fraction": 1.0, "unique_expression_fraction": 0.515625}
+{"task_id": "synthetic_1", "ground_truth": "x0**2", "expression": "1*(x0**2) + -7.539e-08", "r2": 1.0, "nmse": 3.370048906142743e-15, "reward": 0.9980000257492065, "complexity": 2, "valid_expression_fraction": 1.0, "unique_expression_fraction": 0.5}

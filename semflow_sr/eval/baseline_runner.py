@@ -8,7 +8,7 @@ import time
 
 import pandas as pd
 
-from ..data.benchmark_loader import SRTask, load_materialized_task
+from ..data.benchmark_loader import FeynmanCSVLoader, SRTask, load_materialized_task
 from ..data.benchmark_manifest import load_benchmark_manifest
 
 
@@ -23,9 +23,14 @@ def collect_tasks(
     root: str | Path = ".",
     seed: int = 0,
     limit: int | None = None,
+    legacy_87: bool = False,
+    feynman_root: str | Path = "data/materialized/feynman",
 ) -> list[SRTask]:
     if manifest is not None:
         tasks = _collect_manifest_tasks(manifest, suites=suites, root=root)
+        if legacy_87:
+            loader = FeynmanCSVLoader(feynman_root)
+            tasks.extend(loader.load(name, seed=seed) for name in loader.names())
         return tasks[:int(limit)] if limit is not None else tasks
     if data:
         tasks = _collect_legacy_dir_tasks(data, seed=seed)
@@ -42,9 +47,17 @@ def run_baseline_records(
     budget: dict | None = None,
     kwargs: dict | None = None,
     continue_on_error: bool = True,
+    resume: bool = False,
 ) -> dict[str, dict]:
-    out: dict[str, dict] = {}
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if resume and out_path.exists():
+        out: dict[str, dict] = json.loads(out_path.read_text())
+    else:
+        out = {}
     for task in tasks:
+        if resume and task.name in out and out[task.name].get("status", "ok") == "ok":
+            continue
         started = time.perf_counter()
         try:
             item = _call_baseline(task, baseline_fn, kwargs or {})
@@ -86,8 +99,7 @@ def run_baseline_records(
             "runtime_sec": runtime,
         })
         out[task.name] = item
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(out, indent=2))
     out_path.write_text(json.dumps(out, indent=2))
     return out
 

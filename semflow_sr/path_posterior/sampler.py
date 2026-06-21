@@ -34,6 +34,9 @@ class ActionPathSampler:
         max_abs_semantic: float | None = 1e6,
         max_energy_growth: float | None = 100.0,
         max_support_size: int | None = None,
+        support_mode: str = "deterministic_cap",
+        support_topk: int | None = None,
+        support_full_threshold: int | None = None,
     ):
         self.space = action_space
         self.executor = ActionExecutor(action_space)
@@ -44,6 +47,9 @@ class ActionPathSampler:
         self.max_abs_semantic = max_abs_semantic
         self.max_energy_growth = max_energy_growth
         self.max_support_size = None if max_support_size is None else int(max_support_size)
+        self.support_mode = str(support_mode).strip().lower()
+        self.support_topk = None if support_topk is None else int(support_topk)
+        self.support_full_threshold = None if support_full_threshold is None else int(support_full_threshold)
 
     def sample(
         self,
@@ -63,8 +69,8 @@ class ActionPathSampler:
             actions: list[int] = []
             for _ in range(max(int(max_steps), 0)):
                 raw_action_ids = self.space.valid_actions(state).to(device=x.device)
-                raw_action_ids = self._cap_support(raw_action_ids)
                 B = torch.nan_to_num(evaluate_register_state(state, x))
+                raw_action_ids = self._build_real_support(raw_action_ids, B, y, sample_index=len(decisions))
                 action_ids = healthy_action_ids(
                     self.energy,
                     B,
@@ -137,6 +143,28 @@ class ActionPathSampler:
             )
         return semantic_fisher_sphere_step(p_uniform, pred.lograte_logits.squeeze(0), dt=1.0)
 
+    def _build_real_support(
+        self,
+        action_ids: torch.Tensor,
+        B: torch.Tensor,
+        y: torch.Tensor,
+        *,
+        sample_index: int,
+    ) -> torch.Tensor:
+        mode = self.support_mode
+        if mode in {"deterministic_cap", "id_cap"}:
+            return self._cap_support(action_ids)
+        if mode == "adaptive_full":
+            threshold = self.support_full_threshold
+            if threshold is None:
+                threshold = self.max_support_size
+            if threshold is None or action_ids.numel() <= int(threshold):
+                return action_ids
+            mode = "reward_topk_random"
+        if mode in {"reward_topk_random", "mixed_topk_random", "topk_reward"}:
+            return self._reward_aware_support(action_ids, B, y, sample_index=sample_index, random_fill=(mode != "topk_reward"))
+        raise ValueError(f"unknown support_mode: {self.support_mode}")
+
     def _cap_support(self, action_ids: torch.Tensor) -> torch.Tensor:
         if self.max_support_size is None:
             return action_ids
@@ -154,8 +182,51 @@ class ActionPathSampler:
         ).round().long()
         return sorted_ids[idx].unique(sorted=True)
 
+    def _reward_aware_support(
+        self,
+        action_ids: torch.Tensor,
+        B: torch.Tensor,
+        y: torch.Tensor,
+        *,
+        sample_index: int,
+        random_fill: bool,
+    ) -> torch.Tensor:
+        if self.max_support_size is None or action_ids.numel() <= self.max_support_size:
+            return action_ids
+        budget = max(int(self.max_support_size), 0)
+        if budget == 0:
+            return action_ids[:0]
+        rewards = self.energy.rewards(B, y, action_ids)
+        topk = self.support_topk if self.support_topk is not None else max(1, budget // 2)
+        topk = min(max(int(topk), 1), budget, int(action_ids.numel()))
+        top_idx = torch.topk(rewards, topk).indices
+        selected = [int(i) for i in top_idx.detach().cpu().tolist()]
+        if random_fill and len(selected) < budget:
+            selected_set = set(selected)
+            remaining = [i for i in range(int(action_ids.numel())) if i not in selected_set]
+            slots = min(budget - len(selected), len(remaining))
+            if slots > 0:
+                gen = torch.Generator(device=action_ids.device)
+                gen.manual_seed(int(self.generator.initial_seed()) + int(sample_index) * 1_000_003)
+                rem = torch.tensor(remaining, dtype=torch.long, device=action_ids.device)
+                perm = torch.randperm(rem.numel(), generator=gen, device=action_ids.device)
+                selected.extend(int(i) for i in rem[perm[:slots]].detach().cpu().tolist())
+        selected = _unique(selected)[:budget]
+        idx = torch.tensor(selected, dtype=torch.long, device=action_ids.device)
+        return action_ids[idx]
+
 
 def _state_id(state: RegisterState) -> str:
     return "|".join(str(expr) for expr in state.exprs) + ":" + "".join(
         "1" if bool(v) else "0" for v in state.active.detach().cpu()
     )
+
+
+def _unique(xs: list[int]) -> list[int]:
+    seen = set()
+    out = []
+    for x in xs:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out

@@ -52,6 +52,22 @@ def _save_metric_csv(records: list[dict], out: Path, tag: str) -> None:
         "name", "r2", "r2_zero", "acc_tau", "nmse", "complexity", "simplicity",
         "steps", "energy_decrease", "solved",
     ]
+    optional = [
+        "dense_r2",
+        "dense_nmse",
+        "dense_complexity",
+        "dense_num_terms",
+        "num_nonzero_dense_coeffs",
+        "coeff_l1_norm",
+        "coeff_l2_norm",
+        "max_abs_coeff",
+        "coefficient_cancellation_score",
+        "readout_condition_number",
+        "semantic_duplicate_count",
+        "canonical_duplicate_count",
+        "near_duplicate_column_pairs",
+    ]
+    fields.extend([field for field in optional if any(field in rec for rec in records)])
     with open(out / f"{tag}_metrics.csv", "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()

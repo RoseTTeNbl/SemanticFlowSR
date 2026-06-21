@@ -109,7 +109,7 @@ def healthy_action_ids(
         max_abs = eval_out.B_after.abs().flatten(1).max(dim=1).values
         finite = finite & (max_abs <= float(max_abs_semantic))
     if max_energy_growth is not None:
-        base = energy.proj.residual_energy(B, y).abs().clamp(min=1.0)
+        base = energy.residual_energy(B, y).abs().clamp(min=1.0)
         allowed = base * (1.0 + float(max_energy_growth))
         finite = finite & (eval_out.energies <= allowed)
     return normal_ids[finite]

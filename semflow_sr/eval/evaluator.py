@@ -35,9 +35,10 @@ class EvalReport:
     task_metadata: dict | None = None
     active_columns: list[int] | None = None
     readout_coefficients: list[float] | None = None
+    extra_metrics: dict | None = None
 
     def to_record(self) -> dict:
-        return {"name": self.name, "r2": self.r2, "r2_zero": self.r2_zero,
+        record = {"name": self.name, "r2": self.r2, "r2_zero": self.r2_zero,
                 "acc_tau": self.acc_tau, "nmse": self.nmse, "complexity": self.complexity,
                 "simplicity": self.simplicity, "steps": self.steps,
                 "energy_decrease": self.energy_decrease, "solved": self.solved,
@@ -46,6 +47,8 @@ class EvalReport:
                 "task_metadata": self.task_metadata or {},
                 "active_columns": self.active_columns or [],
                 "readout_coefficients": self.readout_coefficients or []}
+        record.update(self.extra_metrics or {})
+        return record
 
 
 def _active_cols(state) -> list[int]:

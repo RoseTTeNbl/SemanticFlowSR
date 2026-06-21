@@ -40,12 +40,17 @@ from .target_sampler import (
 
 @dataclass
 class PathPosteriorBuildConfig:
-    target_mode: str = "future_group_l3"
+    target_mode: str = "multi_step_group_advantage"
     num_trajectories: int = 16
     max_states_per_task: int | None = 32
     max_steps: int = 6
     weight_eta: float = 2.0
     target_smoothing: float = 1e-3
+    score_to_shape: str = "rank_softmax"
+    advantage_eps: float = 1e-6
+    advantage_clip: float | None = 5.0
+    teacher_mode: str = "endpoint_matching"
+    p_init_mode: str = "stop_bias"
     stop_bias_base: float = -2.0
     stop_bias_slope: float = 0.35
     rollout_depth: int = 3
@@ -60,6 +65,9 @@ class PathPosteriorBuildConfig:
     max_abs_semantic: float | None = 1e6
     max_energy_growth: float | None = 100.0
     max_support_size: int | None = 64
+    support_mode: str = "deterministic_cap"
+    support_topk: int | None = None
+    support_full_threshold: int | None = None
     terminal_op_penalty: float | None = None
     cache_path: str | None = None
     gp_population_path: str | None = None
@@ -104,6 +112,9 @@ def build_path_posterior_dataset(
         future_cfg=FutureGroupTargetConfig(
             rank_eta=cfg.weight_eta,
             smoothing=cfg.target_smoothing,
+            score_to_shape=cfg.score_to_shape,
+            advantage_eps=cfg.advantage_eps,
+            advantage_clip=cfg.advantage_clip,
             rollout_depth=cfg.rollout_depth,
             rollouts_per_action=cfg.rollouts_per_action,
             topk=cfg.rollout_topk,
@@ -127,6 +138,9 @@ def build_path_posterior_dataset(
         max_abs_semantic=cfg.max_abs_semantic,
         max_energy_growth=cfg.max_energy_growth,
         max_support_size=cfg.max_support_size,
+        support_mode=cfg.support_mode,
+        support_topk=cfg.support_topk,
+        support_full_threshold=cfg.support_full_threshold,
     )
     records: list[dict] = []
     task_idx = 0
@@ -157,6 +171,7 @@ def build_path_posterior_dataset(
                 x=x,
                 y=y,
                 cfg=cfg,
+                energy=energy,
                 rng=rng,
             )
             if local is None:
@@ -217,7 +232,19 @@ def _append_teacher_records(
         gram_rank=cfg.gram_rank,
         gram_factors=effect.xi,
         q_smoothing=cfg.target_smoothing,
+        teacher_mode=cfg.teacher_mode,
     )
+    mode = str(cfg.teacher_mode).strip().lower()
+    q_eps = torch.as_tensor(q_hat, dtype=B.dtype, device=B.device)
+    q_eps = (1.0 - float(cfg.target_smoothing)) * q_eps + float(cfg.target_smoothing) * p_init
+    q_eps = q_eps.clamp(min=1e-12)
+    q_eps = q_eps / q_eps.sum().clamp(min=1e-12)
+    fixed_potential = torch.nan_to_num(q_eps.log() - p_init.clamp(min=1e-12).log())
+    teacher_final = teacher_path.policies[-1].to(device=B.device, dtype=B.dtype)
+    teacher_top1_pos = int(teacher_final.argmax().detach().cpu().item()) if teacher_final.numel() else -1
+    target_top1_pos = int(q_hat.argmax().detach().cpu().item()) if q_hat.numel() else -1
+    target_scores = None if extra is None else extra.get("target_scores")
+    score_ranks = _score_ranks(target_scores) if target_scores is not None else None
     feats = action_features_with_stop(space, state, action_ids)
     extra = extra or {}
     for path_idx, (p_lambda, w_target, zdot) in enumerate(zip(
@@ -231,9 +258,10 @@ def _append_teacher_records(
         z_lambda = p_lambda.clamp(min=1e-12).sqrt()
         pdot = semantic_fisher_simplex_velocity(p_lambda, w_target)
         p_target = semantic_fisher_sphere_step(p_lambda, w_target, dt=1.0)
-        advantages = torch.nan_to_num(
-            q_hat.clamp(min=1e-12).log() - p_lambda.clamp(min=1e-12).log()
-        )
+        if mode == "fixed_potential_from_q":
+            advantages = fixed_potential
+        else:
+            advantages = torch.nan_to_num(q_eps.log() - p_lambda.clamp(min=1e-12).log())
         record = {
             "x": x.float(),
             "y": y.float(),
@@ -270,7 +298,35 @@ def _append_teacher_records(
             "lambda": torch.tensor(float(path_idx) * float(teacher_path.dt), dtype=torch.float32),
             "gt_action_pos": torch.tensor(-1, dtype=torch.long),
             "full_action_size": torch.tensor(action_ids.numel(), dtype=torch.long),
+            "teacher_mode_id": torch.tensor(1.0 if mode == "fixed_potential_from_q" else 0.0, dtype=torch.float32),
+            "target_top1_pos": torch.tensor(float(target_top1_pos), dtype=torch.float32),
+            "teacher_top1_pos": torch.tensor(float(teacher_top1_pos), dtype=torch.float32),
+            "target_top1_action_id": torch.tensor(
+                float(action_ids[target_top1_pos].detach().cpu().item()) if target_top1_pos >= 0 else -1.0,
+                dtype=torch.float32,
+            ),
+            "teacher_top1_action_id": torch.tensor(
+                float(action_ids[teacher_top1_pos].detach().cpu().item()) if teacher_top1_pos >= 0 else -1.0,
+                dtype=torch.float32,
+            ),
+            "teacher_top1_prob": torch.tensor(
+                float(teacher_final[teacher_top1_pos].detach().cpu().item()) if teacher_top1_pos >= 0 else 0.0,
+                dtype=torch.float32,
+            ),
+            "target_teacher_top1_agreement": torch.tensor(
+                float(target_top1_pos == teacher_top1_pos and target_top1_pos >= 0),
+                dtype=torch.float32,
+            ),
         }
+        if score_ranks is not None:
+            record["target_top1_reward_rank"] = torch.tensor(
+                float(score_ranks[target_top1_pos].item()) if target_top1_pos >= 0 else 0.0,
+                dtype=torch.float32,
+            )
+            record["teacher_top1_reward_rank"] = torch.tensor(
+                float(score_ranks[teacher_top1_pos].item()) if teacher_top1_pos >= 0 else 0.0,
+                dtype=torch.float32,
+            )
         for key, value in extra.items():
             record[key] = torch.as_tensor(value).float().detach().cpu()
         records.append(record)
@@ -283,6 +339,7 @@ def _build_target_shape_local(
     x: torch.Tensor,
     y: torch.Tensor,
     cfg: PathPosteriorBuildConfig,
+    energy: ActionEnergy,
     rng: random.Random,
 ) -> dict | None:
     state = decision.state
@@ -293,6 +350,7 @@ def _build_target_shape_local(
         action_ids.detach().cpu(),
         step=_construction_step(state),
         cfg=PriorConfig(
+            mode=cfg.p_init_mode,
             stop_bias_base=cfg.stop_bias_base,
             stop_bias_slope=cfg.stop_bias_slope,
         ),
@@ -310,6 +368,15 @@ def _build_target_shape_local(
     diagnostics = target.diagnostics or {}
     target_sampler_id = int(diagnostics.get("target_sampler_id", 0))
     score_gap = _score_gap(target.target_scores)
+    oracle = _oracle_diagnostics(
+        target_sampler,
+        energy=energy,
+        state=state,
+        x=x,
+        y=y,
+        support_action_ids=target.action_ids,
+        support_scores=target.target_scores,
+    )
     return {
         "state": state,
         "action_ids": target.action_ids,
@@ -326,6 +393,7 @@ def _build_target_shape_local(
             "target_score_gap": score_gap,
             "target_sampler_runtime_sec": torch.tensor(float(sampler_seconds), dtype=torch.float32),
             "target_support_size": torch.tensor(float(target.action_ids.numel()), dtype=torch.float32),
+            **oracle,
         },
     }
 
@@ -378,3 +446,74 @@ def _score_gap(scores: torch.Tensor) -> torch.Tensor:
         return torch.tensor(0.0, dtype=torch.float32)
     top2 = torch.topk(torch.nan_to_num(s), k=2).values
     return (top2[0] - top2[1]).float()
+
+
+def _oracle_diagnostics(
+    target_sampler,
+    *,
+    energy: ActionEnergy,
+    state,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    support_action_ids: torch.Tensor,
+    support_scores: torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    B = torch.nan_to_num(evaluate_register_state(state, x))
+    full_ids = target_sampler.space.valid_actions(state).to(device=x.device)
+    full_scores = energy.rewards(B, y, full_ids) if full_ids.numel() else torch.zeros(0, device=x.device)
+    support_ids = torch.as_tensor(support_action_ids, dtype=torch.long, device=x.device)
+    support_oracle_scores = _scores_for_action_ids(energy, B, y, support_ids)
+    full_best_pos = int(full_scores.argmax().detach().cpu().item()) if full_scores.numel() else -1
+    support_best_pos = int(support_oracle_scores.argmax().detach().cpu().item()) if support_oracle_scores.numel() else -1
+    full_best_action = int(full_ids[full_best_pos].detach().cpu().item()) if full_best_pos >= 0 else -1
+    support_best_action = int(support_ids[support_best_pos].detach().cpu().item()) if support_best_pos >= 0 else -1
+    full_best_reward = float(full_scores[full_best_pos].detach().cpu().item()) if full_best_pos >= 0 else 0.0
+    support_best_reward = (
+        float(support_oracle_scores[support_best_pos].detach().cpu().item()) if support_best_pos >= 0 else 0.0
+    )
+    target_scores_t = torch.as_tensor(support_scores, dtype=torch.float32)
+    target_top1_pos = int(target_scores_t.argmax().item()) if target_scores_t.numel() else -1
+    return {
+        "full_action_size": torch.tensor(float(full_ids.numel()), dtype=torch.float32),
+        "full_best_action_id": torch.tensor(float(full_best_action), dtype=torch.float32),
+        "full_best_reward": torch.tensor(float(full_best_reward), dtype=torch.float32),
+        "support_best_action_id": torch.tensor(float(support_best_action), dtype=torch.float32),
+        "support_best_reward": torch.tensor(float(support_best_reward), dtype=torch.float32),
+        "support_best_reward_gap": torch.tensor(float(full_best_reward - support_best_reward), dtype=torch.float32),
+        "full_best_in_support": torch.tensor(
+            float(full_best_action >= 0 and bool((support_ids == full_best_action).any().detach().cpu().item())),
+            dtype=torch.float32,
+        ),
+        "target_score_top1_action_id": torch.tensor(
+            float(support_ids[target_top1_pos].detach().cpu().item()) if target_top1_pos >= 0 else -1.0,
+            dtype=torch.float32,
+        ),
+    }
+
+
+def _scores_for_action_ids(
+    energy: ActionEnergy,
+    B: torch.Tensor,
+    y: torch.Tensor,
+    action_ids: torch.Tensor,
+) -> torch.Tensor:
+    ids = torch.as_tensor(action_ids, dtype=torch.long, device=B.device)
+    scores = torch.zeros(ids.numel(), dtype=B.dtype, device=B.device)
+    normal = ids != STOP_ACTION_ID
+    if bool(normal.any().item()):
+        scores[normal] = energy.rewards(B, y, ids[normal])
+    if bool((~normal).any().item()):
+        scores[~normal] = -energy.residual_energy(B, y)
+    return scores
+
+
+def _score_ranks(scores: torch.Tensor | None) -> torch.Tensor | None:
+    if scores is None:
+        return None
+    s = torch.nan_to_num(torch.as_tensor(scores, dtype=torch.float32))
+    if s.numel() == 0:
+        return None
+    order = s.argsort(descending=True)
+    ranks = torch.empty_like(order, dtype=torch.float32)
+    ranks[order] = torch.arange(1, s.numel() + 1, dtype=torch.float32, device=s.device)
+    return ranks.detach().cpu()

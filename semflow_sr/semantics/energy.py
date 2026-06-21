@@ -59,6 +59,9 @@ class ActionEnergy:
         """Immediate group reward: E(B)-E(Ba)-lambda_op*C_op(a)."""
         return self.evaluate_actions(B, y, action_ids).rewards
 
+    def residual_energy(self, B: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        return self.proj.residual_energy(B, y)
+
     def action_semantic_effects(
         self,
         B: torch.Tensor,
@@ -84,9 +87,9 @@ class ActionEnergy:
     def evaluate_actions(self, B: torch.Tensor, y: torch.Tensor,
                          action_ids: torch.Tensor) -> ActionEvaluation:
         """Evaluate action residuals, energies and rewards with one semantic execution."""
-        base = self.proj.residual_energy(B, y)
+        base = self.residual_energy(B, y)
         Ba = self.executor.execute_semantic(B, action_ids)
-        after = self.proj.residual_energy(Ba, y)
+        after = self.residual_energy(Ba, y)
         cop = torch.tensor([op_cost(self.space.decode(int(a)).op_id) for a in action_ids.tolist()],
                            device=B.device, dtype=B.dtype)
         energies = after + self.cfg.lambda_op * cop

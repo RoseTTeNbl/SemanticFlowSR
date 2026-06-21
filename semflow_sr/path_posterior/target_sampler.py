@@ -5,7 +5,7 @@ effects and Gram matrices are computed by the teacher builder.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 import math
 from pathlib import Path
@@ -18,7 +18,6 @@ from ..actions.action_space import ActionSpace
 from ..registers.executor import evaluate_register_state
 from ..registers.state import RegisterState
 from ..semantics.energy import ActionEnergy, ActionEnergyConfig
-from ..semantics.projection import ProjectionBackend
 from ..sr.ops import op_cost
 from ..gp_distill.trace_likelihood import compute_gp_individual_logprob
 from .action_support import STOP_ACTION_ID, append_stop_action, healthy_action_ids, is_stop_action
@@ -37,6 +36,7 @@ class TargetShape:
 class PriorConfig:
     stop_bias_base: float = -2.0
     stop_bias_slope: float = 0.35
+    mode: str = "stop_bias"
 
 
 @dataclass(frozen=True)
@@ -44,6 +44,9 @@ class TargetSamplerConfig:
     temperature: float = 1.0
     rank_eta: float = 2.0
     smoothing: float = 1e-3
+    score_to_shape: str = "rank_softmax"
+    advantage_eps: float = 1e-6
+    advantage_clip: float | None = 5.0
 
 
 @dataclass(frozen=True)
@@ -70,11 +73,15 @@ def build_p_init(
 ) -> torch.Tensor:
     """Deterministic initial probability shape over the local support."""
     cfg = cfg or PriorConfig()
+    mode = str(cfg.mode).strip().lower()
     ids = torch.as_tensor(action_ids, dtype=torch.long)
     logits = torch.zeros(ids.numel(), dtype=torch.float32, device=ids.device)
-    stop_mask = ids == STOP_ACTION_ID
-    if bool(stop_mask.any().item()):
-        logits[stop_mask] = float(cfg.stop_bias_base) + float(cfg.stop_bias_slope) * float(max(int(step), 0))
+    if mode not in {"stop_bias", "uniform"}:
+        raise ValueError(f"unknown p_init mode: {cfg.mode}")
+    if mode == "stop_bias":
+        stop_mask = ids == STOP_ACTION_ID
+        if bool(stop_mask.any().item()):
+            logits[stop_mask] = float(cfg.stop_bias_base) + float(cfg.stop_bias_slope) * float(max(int(step), 0))
     return torch.softmax(logits, dim=0)
 
 
@@ -97,6 +104,64 @@ def rank_softmax_target(
     rank_norm = 1.0 - ranks.to(torch.float32) / float(scores.numel() - 1)
     q = torch.softmax(float(eta) * rank_norm, dim=0)
     return _normalize(q + float(smoothing) * p.to(device=q.device))
+
+
+def group_exp_target(
+    scores: torch.Tensor,
+    p_init: torch.Tensor,
+    *,
+    eta: float = 1.0,
+    smoothing: float = 1e-3,
+    advantage_eps: float = 1e-6,
+    advantage_clip: float | None = 5.0,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build an archive-compatible Boltzmann tilt target from group scores."""
+    s = torch.nan_to_num(torch.as_tensor(scores, dtype=torch.float32))
+    p = _normalize(torch.as_tensor(p_init, dtype=torch.float32).to(device=s.device))
+    if s.numel() == 0:
+        return s, s
+    centered = s - s.mean()
+    std = centered.std(unbiased=False)
+    if float(std.item()) <= float(advantage_eps):
+        advantages = torch.zeros_like(centered)
+    else:
+        advantages = centered / std.clamp_min(float(advantage_eps))
+    advantages = advantages - advantages.mean()
+    if advantage_clip is not None:
+        advantages = advantages.clamp(min=-float(advantage_clip), max=float(advantage_clip))
+    logits = float(eta) * advantages
+    logits = logits - logits.max()
+    q = p * torch.exp(logits)
+    q = _normalize(q)
+    if float(smoothing) > 0.0:
+        q = _normalize((1.0 - float(smoothing)) * q + float(smoothing) * p)
+    return q, advantages
+
+
+def _scores_to_shape(
+    scores: torch.Tensor,
+    p_init: torch.Tensor,
+    cfg: TargetSamplerConfig,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    mode = str(cfg.score_to_shape).strip().lower()
+    if mode in {"rank_softmax", "rank"}:
+        q = rank_softmax_target(
+            scores,
+            p_init,
+            eta=cfg.rank_eta,
+            smoothing=cfg.smoothing,
+        )
+        return q, torch.zeros_like(torch.as_tensor(scores, dtype=torch.float32))
+    if mode in {"group_exp", "group_advantage", "boltzmann_group"}:
+        return group_exp_target(
+            scores,
+            p_init,
+            eta=cfg.rank_eta,
+            smoothing=cfg.smoothing,
+            advantage_eps=cfg.advantage_eps,
+            advantage_clip=cfg.advantage_clip,
+        )
+    raise ValueError(f"unknown score_to_shape mode: {cfg.score_to_shape}")
 
 
 class OneStepTargetSampler:
@@ -128,22 +193,47 @@ class OneStepTargetSampler:
         ids = torch.as_tensor(action_ids, dtype=torch.long, device=x.device)
         B = torch.nan_to_num(evaluate_register_state(state, x))
         scores = torch.zeros(ids.numel(), dtype=B.dtype, device=B.device)
+        stop_mask = ids == STOP_ACTION_ID
+        if bool(stop_mask.any().item()):
+            scores[stop_mask] = -self.energy.residual_energy(B, y)
         normal_mask = ids != STOP_ACTION_ID
         if bool(normal_mask.any().item()):
             scores[normal_mask] = self.energy.rewards(B, y, ids[normal_mask])
-        q_hat = rank_softmax_target(
+        q_hat, advantages = _scores_to_shape(
             scores.detach().cpu(),
             p_init.detach().cpu(),
-            eta=self.cfg.rank_eta,
-            smoothing=self.cfg.smoothing,
+            self.cfg,
         )
         return TargetShape(
             action_ids=ids.detach().cpu(),
             q_hat=q_hat,
             target_scores=scores.detach().cpu().float(),
             target_counts=torch.ones(ids.numel(), dtype=torch.float32),
-            diagnostics={"target_sampler_name": self.name, "target_sampler_id": self.sampler_id},
+            diagnostics={
+                "target_sampler_name": self.name,
+                "target_sampler_id": self.sampler_id,
+                "score_to_shape": self.cfg.score_to_shape,
+                "advantage_min": float(advantages.min().item()) if advantages.numel() else 0.0,
+                "advantage_max": float(advantages.max().item()) if advantages.numel() else 0.0,
+            },
         )
+
+
+class OneStepGroupAdvantageTargetSampler(OneStepTargetSampler):
+    name = "one_step_group_advantage"
+    sampler_id = 6
+
+    def __init__(
+        self,
+        action_space: ActionSpace,
+        *,
+        energy_cfg: ActionEnergyConfig | None = None,
+        cfg: TargetSamplerConfig | None = None,
+    ):
+        cfg = cfg or TargetSamplerConfig()
+        if str(cfg.score_to_shape).strip().lower() in {"rank_softmax", "rank"}:
+            cfg = replace(cfg, score_to_shape="group_exp")
+        super().__init__(action_space, energy_cfg=energy_cfg, cfg=cfg)
 
 
 class FutureGroupTargetSampler:
@@ -161,7 +251,6 @@ class FutureGroupTargetSampler:
         self.energy_cfg = energy_cfg or ActionEnergyConfig(lambda_op=0.0)
         self.energy = ActionEnergy(action_space, self.energy_cfg)
         self.executor = ActionExecutor(action_space)
-        self.proj = ProjectionBackend(self.energy_cfg.projection, self.energy_cfg.rho)
         self.cfg = cfg or FutureGroupTargetConfig()
 
     def build_target(
@@ -176,13 +265,13 @@ class FutureGroupTargetSampler:
     ) -> TargetShape:
         ids = torch.as_tensor(action_ids, dtype=torch.long, device=x.device)
         B0 = torch.nan_to_num(evaluate_register_state(state, x))
-        e0 = self.proj.residual_energy(B0, y)
+        e0 = self.energy.residual_energy(B0, y)
         scores = torch.zeros(ids.numel(), dtype=B0.dtype, device=B0.device)
         counts = torch.zeros(ids.numel(), dtype=torch.float32)
         for pos, action_id_t in enumerate(ids.detach().cpu().tolist()):
             action_id = int(action_id_t)
             if is_stop_action(action_id):
-                scores[pos] = 0.0
+                scores[pos] = -e0
                 counts[pos] = 1.0
                 continue
             first_state = self.executor.execute_symbolic(state, action_id)
@@ -190,7 +279,7 @@ class FutureGroupTargetSampler:
             for _ in range(max(int(self.cfg.rollouts_per_action), 1)):
                 terminal_state, extra_actions = self._sample_short_continuation(first_state, x, y, rng)
                 B_final = torch.nan_to_num(evaluate_register_state(terminal_state, x))
-                ef = self.proj.residual_energy(B_final, y)
+                ef = self.energy.residual_energy(B_final, y)
                 complexity_cost = _action_op_cost(self.space, [action_id] + extra_actions)
                 reward = e0 - ef - float(self.cfg.terminal_op_penalty) * complexity_cost
                 rewards.append(reward)
@@ -199,11 +288,10 @@ class FutureGroupTargetSampler:
             scores[pos] = reward_t.topk(k).values.mean()
             counts[pos] = float(reward_t.numel())
 
-        q_hat = rank_softmax_target(
+        q_hat, advantages = _scores_to_shape(
             scores.detach().cpu(),
             p_init.detach().cpu(),
-            eta=self.cfg.rank_eta,
-            smoothing=self.cfg.smoothing,
+            self.cfg,
         )
         return TargetShape(
             action_ids=ids.detach().cpu(),
@@ -215,6 +303,9 @@ class FutureGroupTargetSampler:
                 "target_sampler_id": self.sampler_id,
                 "rollout_depth": int(self.cfg.rollout_depth),
                 "rollouts_per_action": int(self.cfg.rollouts_per_action),
+                "score_to_shape": self.cfg.score_to_shape,
+                "advantage_min": float(advantages.min().item()) if advantages.numel() else 0.0,
+                "advantage_max": float(advantages.max().item()) if advantages.numel() else 0.0,
             },
         )
 
@@ -251,6 +342,23 @@ class FutureGroupTargetSampler:
             actions.append(action_id)
             current = self.executor.execute_symbolic(current, action_id)
         return current, actions
+
+
+class MultiStepGroupAdvantageTargetSampler(FutureGroupTargetSampler):
+    name = "multi_step_group_advantage"
+    sampler_id = 2
+
+    def __init__(
+        self,
+        action_space: ActionSpace,
+        *,
+        energy_cfg: ActionEnergyConfig | None = None,
+        cfg: FutureGroupTargetConfig | None = None,
+    ):
+        cfg = cfg or FutureGroupTargetConfig()
+        if str(cfg.score_to_shape).strip().lower() in {"rank_softmax", "rank"}:
+            cfg = replace(cfg, score_to_shape="group_exp")
+        super().__init__(action_space, energy_cfg=energy_cfg, cfg=cfg)
 
 
 class CachedTrajectoryFitnessTargetSampler:
@@ -440,27 +548,19 @@ def make_target_sampler(
 ) -> (
     OneStepTargetSampler
     | FutureGroupTargetSampler
+    | MultiStepGroupAdvantageTargetSampler
     | CachedTrajectoryFitnessTargetSampler
     | GPCandidateFitnessTargetSampler
-    | ShapeSamplingTargetSampler
 ):
     normalized = str(mode).strip().lower().replace("-", "_")
-    if normalized in {"one_step", "sffm_one_step", "semantic_fisher_flow_one_step"}:
-        return OneStepTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg)
-    if normalized in {
-        "future_group_l3",
-        "sffm_future_group_l3",
-        "semantic_fisher_flow_future_group_l3",
-    }:
-        return FutureGroupTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg)
+    if normalized in {"one_step_group_advantage", "one_step_group_exp", "archive_one_step"}:
+        return OneStepGroupAdvantageTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg)
+    if normalized in {"multi_step_group_advantage", "future_group_advantage", "future_group_l3_group_advantage"}:
+        return MultiStepGroupAdvantageTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg)
     if normalized in {"cached_trajectory_fitness", "cached_fitness", "trajectory_cache_fitness"}:
         return CachedTrajectoryFitnessTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg)
     if normalized in {"gp_candidate_fitness", "gp_generated_candidate_fitness", "gp_population_fitness"}:
         return GPCandidateFitnessTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg)
-    if normalized in {"importance_sampling", "importance_shape"}:
-        return ShapeSamplingTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg, mode="importance_sampling")
-    if normalized in {"mcmc_shape", "mcmc", "mcmc_probability_shape"}:
-        return ShapeSamplingTargetSampler(action_space, energy_cfg=energy_cfg, cfg=future_cfg, mode="mcmc_shape")
     raise ValueError(f"unknown target sampler mode: {mode}")
 
 

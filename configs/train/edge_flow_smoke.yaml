@@ -1,0 +1,29 @@
+seed: 0
+out: checkpoints
+checkpoint_name: edge_flow_smoke.pt
+num_tasks: 2
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 1
+template:
+  num_vars: 1
+  num_registers: 4
+  num_layers: 2
+  mixture_modes: 1
+  primitives:
+    - add
+    - mul
+    - square
+gen:
+  max_depth: 3
+  probe_size: 32
+model:
+  hidden: 48
+train:
+  epochs: 2
+  samples_per_task: 32
+  elite_k: 8
+  target_smoothing: 0.01
+  complexity_weight: 0.001
+  lr: 0.001
+  grad_clip: 1.0

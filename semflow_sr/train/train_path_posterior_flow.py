@@ -47,8 +47,8 @@ def run(cfg: dict):
         output_mode="semantic_fisher_lograte",
     )
     model = SemanticTransformer(model_cfg).to(device)
-    energy_cfg = ActionEnergyConfig(**cfg.get("energy", {"lambda_op": 0.0}))
     pp_cfg = cfg.get("path_posterior", {})
+    energy_cfg = ActionEnergyConfig(**cfg.get("energy", {"lambda_op": 0.0}))
     build_cfg = PathPosteriorBuildConfig(
         target_mode=str(pp_cfg.get("target_mode", "future_group_l3")),
         num_trajectories=int(pp_cfg.get("num_trajectories", 16)),
@@ -60,6 +60,15 @@ def run(cfg: dict):
         max_steps=int(pp_cfg.get("max_steps", 6)),
         weight_eta=float(pp_cfg.get("weight_eta", 2.0)),
         target_smoothing=float(pp_cfg.get("target_smoothing", 1e-3)),
+        score_to_shape=str(pp_cfg.get("score_to_shape", "rank_softmax")),
+        advantage_eps=float(pp_cfg.get("advantage_eps", 1e-6)),
+        advantage_clip=(
+            None
+            if pp_cfg.get("advantage_clip", 5.0) is None
+            else float(pp_cfg.get("advantage_clip", 5.0))
+        ),
+        teacher_mode=str(pp_cfg.get("teacher_mode", "endpoint_matching")),
+        p_init_mode=str(pp_cfg.get("p_init_mode", "stop_bias")),
         stop_bias_base=float(pp_cfg.get("stop_bias_base", -2.0)),
         stop_bias_slope=float(pp_cfg.get("stop_bias_slope", 0.35)),
         rollout_depth=int(pp_cfg.get("rollout_depth", 3)),
@@ -74,6 +83,17 @@ def run(cfg: dict):
         max_abs_semantic=pp_cfg.get("max_abs_semantic", 1e6),
         max_energy_growth=pp_cfg.get("max_energy_growth", 100.0),
         max_support_size=pp_cfg.get("max_support_size", 64),
+        support_mode=str(pp_cfg.get("support_mode", "deterministic_cap")),
+        support_topk=(
+            None
+            if pp_cfg.get("support_topk") is None
+            else int(pp_cfg.get("support_topk"))
+        ),
+        support_full_threshold=(
+            None
+            if pp_cfg.get("support_full_threshold") is None
+            else int(pp_cfg.get("support_full_threshold"))
+        ),
         terminal_op_penalty=pp_cfg.get("terminal_op_penalty"),
         cache_path=pp_cfg.get("cache_path"),
         gp_population_path=pp_cfg.get("gp_population_path"),
@@ -230,6 +250,8 @@ def _record_scalar(value) -> float | None:
 
 def _algorithm_name(target_mode: str) -> str:
     mode = str(target_mode).strip().lower().replace("-", "_")
+    if "one_step_group" in mode or "archive_one_step" in mode:
+        return "semantic_fisher_flow_matching_one_step_group_advantage"
     if "one_step" in mode:
         return "semantic_fisher_flow_matching_one_step_target"
     if "future_group" in mode:

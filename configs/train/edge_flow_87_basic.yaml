@@ -1,0 +1,43 @@
+seed: 0
+out: checkpoints
+checkpoint_name: edge_flow_87_basic.pt
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 1
+data:
+  source: benchmark_87
+  manifest: data/benchmark_suites/benchmark_manifest.json
+  manifest_root: data/benchmark_suites
+  suites:
+    - nguyen
+    - constant
+    - livermore
+    - jin
+  legacy_87: true
+  feynman_root: data/materialized/feynman
+template:
+  num_vars: 3
+  num_registers: 5
+  num_layers: 2
+  mixture_modes: 1
+  primitives:
+    - add
+    - sub
+    - mul
+    - protected_div
+    - sin
+    - cos
+    - square
+    - cube
+    - protected_log
+    - protected_sqrt
+model:
+  hidden: 64
+train:
+  epochs: 2
+  samples_per_task: 128
+  elite_k: 16
+  target_smoothing: 0.01
+  complexity_weight: 0.001
+  lr: 0.001
+  grad_clip: 1.0

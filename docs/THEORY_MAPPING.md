@@ -1,58 +1,42 @@
-# 理论到代码映射
+# Theory To Code Mapping
 
-## 核心对象
-
-| 理论对象 | 符号 | 代码 |
-|---|---|---|
-| 局部条件 | `c=(B,y,S,p_start)` | `trace_dataset.py`, `targets/base.py::LocalCondition` |
-| centered residual | `e_c = Cy - Pi_{CB,rho} Cy` | `ProjectionBackend.residual_vector` |
-| centered energy | `E(B)=1/2||e_c||^2` | `ActionEnergy.compute`, `ProjectionBackend.residual_energy` |
-| action semantic effect | `xi_c(a)=e_c-e_c^a` | `ActionEnergy.action_semantic_effects` |
-| semantic Gram | `K_c(a,b)=<xi_c(a),xi_c(b)>` | `SemanticEffectOutput.gram` |
-| scalar score | `R(a)` | one-step / rollout / search / GP providers |
-| normalized advantage | `A(a)` | provider context `advantages` |
-| semantic-Fisher metric | `g^SF = g^FR + gamma g^sem` | implemented through `semantic_fisher_lograte` |
-| exact log-rate target | `M w = beta (A + nu 1)` | `flow/semantic_fisher.py::semantic_fisher_lograte` |
-| simplex tangent | `p_dot = p ⊙ w` | `semantic_fisher_simplex_velocity` |
-| sphere tangent | `z_dot = 1/2 z ⊙ w` | `semantic_fisher_sphere_velocity` |
-| sphere update | `z_next = Retr(z + dt z_dot)` | `semantic_fisher_sphere_step` |
-| model output | `w_theta(c,a)` | `SemanticTransformer(output_mode="semantic_fisher_lograte")` |
-| 主损失 | `||z_dot_theta-z_dot_target||^2` | `SemanticFisherVelocityLoss` |
-
-## 当前主训练链
+Current theory:
 
 ```text
-build_dataset
--> VelocityTraceDataset(path_name="semantic_fisher_pullback")
--> collate_velocity
--> SemanticTransformer(output_mode="semantic_fisher_lograte")
--> SemanticFisherVelocityLoss
+Edge-Parameterized Semantic Flow Matching for Symbolic Regression
 ```
 
-## 当前主推理链
+The probability object is a task-conditioned edge distribution `Theta`, not a
+local action policy. A sampled point from `Theta` is a complete executable DAG.
+
+| Theory object | Symbol | Code |
+|---|---|---|
+| Dataset/task | `D=(X,y)` | `semflow_sr/edge_flow/dataset.py`, synthetic smoke generator |
+| Circuit template | `G={C_g}` | `semflow_sr/edge_flow/template.py::RegisterOperatorTemplate` |
+| Edge group | `C_g` | `EdgeGroup` with `ARG_SELECT`, `REG_UPDATE`, `OUTPUT_SELECT` |
+| Edge distribution | `Theta=(alpha, theta)` | `semflow_sr/edge_flow/edge_distribution.py::EdgeDistribution` |
+| Complete circuit sample | `z=(h,z_1,...,z_N)` | `semflow_sr/edge_flow/circuit_sampler.py::CircuitSample` |
+| Expression map | `e=pi(z)` | `CircuitSampler._build_expression` |
+| Complete-expression reward | `R_D(e)` | `semflow_sr/edge_flow/reward.py::RewardEvaluator` |
+| Empirical elite target | `pi_hat_D` | top-k elites in `projection.py` |
+| Edge target projection | `Theta*_D` | `project_elites_to_edge_target` |
+| Fisher sqrt path | `z_lambda=sqrt(theta_lambda)` | `flow_teacher.py::build_fisher_slerp_record` |
+| Velocity target | `dot z_lambda` | `EdgeFlowRecord.group_zdot`, `mixture_zdot` |
+| Learned vector field | `V_psi(D,Theta,lambda)` | `model.py::EdgeFlowModel` |
+| Inference integration | `Theta0 -> Theta1` | `scripts/run_edge_flow.py::_integrate` |
+
+## Current Smoke Workflow
 
 ```text
-rollout_velocity(integration_method="semantic_fisher_sphere")
--> model.lograte_logits
--> semantic_fisher_sphere_step
+configs/train/edge_flow_smoke.yaml
+-> semflow_sr.edge_flow.train_edge_flow
+-> checkpoints/edge_flow_smoke.pt
+-> scripts/run_edge_flow.py
+-> results/edge_flow_smoke/
 ```
 
-## Provider 与扩展
+## Legacy Mapping
 
-| 层 | 作用 | 代码 |
-|---|---|---|
-| one-step | 当前 residual energy decrease | `semantics/energy.py`, `targets/one_step_advantage.py` |
-| rollout | 未来完成质量估计 | `rollout/`, `targets/rollout_advantage.py` |
-| search | beam / search score | `targets/search_advantage.py` |
-| GP | 隐式分布接口 | `gp_distill/`, `targets/gp_implicit_target.py` |
-
-这些模块只负责提供 `R(a)` 或兼容的 target 分布。主几何始终由 `xi / gram / gamma` 决定。
-
-## 兼容 / Ablation
-
-| 对象 | 说明 |
-|---|---|
-| `natural_path.py::natural_path_from_potential` | plain Fisher exponential path ablation |
-| `SpherePathLoss` | plain Fisher sphere-path training ablation |
-| `closed_form_policy_update` | old endpoint update ablation |
-| `gamma=0` in `semantic_fisher_lograte` | no-pullback semantic-Fisher ablation |
+The old action-level Semantic-Fisher code is still present under
+`semflow_sr/path_posterior/` for regression comparison. It is not the main
+theory mapping and should not be used to describe the current algorithm.

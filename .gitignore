@@ -19,6 +19,10 @@ venv/
 /outputs/
 /results/*
 !/results/README.md
+!/results/edge_flow_smoke/
+!/results/edge_flow_smoke/README.md
+!/results/edge_flow_smoke/*_summary.json
+!/results/edge_flow_smoke/*_samples.jsonl
 *.pt
 *.ckpt
 
@@ -27,11 +31,18 @@ venv/
 /prompts/
 /docs/*
 !/docs/IMPROVEMENT_NOTES.md
+!/docs/RESULTS.md
+!/docs/EVAL_87_ADAPTATION.md
+!/docs/superpowers/
+!/docs/superpowers/plans/
+!/docs/superpowers/plans/*.md
 /tests/*
 !/tests/test_group_advantage_target.py
 !/tests/test_support_sampler.py
 !/tests/test_eval_results_plots.py
 !/tests/test_build_paper_results.py
+!/tests/test_edge_flow_core.py
+!/tests/test_edge_flow_training.py
 !/tests/test_baseline_manifest_runner.py
 !/tests/test_benchmark_manifest.py
 !/tests/test_candidate_flow.py

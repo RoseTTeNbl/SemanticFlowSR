@@ -1,257 +1,386 @@
-# 算法文档：Semantic-Fisher Flow Matching
+# Algorithm: Edge-Parameterized Semantic Flow Matching
 
-当前主线是：
+Current mainline:
 
 ```text
-Semantic-Fisher Flow Matching
+Edge-Parameterized Semantic Flow Matching for Symbolic Regression
 ```
 
-核心拆分：
+The probability object is no longer a local action distribution
+`p(a_t | s_t)`. The mainline now models a distribution over complete executable
+expressions through a low-dimensional product of edge-choice simplexes.
 
 ```text
-TargetSampler 只负责产生目标概率形 q_hat；
-semantic effects xi(a) 只负责定义 semantic-Fisher geometry；
-flow matching 只学习从 p_init 到 q_hat 的 lambda-time 速度场。
+data D=(X,y)
+-> register-operator circuit template
+-> edge distribution Theta over complete expression DAGs
+-> sample complete expressions from q_Theta
+-> evaluate rewards
+-> project elite expressions to target edge distribution Theta*
+-> train flow Theta0 -> Theta*
+-> infer by integrating Theta and sampling/decoding complete expressions
+```
+
+The old action-support Semantic-Fisher path remains in the repository only as a
+legacy diagnostic. It is not the current algorithmic mainline.
+
+---
+
+## 1. Template
+
+Implemented in:
+
+```text
+semflow_sr/edge_flow/template.py
+```
+
+`RegisterOperatorTemplate` defines a finite sparse DAG family:
+
+```text
+num_layers L
+num_registers K
+primitive set
+mixture_modes H
+edge-choice groups G
+```
+
+The first implementation uses fixed primitive nodes per layer. It samples:
+
+```text
+ARG_SELECT     primitive argument slots choose previous registers
+REG_UPDATE     next-layer registers choose carry registers or primitive images
+OUTPUT_SELECT  final output chooses a terminal register
+```
+
+This replaces local action support:
+
+```text
+old: A_s = legal one-step actions at partial state s
+new: C_g = candidates for edge-choice group g in a full circuit template
 ```
 
 ---
 
-## 1. State, Support, Init
+## 2. Edge Distribution
 
-局部决策单元仍然是一个可执行 action：
+Implemented in:
 
 ```text
-omega = action
+semflow_sr/edge_flow/edge_distribution.py
 ```
 
-每个 state `s` 构造同一个 deterministic support：
+For each mixture mode `h` and edge group `g`:
 
 ```text
-A_s = legal one-step actions + STOP
+theta_g^(h) in simplex(C_g)
+alpha in simplex(H)
 ```
 
-工程上允许 `max_support_size` 作为计算近似。当前实现先 deterministic cap，再做
-数值健康过滤，然后追加 STOP；训练和推理共享这个顺序。
-
-起点概率形：
+The distribution over a sampled circuit `z` is:
 
 ```text
-p_init(a|s) = PriorBuilder(s, A_s)
+q_Theta(z) = alpha_h * product_g theta_g^(h)(z_g)
 ```
 
-第一版是：
+The circuit executes to a complete expression:
 
 ```text
-real legal actions: uniform logits
-STOP: stop_bias_base + stop_bias_slope * construction_step
+e = pi(z)
+```
+
+So `Theta` induces a distribution over complete expressions without enumerating
+the exponentially large expression set.
+
+The first smoke configuration uses:
+
+```text
+H = 1
+uniform edge prior
+```
+
+The current 87-task diagnostic configuration uses:
+
+```text
+H = 4
+mode-stratified sampling
+hard per-mode elite projection
 ```
 
 ---
 
-## 2. TargetSampler 实验设置
+## 3. Complete Expression Sampling
 
-统一接口由 `semflow_sr/path_posterior/target_sampler.py` 实现：
-
-```text
-state, action_ids, p_init, x, y, rng -> TargetShape
-```
-
-返回：
+Implemented in:
 
 ```text
-q_hat          # endpoint probability shape
-target_scores  # reward/search scores
-target_counts  # rollout/eval counts
-diagnostics
+semflow_sr/edge_flow/circuit_sampler.py
 ```
 
-TargetSampler 不计算 `xi`、不构造 Gram、不解 semantic-Fisher ODE。
-
-当前实现的实验组如下。它们共享同一个 Semantic-Fisher Flow Matching
-teacher/训练/推理流程，只改变 `q_hat` 的构造方式。
-
-| 实验设置 | Config `target_mode` | TargetSampler | 目标分布构造 |
-|---|---|---|---|
-| `OneStepTarget` | `one_step` | `OneStepTargetSampler` | 用旧 dense one-step residual gain `E(B_s)-E(B_s^a)` 给每个 action 打分，再 rank-softmax 得到 `q_hat`。这是 sanity/regression baseline。 |
-| `FutureGroup-L3Target` | `future_group_l3` | `FutureGroupTargetSampler` | 先执行候选 action，再采样长度 `L=3` 的短 continuation，用 top-k mean 聚合 rollout reward，再 rank-softmax 得到 `q_hat`。这是当前正式实验组。 |
-| `CachedTrajectoryFitnessTarget` | `cached_trajectory_fitness` | `CachedTrajectoryFitnessTargetSampler` | 读取 cached trajectory fitness 记录，把进入当前 support 的首个 action 按 fitness 权重累积成经验概率形 `q_hat`。 |
-| `GPCandidateFitnessTarget` | `gp_candidate_fitness` | `GPCandidateFitnessTargetSampler` | 读取训练好的 GP population/trajectory records，用可计算的 `gp_logprob` 或 event log likelihood 与 fitness 形成采样权重，抽样得到 simplex 上的一个 `q_hat` 点。 |
-| `ImportanceSamplingTarget` | `importance_sampling` | `ShapeSamplingTargetSampler` | 以 one-step score 诱导目标密度、以 `p_init` 为 proposal，做 self-normalized importance sampling 得到 `q_hat`。 |
-| `MCMCShapeTarget` | `mcmc_shape` | `ShapeSamplingTargetSampler` | 在 action support 的目标密度上运行 Metropolis 链，经验访问分布平滑后作为 `q_hat`。 |
-
-`PathPosterior-Frequency` 已从这条实现中删除。Terminal semantic projection 不再是主线。
-
-注意：TargetSampler 采样的是 endpoint probability shape `q_hat`，不是在训练时
-替算法 commit 一个 action。action 的选择只发生在推理阶段的 flow integration 之后。
-
----
-
-## 3. FutureGroup-L3Target
-
-对每个 action `a in A_s`：
+Sampling returns complete DAG samples:
 
 ```text
-execute a -> s^a
-sample M short continuations of length L=3
-compute G_{a,m} = E(B_s) - E(B_terminal) - lambda_c * complexity
-S_s(a) = top-k-mean({G_{a,m}})
+mode h
+edge choices z_g for every group
+expression tree
+log probability
+complexity
 ```
 
-STOP 作为普通 support action：
+Mixture sampling is stratified: each mode receives samples instead of relying on
+early mixture probabilities to discover every mode.
+
+Execution uses existing expression AST and protected numeric operators:
 
 ```text
-S_s(STOP) = 0
-xi_s(STOP) = 0
-```
-
-目标概率形用 rank-softmax 构造：
-
-```text
-q_hat_s = rank_softmax(S_s)
-q_hat_s = normalize(q_hat_s + eps * p_init)
-```
-
-使用 rank-softmax 是为了避免不同任务、不同 state 的 reward scale 污染目标。
-
----
-
-## 4. Semantic-Fisher Endpoint ODE
-
-给定：
-
-```text
-A_s
-p_init
-q_hat_s
-xi_s(a)
-K_s(a,a') = <xi_s(a), xi_s(a')>
-```
-
-先平滑 endpoint：
-
-```text
-q_eps = (1 - eps_q) q_hat_s + eps_q p_init
-```
-
-在每个 lambda-time policy `p_lambda` 上重新计算：
-
-```text
-r_lambda = log q_eps - log p_lambda
-```
-
-teacher 解：
-
-```text
-(I + gamma K_s P_lambda) w_lambda
-    = beta (r_lambda + nu_lambda 1)
-
-p_lambda^T w_lambda = 0
-```
-
-速度：
-
-```text
-dot p_lambda = p_lambda * w_lambda
-dot z_lambda = 0.5 * sqrt(p_lambda) * w_lambda
-```
-
-训练目标：
-
-```text
-loss = || dot z_theta - dot z_lambda ||^2
-```
-
-这不是 endpoint classifier；lambda-time ODE 仍然是训练主对象。
-
----
-
-## 5. 训练流程
-
-入口：
-
-```text
-semflow_sr/train/train_path_posterior_flow.py
-```
-
-流程：
-
-```text
-for iteration in on_policy_iterations:
-    clone current model as behavior model
-    sample root behavior trajectories only to collect prefix states
-    for selected prefix state:
-        build support A_s
-        build deterministic p_init
-        TargetSampler builds q_hat
-        compute xi and Gram
-        integrate semantic-Fisher endpoint ODE
-        write flow-matching records along lambda-time
-    train model on records
-```
-
-CPU 限制由 config 的 `runtime` 字段控制：
-
-```yaml
-runtime:
-  torch_num_threads: 4
-  torch_num_interop_threads: 1
+semflow_sr/sr/ast.py
+semflow_sr/sr/ops.py
 ```
 
 ---
 
-## 6. 推理流程
+## 4. Reward
 
-入口：
-
-```text
-scripts/run_path_posterior_flow.py
-```
-
-流程：
+Implemented in:
 
 ```text
-state = initial registers
-for step in max_steps:
-    build same deterministic support A_s
-    build p_init with the same STOP bias rule
-    compute xi and Gram
-    model predicts lambda-time log-rate
-    integrate one semantic-Fisher sphere step
-    commit argmax action or STOP
+semflow_sr/edge_flow/reward.py
 ```
 
-推理不调用 TargetSampler；TargetSampler 只用于训练 endpoint construction。
+Reward is defined on complete expressions:
+
+```text
+R_D(e) = R2(affine_calibrated e; D) - lambda_c * complexity(e)
+```
+
+Affine calibration is single-expression calibration:
+
+```text
+y ~= a * e(X) + b
+```
+
+It is not dense dictionary readout. Invalid numerical expressions get a large
+negative reward and remain diagnostic samples.
+
+Training records can optionally use validation-robust projection rewards:
+
+```text
+R_target(e) = min(R2_train(e), R2_val(e)) - lambda_c * complexity(e)
+```
+
+This is enabled by `validation_fraction > 0` in the training config. Evaluation
+still records raw R2, affine-calibrated R2, calibration gain, train/test gap,
+and final test R2.
 
 ---
 
-## 7. 主要代码位置
+## 5. Elite Projection
 
-| 功能 | 文件 |
-|---|---|
-| STOP、support、health filter | `semflow_sr/path_posterior/action_support.py` |
-| prefix trajectory records | `semflow_sr/path_posterior/target.py` |
-| TargetSampler / p_init | `semflow_sr/path_posterior/target_sampler.py` |
-| dataset 和 teacher records | `semflow_sr/path_posterior/dataset.py` |
-| endpoint ODE | `semflow_sr/flow/semantic_fisher.py` |
-| 训练入口 | `semflow_sr/train/train_path_posterior_flow.py` |
-| 推理入口 | `scripts/run_path_posterior_flow.py` |
+Implemented in:
+
+```text
+semflow_sr/edge_flow/projection.py
+```
+
+Given sampled expressions and rewards, the first target estimator uses top-k
+elite weights:
+
+```text
+omega_i = 1/k for top-k valid samples
+```
+
+For product edge distributions, each group target is a weighted edge count:
+
+```text
+theta*_g,k = sum_i omega_i * 1[choice_i[g] = k]
+```
+
+For mixture mode `H > 1`, the first implementation uses hard mode assignment:
+
+```text
+sample belongs to the mode it was sampled from
+```
+
+Each mode receives its own edge counts. Empty modes fall back to the prior.
+Target smoothing keeps every simplex in the interior:
+
+```text
+theta* <- (1 - eps) * theta*_counts + eps * theta0
+```
+
+The projection diagnostics record target entropy, target ESS, per-mode elite
+counts, and per-mode best rewards.
 
 ---
 
-## 8. 快速命令
+## 6. Flow Teacher
+
+Implemented in:
+
+```text
+semflow_sr/edge_flow/flow_teacher.py
+```
+
+The first teacher path uses groupwise Fisher square-root interpolation:
+
+```text
+z = sqrt(theta)
+z_lambda = slerp(sqrt(theta0), sqrt(theta*), lambda)
+dot z_lambda = analytic slerp derivative
+```
+
+This gives a stable flow-matching target on each categorical simplex. Mixture
+weights are treated as another categorical group.
+
+The first implementation intentionally does not use the old local
+semantic-Fisher linear solve. That geometry belonged to action simplexes. The
+new canonical geometry is the expression-Fisher pullback; the smoke
+implementation uses product Fisher square-root coordinates.
+
+---
+
+## 7. Model
+
+Implemented in:
+
+```text
+semflow_sr/edge_flow/model.py
+```
+
+`EdgeFlowModel` is a lightweight data-conditioned velocity model. Inputs:
+
+```text
+task statistics from (X,y)
+current edge probabilities theta_lambda
+group identity and type
+candidate index
+mixture mode
+group entropy
+```
+
+Output:
+
+```text
+predicted dot z for each mixture/group/candidate simplex
+```
+
+The model centers its implied log-rate per simplex so the predicted
+square-root velocity is tangent to the simplex sphere.
+
+---
+
+## 8. Training Workflow
+
+Smoke entrypoint:
 
 ```bash
-conda run -n semflow pytest -q tests/test_path_posterior_flow.py
+conda run -n semflow python -m semflow_sr.edge_flow.train_edge_flow \
+  --config configs/train/edge_flow_smoke.yaml
+```
 
-conda run -n semflow python -m semflow_sr.train.train_path_posterior_flow \
-  --config configs/train/semantic_fisher_flow_87_future_group_l3_smoke.yaml
+Training flow:
 
-conda run -n semflow python scripts/run_path_posterior_flow.py \
-  --ckpt checkpoints/semantic_fisher_flow_future_group_l3_87_smoke.pt \
-  --legacy_87 \
-  --limit_tasks 5 \
-  --out results/semantic_fisher_flow_smoke \
-  --tag semantic_fisher_flow_future_group_l3_smoke_seed0 \
-  --max_steps 6 \
-  --device cpu
+```text
+generate synthetic tasks
+build uniform Theta0
+sample complete expressions
+evaluate complete-expression rewards
+project top-k elites to Theta*
+sample lambda and build fisher-slerp teacher
+train EdgeFlowModel on dot z targets
+save checkpoint and train curve
+```
+
+The smoke config is deliberately small and is only a wiring check.
+
+87-task entrypoint:
+
+```bash
+env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
+  taskset -c 0-3 conda run -n semflow \
+  python -m semflow_sr.edge_flow.train_edge_flow \
+  --config configs/train/edge_flow_87_h4_l3_k8.yaml
+```
+
+---
+
+## 9. Inference Workflow
+
+Smoke entrypoint:
+
+```bash
+conda run -n semflow python scripts/run_edge_flow.py \
+  --ckpt checkpoints/edge_flow_smoke.pt \
+  --out results/edge_flow_smoke \
+  --tag edge_flow_smoke
+```
+
+Inference flow:
+
+```text
+Theta = uniform prior
+for flow step:
+    model predicts dot z on current Theta
+    update every simplex in square-root coordinates
+sample complete expressions from final Theta
+evaluate rewards with affine calibration
+return best expression
+```
+
+No local action is committed during inference.
+
+The benchmark runner can also write module-wise diagnostics:
+
+```text
+decoder_budget_curve
+prior_best_r2 / prior_best_expression / prior_best_skeleton_match
+theta_star_best_r2 / theta_star_projection_drop
+template and expression structure diagnostics
+calibration_gain and raw_test_r2_without_affine
+```
+
+---
+
+## 10. Migration Map
+
+| Old action-level concept | New edge-flow concept |
+|---|---|
+| partial state `s_t` | full circuit template plus edge distribution `Theta` |
+| action support `A_s` | edge-choice groups `C_g` |
+| TargetSampler over actions | complete-expression sampling plus elite projection |
+| `q_hat(a | s)` | target edge distribution `Theta*` |
+| local semantic effect `xi_s(a)` | complete expression semantics `s_D(e)` |
+| semantic-Fisher local ODE | product Fisher edge-flow in sqrt coordinates |
+| commit one action | sample/decode complete expression after flow |
+| STOP action | output selector and finite-depth template |
+| dense register readout | single sampled sparse DAG with affine calibration |
+
+---
+
+## 11. Current Implementation Status
+
+Implemented:
+
+```text
+H>=1 edge distribution storage
+stratified mixture sampling
+complete expression DAG execution
+affine-calibrated reward
+validation-robust target rewards
+top-k elite projection
+hard mode assignment for mixtures
+fisher-slerp teacher records
+lightweight edge-flow model
+smoke and 87-task train/eval CLIs
+benchmark result writer with expressions, grouped stats, and diagnostics
+```
+
+Not yet implemented:
+
+```text
+soft EM responsibilities
+semantic pullback extension gamma > 0
+beam decoding
+replay buffer
+dimension-specific d1/d2/d3 edge-flow checkpoints
+edge co-occurrence / mutual information diagnostics
 ```

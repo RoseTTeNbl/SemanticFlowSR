@@ -1,134 +1,70 @@
 # Architecture
 
-This document maps the current Semantic-Fisher Flow Matching implementation.
-
-Main flow:
+The current mainline is:
 
 ```text
-behavior trajectories
--> prefix states
--> deterministic support and p_init
--> TargetSampler endpoint q_hat
--> exact action semantic effects and Gram
--> lambda-dependent semantic-Fisher endpoint teacher
--> SemanticTransformer flow-matching loss
--> inference integrates predicted velocity and commits action or STOP
+Edge-Parameterized Semantic Flow Matching
 ```
 
-## Main Package
+The previous action-level Semantic-Fisher implementation remains under
+`semflow_sr/path_posterior/` as legacy diagnostic code. New work should use
+`semflow_sr/edge_flow/`.
 
-### `semflow_sr/path_posterior/action_support.py`
+## Main Edge Flow Modules
 
-Defines STOP, STOP features/effects, health filtering, and support helpers. The
-current efficient order is deterministic cap first, health filtering second,
-STOP append last.
+| File | Responsibility |
+|---|---|
+| `semflow_sr/edge_flow/template.py` | Register-operator circuit template and edge-choice group metadata. |
+| `semflow_sr/edge_flow/edge_distribution.py` | Mixture edge distribution `Theta`, per-group probabilities, sqrt coordinates. |
+| `semflow_sr/edge_flow/circuit_sampler.py` | Stratified complete-DAG sampling from `Theta`. |
+| `semflow_sr/edge_flow/reward.py` | Complete-expression reward with affine calibration and complexity cost. |
+| `semflow_sr/edge_flow/projection.py` | Top-k elite projection to target edge distribution `Theta*`. |
+| `semflow_sr/edge_flow/flow_teacher.py` | Product Fisher square-root teacher path. |
+| `semflow_sr/edge_flow/dataset.py` | Edge flow training records and diagnostics. |
+| `semflow_sr/edge_flow/model.py` | Data-conditioned edge velocity model and loss. |
+| `semflow_sr/edge_flow/train_edge_flow.py` | Smoke training CLI. |
+| `scripts/run_edge_flow.py` | Smoke inference/evaluation CLI. |
 
-### `semflow_sr/path_posterior/target.py`
+## Reused Shared Modules
 
-Contains only prefix collection records:
+| File | Use |
+|---|---|
+| `semflow_sr/sr/ast.py` | Expression AST and numeric evaluation. |
+| `semflow_sr/sr/ops.py` | Primitive registry and protected operators. |
+| `semflow_sr/sr/printer.py` | Expression rendering/simplification for top candidates. |
+| `semflow_sr/data/synthetic_generator.py` | Synthetic smoke tasks. |
+| `semflow_sr/eval/metrics.py` | R2/NMSE conventions where needed. |
+
+## Current Workflow
 
 ```text
-PathDecision
-PathTrajectory
+configs/train/edge_flow_smoke.yaml
+-> python -m semflow_sr.edge_flow.train_edge_flow
+-> checkpoints/edge_flow_smoke.pt
+-> scripts/run_edge_flow.py
+-> results/edge_flow_smoke/
 ```
 
-The old PathPosterior-Frequency conditional code has been removed.
-
-### `semflow_sr/path_posterior/target_sampler.py`
-
-Defines target endpoint builders:
+The smoke result files are intentionally small and tracked:
 
 ```text
-PriorConfig
-build_p_init
-TargetShape
-OneStepTargetSampler
-FutureGroupTargetSampler
-CachedTrajectoryFitnessTargetSampler
-GPCandidateFitnessTargetSampler
-ShapeSamplingTargetSampler
+results/edge_flow_smoke/edge_flow_smoke_summary.json
+results/edge_flow_smoke/edge_flow_smoke_samples.jsonl
 ```
 
-Target samplers produce `q_hat`, `target_scores`, and diagnostics. They do not
-compute semantic effects or semantic-Fisher fields.
+Future full benchmark outputs should go under a new dated directory and remain
+ignored unless explicitly summarized.
 
-### `semflow_sr/path_posterior/sampler.py`
+## Legacy Code
 
-Samples behavior trajectories to collect prefix states. It records support and
-the behavior policy at each visited state. Support construction now caps raw
-actions before health filtering to avoid evaluating hundreds of actions before
-the approximation cap.
-
-### `semflow_sr/path_posterior/dataset.py`
-
-Builds flow-matching records:
+Legacy action-level modules:
 
 ```text
-synthetic task
--> behavior model samples root trajectories
--> collect selected prefix states
--> build p_init
--> target sampler builds q_hat
--> compute xi / Gram
--> integrate endpoint semantic-Fisher path
--> emit lambda-time records
+semflow_sr/path_posterior/
+semflow_sr/flow/semantic_fisher.py
+semflow_sr/train/train_path_posterior_flow.py
+scripts/run_path_posterior_flow.py
 ```
 
-Records keep compatibility with `collate_velocity`.
-
-## Flow
-
-### `semflow_sr/flow/semantic_fisher.py`
-
-Important functions:
-
-```text
-semantic_fisher_lograte
-semantic_fisher_sphere_step
-integrate_semantic_fisher_endpoint_path
-```
-
-The endpoint path recomputes:
-
-```text
-log q_eps - log p_lambda
-```
-
-at each lambda-time state.
-
-## Training
-
-### `semflow_sr/train/train_path_posterior_flow.py`
-
-Runs iterative behavior refresh and CPU-limited training. Config field:
-
-```yaml
-runtime:
-  torch_num_threads: 4
-  torch_num_interop_threads: 1
-```
-
-Checkpoint metadata uses algorithm names such as:
-
-```text
-semantic_fisher_flow_matching_future_group_l3
-```
-
-## Evaluation
-
-### `scripts/run_path_posterior_flow.py`
-
-Loads a checkpoint and uses the same support cap and deterministic `p_init`
-STOP-bias rule as training. It does not call TargetSampler at inference time.
-
-## Deprecated Diagnostics
-
-The old block-flow and legacy endpoint paths remain for comparison:
-
-```text
-semflow_sr/blocks/
-semflow_sr/flow/semantic_fisher_table.py
-semflow_sr/models/block_flow_model.py
-semflow_sr/train/train_block_flow.py
-scripts/run_block_risk_flow.py
-```
+These are not deleted because they are useful for regression comparison, but
+they should not be described as the current algorithm.

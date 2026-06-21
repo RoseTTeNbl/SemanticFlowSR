@@ -3,28 +3,14 @@
 SemanticFlowSR is currently centered on:
 
 ```text
-Semantic-Fisher Flow Matching
+Edge-Parameterized Semantic Flow Matching
 ```
 
-The mainline is not the older H3/HxA RiskFlow path. For each state, a
-deterministic initial probability shape is built over the current action
-support, then a TargetSampler constructs an empirical endpoint distribution:
-
-```text
-q_hat(omega | s)
-```
-
-The current implementation uses:
-
-```text
-omega = one executable action
-```
-
-The algorithm name stays `Semantic-Fisher Flow Matching`; experiment groups are
-named by their TargetSampler. The current formal group is
-`FutureGroup-L3Target`: each candidate action is scored by short rollout groups
-of depth 3, and those scores induce `q_hat`. Semantic effects define only the
-semantic-Fisher geometry.
+The mainline no longer trains a local action policy. It builds a
+register-operator circuit template, places a product-of-simplexes edge
+distribution over complete expression DAGs, samples complete expressions,
+projects reward elites to an edge target, and trains a flow on edge
+probabilities.
 
 For a new coding session, read [AGENTS.md](AGENTS.md), then
 [docs/ALGORITHM.md](docs/ALGORITHM.md) and
@@ -33,49 +19,19 @@ For a new coding session, read [AGENTS.md](AGENTS.md), then
 ## Current Algorithm
 
 ```text
-sample complete action trajectories from the behavior model
--> collect prefix states
--> build deterministic p_init over current action support
--> target sampler builds q_hat(action | state)
--> build lambda-dependent A_lambda = log q_hat - log p_lambda
--> compute exact local action residual effects xi(action)
--> solve semantic-Fisher teacher log-rate w*
--> train SemanticTransformer by square-root flow matching
--> inference integrates predicted velocity and commits one action or STOP
+data D=(X,y)
+-> RegisterOperatorTemplate
+-> EdgeDistribution Theta0
+-> sample complete expressions from q_Theta
+-> reward complete expressions
+-> project elites to Theta*
+-> build Fisher square-root teacher path
+-> train EdgeFlowModel on dot z
+-> infer by integrating Theta and sampling complete expressions
 ```
 
-## TargetSampler Groups
-
-| Experiment setting | Config `target_mode` | TargetSampler | Endpoint construction |
-|---|---|---|---|
-| `OneStepTarget` | `one_step` | `OneStepTargetSampler` | Scores each action by the old dense one-step residual gain `E(B_s)-E(B_s^a)`, then rank-softmaxes scores into `q_hat`. This is a sanity/regression baseline. |
-| `FutureGroup-L3Target` | `future_group_l3` | `FutureGroupTargetSampler` | Executes each candidate action, samples short continuations of length `L=3`, aggregates rollout rewards by top-k mean, then rank-softmaxes scores into `q_hat`. This is the current formal experiment group. |
-| `CachedTrajectoryFitnessTarget` | `cached_trajectory_fitness` | `CachedTrajectoryFitnessTargetSampler` | Loads cached trajectory records, maps supported first actions to fitness-weighted trajectory samples, and returns an empirical `q_hat`. |
-| `GPCandidateFitnessTarget` | `gp_candidate_fitness` | `GPCandidateFitnessTargetSampler` | Loads a trained GP population or trajectory records, combines computable GP likelihood terms with fitness, samples a point on the action-support simplex, and returns that `q_hat`. |
-| `ImportanceSamplingTarget` | `importance_sampling` | `ShapeSamplingTargetSampler` | Uses one-step scores as the target density and `p_init` as proposal; self-normalized importance samples produce `q_hat`. |
-| `MCMCShapeTarget` | `mcmc_shape` | `ShapeSamplingTargetSampler` | Runs a small Metropolis chain over the support target density and returns the empirical endpoint probability shape `q_hat`. |
-
-Removed historical targets are not active experiment groups: risk-weighted
-visited-action frequency and terminal semantic projection.
-
-All TargetSampler variants output a full probability shape over the current
-support. They do not return a sampled action; inference still integrates the
-learned Semantic-Fisher velocity and then commits an action.
-
-Important boundaries:
-
-- No local one-step residual reward in the main target.
-- No risk-weighted visited-action frequency as the main target.
-- No terminal semantic projection as the main target.
-- No `block_reward = max/topk/mean over suffixes`.
-- No HxA coordinate target or zeta-averaged geometry as mainline.
-- No uniform exploration mixture such as `(1-eps) policy + eps uniform`.
-- More exploration means more complete trajectories from the recorded behavior
-  policy, or a separately labeled off-policy source.
-- GP/replay samples are not on-policy training data unless behavior
-  probabilities and correction are recorded.
-- `deap` and `gplearn` in the main env are for GP-assisted SFSR tools; external
-  paper baselines are handled by the separate baseline scripts.
+Old action-level SFFM/TSSF code remains for legacy diagnostics, but it is not
+the current main algorithm.
 
 ## Environment
 
@@ -84,10 +40,7 @@ Run commands from `SemanticFlowSR/`.
 ```bash
 conda create -n semflow python=3.11
 conda activate semflow
-
-# Choose the PyTorch wheel matching the machine. This repo has been run with cu126.
 pip install --index-url https://download.pytorch.org/whl/cu126 torch
-
 pip install numpy scipy sympy pyyaml pandas scikit-learn tqdm einops pytest
 pip install deap gplearn
 pip install -e .
@@ -96,23 +49,26 @@ pip install -e .
 ## Quick Commands
 
 ```bash
-# Unit tests for the current Semantic-Fisher Flow Matching path.
-conda run -n semflow pytest -q tests/test_path_posterior_flow.py
+# Current Edge Flow unit tests.
+env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
+  taskset -c 0-3 conda run -n semflow \
+  pytest -q tests/test_edge_flow_core.py tests/test_edge_flow_training.py
 
-# Train the current 87-task action-flow checkpoint.
-conda run -n semflow python -m semflow_sr.train.train_path_posterior_flow \
-  --config configs/train/semantic_fisher_flow_87_future_group_l3.yaml
+# Smoke train. This is not full training.
+env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
+  taskset -c 0-3 conda run -n semflow \
+  python -m semflow_sr.edge_flow.train_edge_flow \
+  --config configs/train/edge_flow_smoke.yaml
 
-# Evaluate the current action-flow checkpoint on the legacy 87-task loader.
-conda run -n semflow python scripts/run_path_posterior_flow.py \
-  --ckpt checkpoints/semantic_fisher_flow_future_group_l3_87.pt \
-  --legacy_87 \
-  --out results/semantic_fisher_flow_87 \
-  --tag semantic_fisher_flow_future_group_l3_87_seed0 \
-  --max_steps 6 \
-  --device cpu
+# Smoke evaluate.
+env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
+  taskset -c 0-3 conda run -n semflow \
+  python scripts/run_edge_flow.py \
+  --ckpt checkpoints/edge_flow_smoke.pt \
+  --out results/edge_flow_smoke \
+  --tag edge_flow_smoke
 
-# Validate the unified benchmark manifest before full experiments.
+# Validate the unified benchmark manifest before future full experiments.
 conda run -n semflow python scripts/validate_benchmark_manifest.py \
   --manifest data/benchmark_suites/benchmark_manifest.json \
   --root data/benchmark_suites \
@@ -120,67 +76,43 @@ conda run -n semflow python scripts/validate_benchmark_manifest.py \
   --fail-on-error
 ```
 
-The old block-flow commands still exist for diagnostics:
-
-```text
-semflow_sr/train/train_block_flow.py
-scripts/run_block_risk_flow.py
-```
-
-Do not treat them as the current algorithm unless explicitly running a
-comparison against the deprecated H3/HxA path.
-
 ## Main Code Map
 
 | Purpose | File |
 |---|---|
-| Prefix trajectory records | `semflow_sr/path_posterior/target.py` |
-| Target samplers and p_init | `semflow_sr/path_posterior/target_sampler.py` |
-| STOP/support/health helpers | `semflow_sr/path_posterior/action_support.py` |
-| Complete action trajectory sampler | `semflow_sr/path_posterior/sampler.py` |
-| Dataset and teacher target builder | `semflow_sr/path_posterior/dataset.py` |
-| Action-flow trainer | `semflow_sr/train/train_path_posterior_flow.py` |
-| Action-flow evaluator | `scripts/run_path_posterior_flow.py` |
-| Core action-support model | `semflow_sr/models/semantic_transformer.py` |
-| Semantic-Fisher action solver | `semflow_sr/flow/semantic_fisher.py` |
-| Deprecated H3/HxA diagnostic path | `semflow_sr/blocks/`, `semflow_sr/flow/semantic_fisher_table.py` |
-| Dataset manifest tooling | `semflow_sr/data/benchmark_manifest.py`, `scripts/prepare_benchmark_suites.py` |
-| External baseline tooling | `scripts/check_baselines_sanity.py`, `scripts/run_external_baseline_matrix.py` |
-| GP-assisted SFSR helpers | `semflow_sr/gp_distill/` |
+| Template and edge groups | `semflow_sr/edge_flow/template.py` |
+| Edge distribution | `semflow_sr/edge_flow/edge_distribution.py` |
+| Complete DAG sampler | `semflow_sr/edge_flow/circuit_sampler.py` |
+| Complete-expression reward | `semflow_sr/edge_flow/reward.py` |
+| Elite projection | `semflow_sr/edge_flow/projection.py` |
+| Fisher-slerp teacher | `semflow_sr/edge_flow/flow_teacher.py` |
+| Training records | `semflow_sr/edge_flow/dataset.py` |
+| Edge-flow model/loss | `semflow_sr/edge_flow/model.py` |
+| Smoke trainer | `semflow_sr/edge_flow/train_edge_flow.py` |
+| Smoke evaluator | `scripts/run_edge_flow.py` |
 
-## Benchmark Layout
+## Results
 
-The unified manifest is:
+Current tracked result is smoke-only:
 
 ```text
-data/benchmark_suites/benchmark_manifest.json
+results/edge_flow_smoke/
 ```
 
-Target suites:
+It verifies the new path can run end to end. It is not a benchmark result.
+
+## Legacy Code
+
+The old action-level and block-flow code paths remain available for regression
+comparison:
 
 ```text
-formula-dev: Nguyen / Constant / Livermore / Jin
-SRSD-Feynman: easy / medium / hard
-SRSD-Feynman dummy-variable variants
-PMLB/SRBench filtered regression subset
+semflow_sr/path_posterior/
+semflow_sr/train/train_path_posterior_flow.py
+scripts/run_path_posterior_flow.py
+semflow_sr/train/train_block_flow.py
+scripts/run_block_risk_flow.py
 ```
 
-Checkpoint dimension rules still matter. A task with more variables than the
-checkpoint model supports must be skipped or evaluated with a matching
-checkpoint bucket. The action-flow evaluator pads lower-dimensional tasks to
-the checkpoint `d` and skips higher-dimensional tasks.
-
-## Current Status
-
-Current Semantic-Fisher Flow Matching 87-task runs:
-
-| TargetSampler | Checkpoint | Result summary | Mean R2 | Median R2 | Solution rate | STOP task fraction |
-|---|---|---|---:|---:|---:|---:|
-| `OneStepTarget` | `checkpoints/semantic_fisher_flow_one_step_87.pt` | `results/semantic_fisher_flow_87/semantic_fisher_flow_one_step_87_seed0_summary.json` | 0.8130 | 0.9036 | 0.1494 | 0.1034 |
-| `FutureGroup-L3Target` | `checkpoints/semantic_fisher_flow_future_group_l3_87.pt` | `results/semantic_fisher_flow_87/semantic_fisher_flow_future_group_l3_87_seed0_summary.json` | 0.8466 | 0.9122 | 0.1149 | 0.0575 |
-
-Verification after the latest TargetSampler changes:
-
-```text
-tests/test_path_posterior_flow.py: 11 passed
-```
+Do not treat them as the current algorithm unless the user explicitly asks for
+a legacy comparison.
