@@ -1,293 +1,136 @@
-# Results
+# 实验结果记录
 
-Current active result family:
+本文档只记录当前 CSEF 主线结果。
 
-```text
-Edge-Parameterized Semantic Flow Matching
-```
-
-Current tracked benchmark results:
+## 1. 当前结果范围
 
 ```text
-results/edge_flow_87_basic/
-results/edge_flow_87_h4_l3_k8/
+method family: Conditional Semantic Edge Flow
+date: 2026-06-23
+device: cuda:1
+train data: data/generated/symbolicgpt_subset, 747 train formulas
+eval suites: nguyen constant livermore jin
+eval tasks: 34
+eval_samples: 64
+flow_steps: 1
+sampler_method: policy
+head_fit_mode: linear
 ```
 
-Each full result directory must contain:
+当前比较只包含两条几何线：
 
 ```text
-*_summary.json
-*_samples.jsonl
-*_task_expressions.csv
-*_task_expressions.md
-*_statistics_by_group.csv
-*_statistics_by_group.json
-*_diagnostics.json
+CSEF-Fisher:    probability_path_geometry=fisher
+CSEF-Euclidean: probability_path_geometry=euclidean
 ```
 
-The smoke run remains only a wiring check. It must not be compared to 87-task
-results or external baselines.
-
-## Smoke Result
-
-Latest smoke command:
-
-```bash
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
-  python scripts/run_edge_flow.py \
-  --ckpt checkpoints/edge_flow_smoke.pt \
-  --out results/edge_flow_smoke \
-  --tag edge_flow_smoke \
-  --num_tasks 2 \
-  --eval_samples 64 \
-  --flow_steps 4 \
-  --seed 1
-```
-
-Current smoke summary:
-
-```json
-{
-  "n_tasks": 2,
-  "r2_mean": 0.8014429211616516,
-  "solution_rate": 0.5
-}
-```
-
-## 87-Task Basic Result
-
-Run date: 2026-06-21.
-
-Configuration:
+当前训练配置使用：
 
 ```text
-configs/train/edge_flow_87_basic.yaml
+teacher_target_mode=structural_denoising
+target_shape_source=structural_denoising
 ```
 
-This is one low-budget Edge Flow configuration group. It trains one
-`num_vars=3` checkpoint on the full 87-task train split and pads lower-variable
-tasks with zero dummy columns.
+## 2. Artifacts
 
-Training:
-
-```bash
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
-  python -m semflow_sr.edge_flow.train_edge_flow \
-  --config configs/train/edge_flow_87_basic.yaml
-```
-
-Evaluation:
-
-```bash
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
-  python scripts/run_edge_flow.py \
-  --ckpt checkpoints/edge_flow_87_basic.pt \
-  --out results/edge_flow_87_basic \
-  --tag edge_flow_87_basic \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --manifest_root data/benchmark_suites \
-  --manifest_suite nguyen constant livermore jin \
-  --legacy_87 \
-  --feynman_root data/materialized/feynman \
-  --eval_samples 256 \
-  --flow_steps 8 \
-  --seed 0
-```
-
-Summary:
-
-```json
-{
-  "n_tasks": 87,
-  "r2_mean": 0.7931209405263265,
-  "nmse_mean": 0.2068790586840885,
-  "solution_rate": 0.06896551724137931,
-  "skeleton_accuracy": 0.022988505747126436,
-  "complexity_mean": 3.1264367816091956,
-  "valid_expression_fraction_mean": 0.9987877155172413,
-  "unique_expression_fraction_mean": 0.6968390804597702
-}
-```
-
-`skeleton_accuracy` is a 0/1 exact operator-skeleton metric. It compares
-`ground_truth` with the selected `raw_expression` after removing numeric
-constants and affine scaling, stripping protected `Abs`, and preserving variable
-identity plus discrete exponent structure. It is intentionally stricter than
-R2: high R2 from a correlated but wrong structure does not count.
-
-Output files:
+Fisher:
 
 ```text
-results/edge_flow_87_basic/edge_flow_87_basic_summary.json
-results/edge_flow_87_basic/edge_flow_87_basic_samples.jsonl
-results/edge_flow_87_basic/edge_flow_87_basic_task_expressions.csv
-results/edge_flow_87_basic/edge_flow_87_basic_task_expressions.md
-results/edge_flow_87_basic/edge_flow_87_basic_statistics_by_group.csv
-results/edge_flow_87_basic/edge_flow_87_basic_statistics_by_group.json
-results/edge_flow_87_basic/edge_flow_87_basic_diagnostics.json
+config:        configs/train/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.yaml
+checkpoint:    checkpoints/teacher_path_geometry/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.pt
+train curve:   checkpoints/teacher_path_geometry/train_curve_conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.csv
+train log:     logs/csef_fisher_full_train_20260623.log
+eval dir:      results/teacher_path_geometry_fisher_gpu
+eval summary:  results/teacher_path_geometry_fisher_gpu/teacher_path_geometry_fisher_gpu_summary.json
+eval samples:  results/teacher_path_geometry_fisher_gpu/teacher_path_geometry_fisher_gpu_samples.jsonl
 ```
 
-Subset highlights:
-
-| group | n | R2 mean | solution rate | skeleton acc. |
-|---|---:|---:|---:|---:|
-| all | 87 | 0.7931 | 0.0690 | 0.0230 |
-| constant | 8 | 0.9492 | 0.1250 | 0.1250 |
-| feynman | 53 | 0.7530 | 0.0566 | 0.0000 |
-| jin | 6 | 0.5808 | 0.0000 | 0.0000 |
-| livermore | 8 | 0.9021 | 0.1250 | 0.0000 |
-| nguyen | 12 | 0.8998 | 0.0833 | 0.0833 |
-| num_vars=1 | 21 | 0.9219 | 0.1429 | 0.0952 |
-| num_vars=2 | 29 | 0.8196 | 0.1034 | 0.0000 |
-| num_vars=3 | 37 | 0.6993 | 0.0000 | 0.0000 |
-
-## 87-Task H4/L3/K8 Diagnostic Result
-
-Run date: 2026-06-21.
-
-Configuration:
+Euclidean:
 
 ```text
-configs/train/edge_flow_87_h4_l3_k8.yaml
+config:        configs/train/conditional_edge_flow_gt_sampler_teacher_path_euclidean_gpu.yaml
+checkpoint:    checkpoints/teacher_path_geometry/conditional_edge_flow_gt_sampler_teacher_path_euclidean_gpu.pt
+train curve:   checkpoints/teacher_path_geometry/train_curve_conditional_edge_flow_gt_sampler_teacher_path_euclidean_gpu.csv
+train log:     logs/csef_euclidean_full_train_20260623_rerun.log
+eval dir:      results/teacher_path_geometry_euclidean_gpu_20260623
+eval summary:  results/teacher_path_geometry_euclidean_gpu_20260623/teacher_path_geometry_euclidean_gpu_20260623_summary.json
+eval samples:  results/teacher_path_geometry_euclidean_gpu_20260623/teacher_path_geometry_euclidean_gpu_20260623_samples.jsonl
 ```
 
-This run applies the first structural corrections from the new Edge Flow
-diagnosis:
+Combined metrics output:
 
 ```text
-H = 4 mixture modes
-L = 3 template layers
-K = 8 registers
-per-mode top-k hard projection
-validation-robust target rewards with validation_fraction = 0.25
-decoder budget curve at 256 / 1024 / 4096 samples
-prior and theta_star projection oracle diagnostics
+results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623
+results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623/method_summary.csv
+results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623/suite_summary.csv
+results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623/paired_significance.csv
+results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623/metric_summary.png
+results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623/pareto_r2_complexity.png
+results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623/structural_metrics.png
 ```
 
-Training:
+## 3. Training Summary
 
-```bash
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
-  python -m semflow_sr.edge_flow.train_edge_flow \
-  --config configs/train/edge_flow_87_h4_l3_k8.yaml
-```
-
-Evaluation:
-
-```bash
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
-  python scripts/run_edge_flow.py \
-  --ckpt checkpoints/edge_flow_87_h4_l3_k8.pt \
-  --out results/edge_flow_87_h4_l3_k8 \
-  --tag edge_flow_87_h4_l3_k8 \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --manifest_root data/benchmark_suites \
-  --manifest_suite nguyen constant livermore jin \
-  --legacy_87 \
-  --feynman_root data/materialized/feynman \
-  --eval_samples 1024 \
-  --flow_steps 8 \
-  --seed 0 \
-  --decoder_budgets 256 1024 4096 \
-  --oracle_samples 2048 \
-  --oracle_decode_samples 2048 \
-  --elite_k 8 \
-  --target_smoothing 0.01 \
-  --projection_mode per_mode_topk \
-  --selection_eta_logprob 0.0
-```
-
-Summary:
-
-```json
-{
-  "n_tasks": 87,
-  "r2_mean": 0.8184552048814708,
-  "nmse_mean": 0.18154479791512626,
-  "solution_rate": 0.09195402298850575,
-  "skeleton_accuracy": 0.022988505747126436,
-  "complexity_mean": 4.045977011494253,
-  "valid_expression_fraction_mean": 0.9975866558908046,
-  "unique_expression_fraction_mean": 0.6270878232758621
-}
-```
-
-Comparison to `edge_flow_87_basic`:
-
-| run | R2 mean | solution rate | skeleton acc. | complexity | valid frac. | unique frac. |
-|---|---:|---:|---:|---:|---:|---:|
-| basic H1/L2/K5 | 0.7931 | 0.0690 | 0.0230 | 3.1264 | 0.9988 | 0.6968 |
-| H4/L3/K8 | 0.8185 | 0.0920 | 0.0230 | 4.0460 | 0.9976 | 0.6271 |
-
-Subset highlights:
-
-| group | n | R2 mean | solution rate | skeleton acc. |
-|---|---:|---:|---:|---:|
-| all | 87 | 0.8185 | 0.0920 | 0.0230 |
-| constant | 8 | 0.9549 | 0.1250 | 0.1250 |
-| feynman | 53 | 0.7666 | 0.0943 | 0.0000 |
-| jin | 6 | 0.6840 | 0.0000 | 0.0000 |
-| livermore | 8 | 0.9412 | 0.1250 | 0.0000 |
-| nguyen | 12 | 0.9419 | 0.0833 | 0.0833 |
-| num_vars=1 | 21 | 0.9551 | 0.1429 | 0.0952 |
-| num_vars=2 | 29 | 0.8684 | 0.1724 | 0.0000 |
-| num_vars=3 | 37 | 0.7018 | 0.0000 | 0.0000 |
-
-Module-wise diagnostics:
-
-| diagnostic | value |
-|---|---:|
-| prior oracle best R2 mean | 0.8491 |
-| theta_star decode best R2 mean | 0.8743 |
-| theta_star projection drop mean | -0.0252 |
-| prior skeleton accuracy | 0.0230 |
-| theta_star skeleton accuracy | 0.0345 |
-| model skeleton accuracy | 0.0230 |
-| decoder 256 R2 mean | 0.7707 |
-| decoder 1024 R2 mean | 0.8273 |
-| decoder 4096 R2 mean | 0.8678 |
-| decoder 4096 skeleton accuracy | 0.0230 |
-| median calibration gain | 1.4676 |
-| tasks with calibration gain > 0.1 | 0.8276 |
-| mean used variable count | 1.6092 |
-| 3-variable full-dependency fraction | 0.0270 |
+| metric | Fisher | Euclidean |
+|---|---:|---:|
+| rows | 7470 | 7470 |
+| optimizer steps | 939 | 939 |
+| epoch range | 0..9 | 0..9 |
+| device | cuda:1 | cuda:1 |
+| batch_loss mean | 0.020235 | 0.030072 |
+| semantic_teacher_loss_mean | 0.020292 | 0.030295 |
+| semantic_teacher_loss nonzero mean | 0.027356 | 0.040841 |
+| semantic_calibration_energy_mean | 0.126022 | 0.239929 |
+| semantic_calibration_energy nonzero mean | 0.169895 | 0.323456 |
+| semantic_teacher_trace_count mean | 20.6542 | 20.6542 |
+| gt_neighborhood_compile_success overall | 0.6643 | 0.6643 |
+| gt_neighborhood_compile_success nonzero rows | 0.8956 | 0.8956 |
+| gt_neighborhood_compiled mean | 2.6700 | 2.6700 |
 
 Interpretation:
 
 ```text
-H4/L3/K8 improves numeric R2 and solution rate, and the decoder budget curve
-shows that more samples recover better semantic fits. It does not improve
-skeleton recovery. Prior and theta_star oracles also have high R2 but nearly
-unchanged skeleton accuracy, so the main bottleneck is not only neural flow
-imitation. The sampled target family and reward still prefer correlated proxy
-expressions.
+Fisher has lower teacher loss and lower semantic calibration energy.
+Both geometries see the same GT-neighborhood coverage.
+Euclidean produces larger calibrated velocity errors during training.
 ```
 
-## Result Layout Going Forward
+## 4. Evaluation Summary
 
-Use:
+| method | R2 mean | R2 median | R2 95% CI | NMSE mean | solution rate | exact skeleton | symbolic eq | op/dep | BLEU | token acc | edit dist | complexity | weighted complexity | valid rate | unique rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| CSEF-Fisher | 0.937383 | 0.996123 | [0.880588, 0.981796] | 0.062617 | 0.3235 | 0.0294 | 0.0000 | 0.0294 | 0.1027 | 0.0692 | 19.0588 | 12.912 | 23.441 | 0.9899 | 0.9995 |
+| CSEF-Euclidean | 0.940868 | 0.992659 | [0.894852, 0.979058] | 0.059132 | 0.2941 | 0.0000 | 0.0000 | 0.0000 | 0.0706 | 0.1275 | 18.0588 | 12.324 | 21.971 | 0.9775 | 1.0000 |
+
+## 5. Suite Summary
+
+| suite | Fisher R2 | Euclidean R2 | Fisher solution | Euclidean solution | Fisher complexity | Euclidean complexity |
+|---|---:|---:|---:|---:|---:|---:|
+| constant | 0.990889 | 0.985593 | 0.5000 | 0.3750 | 12.000 | 11.125 |
+| nguyen | 0.983832 | 0.965745 | 0.4167 | 0.1667 | 12.917 | 12.417 |
+| livermore | 0.984388 | 0.982102 | 0.2500 | 0.5000 | 11.875 | 11.500 |
+| jin | 0.710469 | 0.776504 | 0.0000 | 0.1667 | 15.500 | 14.833 |
+
+## 6. Paired R2 Significance
 
 ```text
-results/edge_flow_smoke/          small wiring checks
-results/edge_flow_87_<tag>/       full 87-task Edge Flow runs
-results/edge_flow_<date>/         ignored scratch or slice experiments
+n_matched: 34
+mean_delta Fisher-Euclidean: -0.003486
+median_delta Fisher-Euclidean: 0.000499
+wins/losses/ties for Fisher: 19 / 14 / 1
+sign_test_p: 0.486850
 ```
 
-For future full experiments, write:
+The current 34-task run does not show a significant R2 difference between Fisher and Euclidean paths.
+
+## 7. Current Conclusion
 
 ```text
-*_summary.json
-*_samples.jsonl
-*_metrics.csv
-*_diagnostics.json
-task_expressions.csv/md
-statistics_by_group.csv/json
+1. Both geometries train and evaluate successfully on GPU.
+2. Euclidean has slightly higher mean R2.
+3. Fisher has higher solution rate, BLEU, and valid expression fraction.
+4. Fisher training loss and semantic calibration energy are lower.
+5. Structural recovery remains very low under exact and audited structure metrics.
 ```
 
-Only curated summaries should be tracked unless the user explicitly asks to
-track raw benchmark outputs.
+The main remaining issue is structural alignment. The current high R2 values still rely heavily on numerical fitting and sparse-head calibration; exact expression recovery is not solved. The next full GPU run should use the structural denoising teacher target in the current configs.

@@ -9,6 +9,7 @@ import torch
 
 from ..sr.ast import Expr
 from ..sr.ops import NAME_TO_ID, get_op
+from .semantic_teacher import DecisionTrace
 from .edge_distribution import EdgeDistribution
 from .template import RegisterOperatorTemplate
 
@@ -22,6 +23,13 @@ class CircuitSample:
     log_prob: float
     complexity: int
     canonical: str = ""
+    head_terms: tuple[Expr, ...] = ()
+    log_prob_tensor: torch.Tensor | None = None
+    active_log_prob_tensor: torch.Tensor | None = None
+    entropy_tensor: torch.Tensor | None = None
+    decision_traces: tuple[DecisionTrace, ...] = ()
+    semantic_teacher_loss_tensor: torch.Tensor | None = None
+    diagnostics: dict | None = None
 
 
 class CircuitSampler:

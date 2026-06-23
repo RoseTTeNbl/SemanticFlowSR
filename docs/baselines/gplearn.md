@@ -1,9 +1,6 @@
 # gplearn
 
-`gplearn` 有两个用途，必须分开记录：
-
-- 主 `semflow` 环境中的安装：用于 GP-assisted SFSR 工具和 smoke。
-- 外部 baseline：作为独立方法写入 `results/external_baselines`。
+`gplearn` 作为独立符号回归方法运行，并按统一 manifest 写出逐任务 JSON 结果。
 
 ## 独立环境
 
@@ -14,7 +11,7 @@ pip install gplearn scikit-learn pandas
 pip install -e .
 ```
 
-## Manifest 运行
+## manifest 运行
 
 ```bash
 conda run -n gplearn python scripts/run_gplearn_baseline.py \
@@ -23,7 +20,7 @@ conda run -n gplearn python scripts/run_gplearn_baseline.py \
   --root data/benchmark_suites \
   --generations 20 \
   --population_size 1000 \
-  --out results/external_baselines \
+  --out results/baselines_current \
   --tag gplearn_formula_dev
 ```
 

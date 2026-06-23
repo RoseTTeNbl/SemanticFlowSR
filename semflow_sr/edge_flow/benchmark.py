@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 import json
+import math
 from pathlib import Path
+import re
 from typing import Any
 
 import sympy as sp
@@ -72,6 +75,12 @@ def summarize_benchmark_records(records: list[dict[str, Any]]) -> dict[str, Any]
         "nmse_mean": stats["nmse_mean"],
         "solution_rate": stats["solution_rate"],
         "skeleton_accuracy": stats["skeleton_accuracy"],
+        "simplified_symbolic_equivalence_rate": stats["simplified_symbolic_equivalence_rate"],
+        "operator_dependency_accuracy": stats["operator_dependency_accuracy"],
+        "accurate_0_1": stats["solution_rate"],
+        "formula_bleu_mean": stats["formula_bleu_mean"],
+        "formula_token_accuracy_mean": stats["formula_token_accuracy_mean"],
+        "formula_edit_distance_mean": stats["formula_edit_distance_mean"],
         "complexity_mean": stats["complexity_mean"],
         "valid_expression_fraction_mean": stats["valid_expression_fraction_mean"],
         "unique_expression_fraction_mean": stats["unique_expression_fraction_mean"],
@@ -104,7 +113,13 @@ def _aggregate(records: list[dict[str, Any]]) -> dict[str, Any]:
         "r2_mean": _mean(records, "r2"),
         "nmse_mean": _mean(records, "nmse"),
         "solution_rate": _mean_bool(records, "solved"),
+        "accurate_0_1": _mean_bool(records, "solved"),
         "skeleton_accuracy": _mean_bool(records, "skeleton_match"),
+        "simplified_symbolic_equivalence_rate": _mean_bool(records, "simplified_symbolic_equivalence"),
+        "operator_dependency_accuracy": _mean_bool(records, "operator_dependency_match"),
+        "formula_bleu_mean": _mean(records, "formula_bleu"),
+        "formula_token_accuracy_mean": _mean(records, "formula_token_accuracy"),
+        "formula_edit_distance_mean": _mean(records, "formula_edit_distance"),
         "complexity_mean": _mean(records, "complexity"),
         "reward_mean": _mean(records, "reward"),
         "valid_expression_fraction_mean": _mean(records, "valid_expression_fraction"),
@@ -120,9 +135,18 @@ def _write_task_expressions(records: list[dict[str, Any]], path: Path) -> None:
         "ground_truth",
         "expression",
         "raw_expression",
+        "head_fit_mode",
+        "selected_head_term_index",
         "gt_skeleton",
         "pred_skeleton",
         "skeleton_match",
+        "simplified_symbolic_equivalence",
+        "operator_dependency_gt",
+        "operator_dependency_pred",
+        "operator_dependency_match",
+        "formula_bleu",
+        "formula_token_accuracy",
+        "formula_edit_distance",
         "r2",
         "nmse",
         "reward",
@@ -130,6 +154,7 @@ def _write_task_expressions(records: list[dict[str, Any]], path: Path) -> None:
         "raw_test_r2_without_affine",
         "calibration_gain",
         "train_test_r2_gap",
+        "active_variable_count",
         "used_variable_count",
         "root_operator",
         "output_depth",
@@ -140,6 +165,7 @@ def _write_task_expressions(records: list[dict[str, Any]], path: Path) -> None:
         "theta_star_projection_drop",
         "valid_expression_fraction",
         "unique_expression_fraction",
+        "decision_entropy_mean",
     ]
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
@@ -176,7 +202,13 @@ def _write_group_stats(rows: list[dict[str, Any]], path: Path) -> None:
         "r2_mean",
         "nmse_mean",
         "solution_rate",
+        "accurate_0_1",
         "skeleton_accuracy",
+        "simplified_symbolic_equivalence_rate",
+        "operator_dependency_accuracy",
+        "formula_bleu_mean",
+        "formula_token_accuracy_mean",
+        "formula_edit_distance_mean",
         "complexity_mean",
         "reward_mean",
         "valid_expression_fraction_mean",
@@ -210,11 +242,28 @@ def _diagnostic_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "projection_target_ess",
         "calibration_gain",
         "train_test_r2_gap",
+        "head_fit_mode",
+        "selected_head_term_index",
+        "active_variable_count",
         "used_variable_count",
+        "decision_entropy_mean",
         "operator_histogram",
+        "formula_bleu",
+        "formula_token_accuracy",
+        "formula_edit_distance",
+        "base_head_selected_rate",
+        "head_coef_nonzero_count",
+        "head_coef_norm",
+        "fitted_head_gain",
+        "best_raw_term_r2",
+        "gt_compile_success_rate",
         "template_num_edge_groups",
         "template_candidate_count_mean",
         "template_candidate_count_max",
+        "simplified_symbolic_equivalence",
+        "operator_dependency_match",
+        "operator_dependency_gt",
+        "operator_dependency_pred",
     }
     return [{key: _jsonable(row.get(key)) for key in sorted(keys) if key in row} for row in records]
 
@@ -233,12 +282,19 @@ def _pad_features(x: torch.Tensor, template_num_vars: int) -> torch.Tensor:
 def with_skeleton_metrics(row: dict[str, Any]) -> dict[str, Any]:
     out = dict(row)
     gt = str(out.get("ground_truth", "") or "")
-    pred = str(out.get("raw_expression", "") or out.get("expression", "") or "")
+    pred = str(out.get("expression", "") or out.get("raw_expression", "") or "")
     gt_skeleton = expression_skeleton(gt)
     pred_skeleton = expression_skeleton(pred)
     out["gt_skeleton"] = gt_skeleton
     out["pred_skeleton"] = pred_skeleton
     out["skeleton_match"] = bool(gt_skeleton and pred_skeleton and gt_skeleton == pred_skeleton)
+    out["simplified_symbolic_equivalence"] = bool(simplified_symbolic_equivalence(gt, pred))
+    gt_dep = operator_dependency_signature(gt)
+    pred_dep = operator_dependency_signature(pred)
+    out["operator_dependency_gt"] = gt_dep
+    out["operator_dependency_pred"] = pred_dep
+    out["operator_dependency_match"] = bool(gt_dep and pred_dep and gt_dep == pred_dep)
+    out.update(token_sequence_metrics(gt, pred))
     return out
 
 
@@ -246,6 +302,98 @@ def skeleton_match(ground_truth: str, generated: str) -> bool:
     gt = expression_skeleton(ground_truth)
     pred = expression_skeleton(generated)
     return bool(gt and pred and gt == pred)
+
+
+def simplified_symbolic_equivalence(ground_truth: str, generated: str) -> bool:
+    try:
+        gt = sp.sympify(str(ground_truth or ""), locals={"Abs": sp.Abs})
+        pred = sp.sympify(str(generated or ""), locals={"Abs": sp.Abs})
+        return bool(sp.simplify(sp.expand(gt - pred)) == 0)
+    except Exception:
+        return False
+
+
+def operator_dependency_signature(expr_text: str) -> str:
+    text = str(expr_text or "").strip()
+    if not text:
+        return ""
+    try:
+        expr = sp.sympify(text, locals={"Abs": sp.Abs})
+    except Exception:
+        return ""
+    ops: Counter[str] = Counter()
+    vars_seen: set[str] = set()
+    _collect_operator_dependency(expr, ops, vars_seen)
+    if not ops and not vars_seen:
+        return "ops[]|vars[]"
+    op_text = ",".join(f"{key}:{ops[key]}" for key in sorted(ops))
+    var_text = ",".join(sorted(vars_seen))
+    return f"ops[{op_text}]|vars[{var_text}]"
+
+
+def token_sequence_metrics(ground_truth: str, generated: str) -> dict[str, float]:
+    gt = _formula_tokens(ground_truth)
+    pred = _formula_tokens(generated)
+    if not gt or not pred:
+        return {
+            "formula_bleu": 0.0,
+            "formula_token_accuracy": 0.0,
+            "formula_edit_distance": float(len(gt) or len(pred)),
+        }
+    correct = sum(1 for a, b in zip(gt, pred) if a == b)
+    token_acc = float(correct / max(len(gt), 1))
+    edit = float(_levenshtein(gt, pred))
+    bleu = _simple_bleu(gt, pred)
+    return {
+        "formula_bleu": float(bleu),
+        "formula_token_accuracy": float(token_acc),
+        "formula_edit_distance": edit,
+    }
+
+
+def _formula_tokens(text: str) -> list[str]:
+    return re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*|\d+\.\d+|\d+|\*\*|[()+\-*/]", str(text or ""))
+
+
+def _simple_bleu(reference: list[str], candidate: list[str], max_n: int = 4) -> float:
+    if not reference or not candidate:
+        return 0.0
+    precisions = []
+    for n in range(1, int(max_n) + 1):
+        ref_counts = _ngram_counts(reference, n)
+        cand_counts = _ngram_counts(candidate, n)
+        total = sum(cand_counts.values())
+        if total <= 0:
+            precisions.append(1e-9)
+            continue
+        overlap = sum(min(count, ref_counts.get(key, 0)) for key, count in cand_counts.items())
+        precisions.append(max(float(overlap / total), 1e-9))
+    brevity = 1.0 if len(candidate) >= len(reference) else math.exp(1.0 - float(len(reference)) / max(len(candidate), 1))
+    return float(brevity * math.exp(sum(math.log(p) for p in precisions) / len(precisions)))
+
+
+def _ngram_counts(tokens: list[str], n: int) -> dict[tuple[str, ...], int]:
+    if len(tokens) < int(n):
+        return {}
+    out: dict[tuple[str, ...], int] = {}
+    for idx in range(0, len(tokens) - int(n) + 1):
+        key = tuple(tokens[idx:idx + int(n)])
+        out[key] = out.get(key, 0) + 1
+    return out
+
+
+def _levenshtein(a: list[str], b: list[str]) -> int:
+    prev = list(range(len(b) + 1))
+    for i, tok_a in enumerate(a, start=1):
+        cur = [i] + [0 for _ in b]
+        for j, tok_b in enumerate(b, start=1):
+            cur[j] = min(
+                prev[j] + 1,
+                cur[j - 1] + 1,
+                prev[j - 1] + (0 if tok_a == tok_b else 1),
+            )
+        prev = cur
+    return int(prev[-1])
 
 
 def expression_skeleton(expr_text: str) -> str:
@@ -271,7 +419,7 @@ def _skeleton_node(expr: sp.Expr) -> str:
     if expr.func == sp.Abs:
         return _skeleton_node(expr.args[0])
     if expr.is_Add:
-        parts = [_skeleton_node(arg) for arg in expr.args if not _is_numeric_only(arg)]
+        parts = [_skeleton_node(arg) for arg in expr.args if not _is_numeric_only(arg) and not _is_tiny_term(arg)]
         parts = [part for part in parts if part and part != "C"]
         if not parts:
             return "C"
@@ -299,6 +447,18 @@ def _is_numeric_only(expr: sp.Expr) -> bool:
     return not getattr(expr, "free_symbols", set())
 
 
+def _is_tiny_term(expr: sp.Expr, tol: float = 1e-6) -> bool:
+    if _is_numeric_only(expr):
+        return False
+    try:
+        coeff, rest = sp.sympify(expr).as_coeff_Mul()
+        if rest == 1:
+            return False
+        return bool(abs(float(coeff.evalf())) <= float(tol))
+    except Exception:
+        return False
+
+
 def _func_name(expr: sp.Expr) -> str:
     name = getattr(expr.func, "__name__", str(expr.func))
     return {
@@ -316,6 +476,40 @@ def _exponent_skeleton(exponent: sp.Expr) -> str:
     if exponent.is_Rational and abs(int(exponent.p)) <= 8 and 1 < int(exponent.q) <= 8:
         return f"{int(exponent.p)}/{int(exponent.q)}"
     return "C"
+
+
+def _collect_operator_dependency(expr: sp.Expr, ops: Counter[str], vars_seen: set[str]) -> None:
+    expr = sp.sympify(expr)
+    if expr.is_Number:
+        return
+    if expr.is_Symbol:
+        vars_seen.add(str(expr))
+        return
+    if expr.func == sp.Abs:
+        _collect_operator_dependency(expr.args[0], ops, vars_seen)
+        return
+    if expr.is_Add:
+        parts = [arg for arg in expr.args if not _is_numeric_only(arg) and not _is_tiny_term(arg)]
+        if len(parts) > 1:
+            ops["add"] += 1
+        for arg in parts:
+            _collect_operator_dependency(arg, ops, vars_seen)
+        return
+    if expr.is_Mul:
+        parts = [arg for arg in expr.args if not _is_numeric_only(arg) and not _is_tiny_term(arg)]
+        if len(parts) > 1:
+            ops["mul"] += 1
+        for arg in parts:
+            _collect_operator_dependency(arg, ops, vars_seen)
+        return
+    if expr.is_Pow:
+        base, exponent = expr.args
+        ops[f"pow:{_exponent_skeleton(exponent)}"] += 1
+        _collect_operator_dependency(base, ops, vars_seen)
+        return
+    ops[_func_name(expr)] += 1
+    for arg in expr.args:
+        _collect_operator_dependency(arg, ops, vars_seen)
 
 
 def _mean(records: list[dict[str, Any]], key: str) -> float:

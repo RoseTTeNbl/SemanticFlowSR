@@ -1,0 +1,58 @@
+seed: 0
+algorithm: conditional_semantic_edge_flow
+out: checkpoints
+checkpoint_name: conditional_edge_flow_nguyen_constant_carry_linear_e10_s32_gpu.pt
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 1
+  device: cuda:1
+data:
+  source: benchmark_87
+  manifest: data/benchmark_suites/benchmark_manifest.json
+  manifest_root: data/benchmark_suites
+  suites:
+    - nguyen
+    - constant
+  legacy_87: true
+  feynman_root: data/materialized/feynman
+  max_train_points: 96
+template:
+  num_vars: 3
+  num_registers: 8
+  num_layers: 3
+  mixture_modes: 1
+  primitives:
+    - add
+    - sub
+    - mul
+    - protected_div
+    - sin
+    - cos
+    - square
+    - cube
+    - protected_log
+    - protected_sqrt
+model:
+  hidden: 96
+  head_terms: 3
+  branches_per_register: 1
+  update_mode: carry_write
+  write_registers_per_layer: 4
+train:
+  epochs: 10
+  samples_per_task: 32
+  elite_k: 4
+  elite_rank_temperature: 0.05
+  sampler_method: policy
+  flow_steps: 1
+  validation_fraction: 0.25
+  complexity_weight: 0.001
+  lr: 0.001
+  grad_clip: 1.0
+  task_batch_size: 4
+  replay_capacity: 64
+  replay_ratio: 0.5
+  head_fit_mode: linear
+  unique_elites: true
+  entropy_bonus: 0.001
+  inject_gt_elite: false

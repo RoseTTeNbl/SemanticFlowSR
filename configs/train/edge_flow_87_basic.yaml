@@ -1,4 +1,5 @@
 seed: 0
+algorithm: fixed_theta_edge_flow
 out: checkpoints
 checkpoint_name: edge_flow_87_basic.pt
 runtime:

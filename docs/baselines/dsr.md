@@ -1,6 +1,6 @@
 # DSR / DSO
 
-Deep Symbolic Regression / Optimization。依赖较旧，建议独立环境。
+Deep Symbolic Regression / Optimization。建议在独立环境运行。
 
 ## 环境
 
@@ -13,7 +13,7 @@ cd -
 pip install -e .
 ```
 
-## Manifest 运行
+## manifest 运行
 
 ```bash
 conda run -n dso37 python scripts/run_dsr_baseline.py \
@@ -21,7 +21,7 @@ conda run -n dso37 python scripts/run_dsr_baseline.py \
   --suite nguyen constant livermore jin \
   --root data/benchmark_suites \
   --n_samples 100000 \
-  --out results/external_baselines \
+  --out results/baselines_current \
   --tag dso_formula_dev
 ```
 

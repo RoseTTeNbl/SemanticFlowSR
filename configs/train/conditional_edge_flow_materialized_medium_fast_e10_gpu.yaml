@@ -1,0 +1,72 @@
+seed: 0
+algorithm: conditional_semantic_edge_flow
+out: checkpoints
+checkpoint_name: conditional_edge_flow_materialized_medium_fast_e10_gpu.pt
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 1
+  device: cuda:1
+data:
+  source: mixed
+  manifest: data/benchmark_suites/benchmark_manifest.json
+  manifest_root: data/benchmark_suites
+  suites:
+    - nguyen
+    - constant
+    - livermore
+    - jin
+    - srsd_feynman_easy
+    - srsd_feynman_medium
+    - srsd_feynman_hard
+  legacy_87: false
+  feynman_root: data/materialized/feynman
+  limit_tasks: 80
+  max_train_points: 100
+  synthetic_tasks: 50
+template:
+  num_vars: 8
+  num_registers: 12
+  num_layers: 3
+  mixture_modes: 1
+  primitives:
+    - add
+    - sub
+    - mul
+    - protected_div
+    - sin
+    - cos
+    - square
+    - cube
+    - protected_log
+    - protected_sqrt
+model:
+  hidden: 64
+  head_terms: 1
+  branches_per_register: 1
+  update_mode: replace
+gen:
+  num_vars_min: 1
+  num_vars_max: 5
+  max_depth: 4
+  probe_size: 100
+  x_range:
+    - -2.0
+    - 2.0
+train:
+  epochs: 10
+  samples_per_task: 8
+  elite_k: 2
+  elite_rank_temperature: 0.05
+  sampler_method: policy
+  flow_steps: 2
+  validation_fraction: 0.25
+  complexity_weight: 0.001
+  lr: 0.001
+  grad_clip: 1.0
+  task_batch_size: 4
+  replay_capacity: 64
+  replay_ratio: 0.5
+  head_fit_mode: selector
+  unique_elites: true
+  entropy_bonus: 0.002
+  inject_gt_elite: true

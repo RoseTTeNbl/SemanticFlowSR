@@ -1,0 +1,89 @@
+seed: 0
+algorithm: conditional_semantic_edge_flow
+out: checkpoints/teacher_path_geometry
+checkpoint_name: conditional_edge_flow_gt_sampler_teacher_path_semantic_cpu.pt
+runtime:
+  torch_num_threads: 4
+  torch_num_interop_threads: 1
+  device: cpu
+data:
+  source: symbolicgpt_subset
+  root: data/generated/symbolicgpt_subset
+  splits:
+    - train
+  validation_splits:
+    - val
+  early_stopping_limit_tasks: 160
+  limit_tasks: 747
+  train_fraction: 0.8
+  max_train_points: 64
+template:
+  num_vars: 3
+  num_registers: 12
+  num_layers: 4
+  mixture_modes: 1
+  primitives:
+    - add
+    - sub
+    - mul
+    - protected_div
+    - sin
+    - cos
+    - square
+    - cube
+    - protected_log
+    - protected_sqrt
+model:
+  hidden: 128
+  head_terms: 3
+  branches_per_register: 1
+  update_mode: carry_write
+  write_registers_per_layer: 6
+  task_encoder: pointnet
+  exclude_base_head_candidates: true
+  enable_keep_option: true
+  mask_duplicate_branches: true
+  include_base_source_pool: false
+train:
+  epochs: 10
+  samples_per_task: 0
+  elite_k: 1
+  objective: semantic_teacher
+  elite_rank_temperature: 0.05
+  sampler_method: policy
+  flow_steps: 1
+  validation_fraction: 0.25
+  complexity_weight: 0.0
+  semantic_beta: 1.0
+  structure_beta: 4.0
+  posterior_complexity_beta: 0.0
+  teacher_beta: 1.0
+  teacher_smoothing: 0.03
+  teacher_pinv_rtol: 0.01
+  teacher_velocity_clip: 5.0
+  teacher_path_geometry: semantic
+  probability_path_geometry: fisher
+  semantic_calibration_gamma: 1.0
+  teacher_loss_weight: 1.0
+  active_nll_weight: 0.0
+  teacher_time_sampling: uniform
+  lr: 0.001
+  grad_clip: 1.0
+  task_batch_size: 8
+  replay_capacity: 0
+  replay_ratio: 0.0
+  head_fit_mode: linear
+  unique_elites: true
+  entropy_bonus: 0.001
+  inject_gt_elite: true
+  target_shape_source: structural_denoising
+  teacher_target_mode: structural_denoising
+  gt_neighborhood_size: 16
+  gt_neighborhood_op_replace_prob: 0.3
+  gt_neighborhood_source_replace_prob: 0.3
+  reward_mle_weight: 0.0
+  early_stopping_patience: 0
+  early_stopping_samples: 0
+  proposal_sources: []
+  proposal_count: 0
+  proposal_compile_only_trainable: true

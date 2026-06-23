@@ -23,6 +23,7 @@ class EdgeFlowBuildConfig:
     complexity_weight: float = 0.001
     projection_mode: str = "global_topk"
     validation_fraction: float = 0.0
+    head_fit_mode: str = "linear"
 
 
 @dataclass
@@ -117,10 +118,13 @@ def _target_rewards(
     y: torch.Tensor,
     cfg: EdgeFlowBuildConfig,
 ) -> tuple[RewardBatch, dict]:
-    reward_cfg = RewardConfig(complexity_weight=cfg.complexity_weight)
+    reward_cfg = RewardConfig(complexity_weight=cfg.complexity_weight, head_fit_mode=cfg.head_fit_mode)
     frac = max(0.0, min(float(cfg.validation_fraction), 0.9))
     if frac <= 0.0 or x.shape[0] < 8:
-        return evaluate_expression_rewards(samples, x, y, reward_cfg), {"reward_validation_fraction": 0.0}
+        rewards = evaluate_expression_rewards(samples, x, y, reward_cfg)
+        diag = _reward_proxy_diagnostics(rewards)
+        diag["reward_validation_fraction"] = 0.0
+        return rewards, diag
     cut = max(2, int(round(float(x.shape[0]) * (1.0 - frac))))
     cut = min(cut, int(x.shape[0]) - 2)
     train_rewards = evaluate_expression_rewards(samples, x[:cut], y[:cut], reward_cfg)
@@ -135,10 +139,26 @@ def _target_rewards(
         valid_mask=valid,
         affine_coef=train_rewards.affine_coef,
         complexity=train_rewards.complexity,
+        selected_term_index=train_rewards.selected_term_index,
+        best_raw_term_r2=train_rewards.best_raw_term_r2,
+        fitted_head_gain=train_rewards.fitted_head_gain,
+        head_coef_nonzero_count=train_rewards.head_coef_nonzero_count,
+        head_coef_norm=train_rewards.head_coef_norm,
     )
     gap = (train_rewards.r2 - val_rewards.r2).abs()
-    return out, {
+    diag = _reward_proxy_diagnostics(out)
+    diag.update({
         "reward_validation_fraction": float(frac),
         "target_reward_train_val_gap_mean": float(gap.mean().item()) if gap.numel() else 0.0,
         "target_reward_train_val_gap_max": float(gap.max().item()) if gap.numel() else 0.0,
+    })
+    return out, diag
+
+
+def _reward_proxy_diagnostics(rewards: RewardBatch) -> dict:
+    return {
+        "best_raw_term_r2_mean": float(rewards.best_raw_term_r2.mean().item()) if rewards.best_raw_term_r2.numel() else 0.0,
+        "fitted_head_gain_mean": float(rewards.fitted_head_gain.mean().item()) if rewards.fitted_head_gain.numel() else 0.0,
+        "head_coef_nonzero_mean": float(rewards.head_coef_nonzero_count.float().mean().item()) if rewards.head_coef_nonzero_count.numel() else 0.0,
+        "head_coef_norm_mean": float(rewards.head_coef_norm.mean().item()) if rewards.head_coef_norm.numel() else 0.0,
     }

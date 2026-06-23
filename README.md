@@ -1,37 +1,38 @@
 # SemanticFlowSR
 
-SemanticFlowSR is currently centered on:
+SemanticFlowSR 当前聚焦于：
 
 ```text
-Edge-Parameterized Semantic Flow Matching
+Conditional Semantic Edge Flow, CSEF
 ```
 
-The mainline no longer trains a local action policy. It builds a
-register-operator circuit template, places a product-of-simplexes edge
-distribution over complete expression DAGs, samples complete expressions,
-projects reward elites to an edge target, and trains a flow on edge
-probabilities.
+CSEF 在表达式构造图的显式 categorical 概率形上做 flow matching。GT 先编译为 canonical 构造路径，GT-neighborhood 只提供 noisy context，目标概率形 `P_1` 直接流向 clean GT decision 的 smoothed one-hot。隐参数网络 `psi` 根据当前任务、寄存器语义、构造前缀、当前概率状态 `p_t` 和时间 `t` 预测局部速度。语义只作为网络输入和速度误差校准，不进入 Fisher-Rao teacher path。
 
-For a new coding session, read [AGENTS.md](AGENTS.md), then
-[docs/ALGORITHM.md](docs/ALGORITHM.md) and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Current Algorithm
+建议新会话先读：
 
 ```text
-data D=(X,y)
+AGENTS.md
+docs/ALGORITHM.md
+docs/ARCHITECTURE.md
+docs/MATH.md
+docs/RESULTS.md
+```
+
+## 当前流程
+
+```text
+D=(X,y, optional GT)
 -> RegisterOperatorTemplate
--> EdgeDistribution Theta0
--> sample complete expressions from q_Theta
--> reward complete expressions
--> project elites to Theta*
--> build Fisher square-root teacher path
--> train EdgeFlowModel on dot z
--> infer by integrating Theta and sampling complete expressions
+-> ConditionalEdgeFlowModel
+-> GT compiler builds canonical CSEF paths
+-> GT-neighborhood samples noisy symbolic contexts
+-> clean GT decisions define target probability shape P_1
+-> sample P_0 and t
+-> build Fisher or Euclidean p_0 -> p_t -> teacher velocity
+-> recompute model velocity at the same p_t,t
+-> train semantic-calibrated velocity matching
+-> evaluate with sparse linear head fitting and structure-prior rerank
 ```
-
-Old action-level SFFM/TSSF code remains for legacy diagnostics, but it is not
-the current main algorithm.
 
 ## Environment
 
@@ -46,73 +47,98 @@ pip install deap gplearn
 pip install -e .
 ```
 
-## Quick Commands
+## Main Commands
+
+Fisher probability-shape training:
 
 ```bash
-# Current Edge Flow unit tests.
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
-  pytest -q tests/test_edge_flow_core.py tests/test_edge_flow_training.py
-
-# Smoke train. This is not full training.
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
+conda run --no-capture-output -n semflow \
   python -m semflow_sr.edge_flow.train_edge_flow \
-  --config configs/train/edge_flow_smoke.yaml
-
-# Smoke evaluate.
-env OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4 NUMEXPR_NUM_THREADS=4 \
-  taskset -c 0-3 conda run -n semflow \
-  python scripts/run_edge_flow.py \
-  --ckpt checkpoints/edge_flow_smoke.pt \
-  --out results/edge_flow_smoke \
-  --tag edge_flow_smoke
-
-# Validate the unified benchmark manifest before future full experiments.
-conda run -n semflow python scripts/validate_benchmark_manifest.py \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --root data/benchmark_suites \
-  --out results/dataset_validation \
-  --fail-on-error
+  --config configs/train/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.yaml
 ```
 
-## Main Code Map
+Euclidean probability-coordinate ablation:
+
+```bash
+conda run --no-capture-output -n semflow \
+  python -m semflow_sr.edge_flow.train_edge_flow \
+  --config configs/train/conditional_edge_flow_gt_sampler_teacher_path_euclidean_gpu.yaml
+```
+
+Fisher evaluation:
+
+```bash
+conda run --no-capture-output -n semflow python scripts/run_edge_flow.py \
+  --ckpt checkpoints/teacher_path_geometry/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.pt \
+  --out results/teacher_path_geometry_fisher_gpu \
+  --tag teacher_path_geometry_fisher_gpu \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --manifest_root data/benchmark_suites \
+  --manifest_suite nguyen constant livermore jin \
+  --eval_samples 64 \
+  --flow_steps 1 \
+  --sampler_method policy \
+  --head_fit_mode linear \
+  --device cuda:1
+```
+
+Euclidean evaluation:
+
+```bash
+conda run --no-capture-output -n semflow python scripts/run_edge_flow.py \
+  --ckpt checkpoints/teacher_path_geometry/conditional_edge_flow_gt_sampler_teacher_path_euclidean_gpu.pt \
+  --out results/teacher_path_geometry_euclidean_gpu_20260623 \
+  --tag teacher_path_geometry_euclidean_gpu_20260623 \
+  --manifest data/benchmark_suites/benchmark_manifest.json \
+  --manifest_root data/benchmark_suites \
+  --manifest_suite nguyen constant livermore jin \
+  --eval_samples 64 \
+  --flow_steps 1 \
+  --sampler_method policy \
+  --head_fit_mode linear \
+  --device cuda:1
+```
+
+Build comparison metrics and figures:
+
+```bash
+conda run --no-capture-output -n semflow python scripts/archive_paper_metrics.py \
+  --out results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623 \
+  --suite nguyen constant livermore jin \
+  --bootstrap_samples 1000 \
+  --method CSEF-Fisher SFSR sfsr_method samples_jsonl results/teacher_path_geometry_fisher_gpu/teacher_path_geometry_fisher_gpu_samples.jsonl \
+  --method CSEF-Euclidean SFSR sfsr_method samples_jsonl results/teacher_path_geometry_euclidean_gpu_20260623/teacher_path_geometry_euclidean_gpu_20260623_samples.jsonl
+```
+
+Regression tests:
+
+```bash
+CUDA_VISIBLE_DEVICES=2 conda run --no-capture-output -n semflow \
+  pytest tests/test_edge_flow_core.py tests/test_edge_flow_training.py \
+         tests/test_external_adapter_outputs.py tests/test_paper_metrics.py -q
+```
+
+## Code Map
 
 | Purpose | File |
 |---|---|
-| Template and edge groups | `semflow_sr/edge_flow/template.py` |
-| Edge distribution | `semflow_sr/edge_flow/edge_distribution.py` |
-| Complete DAG sampler | `semflow_sr/edge_flow/circuit_sampler.py` |
-| Complete-expression reward | `semflow_sr/edge_flow/reward.py` |
-| Elite projection | `semflow_sr/edge_flow/projection.py` |
-| Fisher-slerp teacher | `semflow_sr/edge_flow/flow_teacher.py` |
-| Training records | `semflow_sr/edge_flow/dataset.py` |
-| Edge-flow model/loss | `semflow_sr/edge_flow/model.py` |
-| Smoke trainer | `semflow_sr/edge_flow/train_edge_flow.py` |
-| Smoke evaluator | `scripts/run_edge_flow.py` |
+| Template and register metadata | `semflow_sr/edge_flow/template.py` |
+| Conditional CSEF model and sampler | `semflow_sr/edge_flow/conditional.py` |
+| Probability-shape teacher velocity and semantic calibration | `semflow_sr/edge_flow/semantic_teacher.py` |
+| GT-neighborhood noisy-context sampler | `semflow_sr/edge_flow/gt_neighborhood.py` |
+| Formula-to-CSEF compiler | `semflow_sr/edge_flow/path_compiler.py` |
+| Reward and sparse head fitting | `semflow_sr/edge_flow/reward.py` |
+| Structure-prior rerank score | `semflow_sr/edge_flow/selection.py` |
+| Benchmark loading and result writing | `semflow_sr/edge_flow/benchmark.py` |
+| Training CLI | `semflow_sr/edge_flow/train_edge_flow.py` |
+| Evaluation CLI | `scripts/run_edge_flow.py` |
+| Paper metrics bundle builder | `scripts/archive_paper_metrics.py` |
 
-## Results
+## Current Results
 
-Current tracked result is smoke-only:
-
-```text
-results/edge_flow_smoke/
-```
-
-It verifies the new path can run end to end. It is not a benchmark result.
-
-## Legacy Code
-
-The old action-level and block-flow code paths remain available for regression
-comparison:
+Current comparison is recorded in [docs/RESULTS.md](docs/RESULTS.md).
 
 ```text
-semflow_sr/path_posterior/
-semflow_sr/train/train_path_posterior_flow.py
-scripts/run_path_posterior_flow.py
-semflow_sr/train/train_block_flow.py
-scripts/run_block_risk_flow.py
+Fisher:    R2 mean 0.937383, solution rate 0.323529, skeleton accuracy 0.029412
+Euclidean: R2 mean 0.940868, solution rate 0.294118, skeleton accuracy 0.0
 ```
-
-Do not treat them as the current algorithm unless the user explicitly asks for
-a legacy comparison.

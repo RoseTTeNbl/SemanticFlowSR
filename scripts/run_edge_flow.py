@@ -18,12 +18,20 @@ from semflow_sr.edge_flow.benchmark import (
     write_benchmark_result_files,
 )
 from semflow_sr.edge_flow.circuit_sampler import CircuitSampler
+from semflow_sr.edge_flow.conditional import (
+    ConditionalEdgeFlowConfig,
+    ConditionalEdgeFlowModel,
+    ConditionalEdgeFlowSampler,
+    render_sparse_expression,
+)
 from semflow_sr.edge_flow.dataset import EdgeFlowRecord
 from semflow_sr.edge_flow.edge_distribution import EdgeDistribution
 from semflow_sr.edge_flow.model import EdgeFlowModel, EdgeFlowModelConfig
 from semflow_sr.edge_flow.projection import project_elites_to_edge_target
 from semflow_sr.edge_flow.reward import RewardConfig, evaluate_expression_rewards
+from semflow_sr.edge_flow.selection import structure_prior_scores
 from semflow_sr.edge_flow.template import RegisterOperatorTemplate
+from semflow_sr.edge_flow.train_edge_flow import _resolve_device
 from semflow_sr.eval.metrics import accuracy_rate, nmse, r2_score
 from semflow_sr.sr.ast import Expr, eval_expr
 from semflow_sr.sr.ops import get_op
@@ -53,6 +61,11 @@ def main() -> None:
     parser.add_argument("--target_smoothing", type=float, default=0.01)
     parser.add_argument("--projection_mode", default="global_topk")
     parser.add_argument("--selection_eta_logprob", type=float, default=0.0)
+    parser.add_argument("--sampler_method", default="policy", choices=["policy", "natural", "natural_policy", "ode"])
+    parser.add_argument("--postprocess_top_k", type=int, default=32)
+    parser.add_argument("--selection_validation_fraction", type=float, default=0.25)
+    parser.add_argument("--head_fit_mode", default="linear")
+    parser.add_argument("--device", default="auto")
     args = parser.parse_args()
 
     result = run(args)
@@ -67,6 +80,9 @@ def run(args) -> dict:
         **ckpt["template"],
         "primitives": tuple(ckpt["template"]["primitives"]),
     })
+    algorithm = str(ckpt.get("algorithm", "fixed_theta_edge_flow"))
+    if algorithm == "conditional_semantic_edge_flow":
+        return _run_conditional(args, ckpt, template)
     model = EdgeFlowModel(EdgeFlowModelConfig(**ckpt["model_cfg"]))
     model.load_state_dict(ckpt["model"])
     model.eval()
@@ -137,6 +153,355 @@ def run(args) -> dict:
             ))
     summary = summarize_benchmark_records(records)
     return {"summary": summary, "records": records}
+
+
+def _run_conditional(args, ckpt: dict, template: RegisterOperatorTemplate) -> dict:
+    device = _resolve_device({"device": getattr(args, "device", "auto")})
+    model = ConditionalEdgeFlowModel(ConditionalEdgeFlowConfig(**ckpt["model_cfg"]))
+    model.load_state_dict(ckpt["model"], strict=False)
+    model.to(device)
+    model.eval()
+    rng = random.Random(int(args.seed))
+    records = []
+    if args.manifest:
+        tasks = load_edge_flow_benchmark_tasks(
+            manifest=args.manifest,
+            suites=list(args.manifest_suite or []),
+            root=args.manifest_root,
+            seed=int(args.seed),
+            legacy_87=bool(args.legacy_87),
+            feynman_root=args.feynman_root,
+            limit=args.limit_tasks,
+        )
+        for task in tasks:
+            x_train, y_train, x_test, y_test = task_tensors(task, template_num_vars=template.num_vars)
+            x_train = x_train.to(device)
+            y_train = y_train.to(device)
+            x_test = x_test.to(device)
+            y_test = y_test.to(device)
+            records.append(_evaluate_conditional_dataset_task(
+                model,
+                template,
+                task_id=task.name,
+                suite=str(task.metadata.get("suite", "unknown")),
+                num_vars=int(task.X_train.shape[1]),
+                ground_truth=task.expression or task.metadata.get("ground_truth", ""),
+                variable_names=list(task.variable_names),
+                x_train=x_train,
+                y_train=y_train,
+                x_test=x_test,
+                y_test=y_test,
+                rng=rng,
+                eval_samples=int(args.eval_samples),
+                flow_steps=int(args.flow_steps),
+                complexity_weight=float(args.complexity_weight),
+                decoder_budgets=list(args.decoder_budgets or []),
+                selection_eta_logprob=float(args.selection_eta_logprob),
+                sampler_method=str(getattr(args, "sampler_method", "policy")),
+                postprocess_top_k=int(getattr(args, "postprocess_top_k", 32)),
+                selection_validation_fraction=float(getattr(args, "selection_validation_fraction", 0.25)),
+                head_fit_mode=str(getattr(args, "head_fit_mode", "linear")),
+            ))
+    else:
+        for idx in range(int(args.num_tasks)):
+            expr, x, y = _task(template, rng)
+            x = x.to(device)
+            y = y.to(device)
+            records.append(_evaluate_conditional_dataset_task(
+                model,
+                template,
+                task_id=f"synthetic_{idx}",
+                suite="synthetic",
+                num_vars=template.num_vars,
+                ground_truth=to_string(expr, template.num_vars, simplify=True),
+                variable_names=[f"x{i}" for i in range(template.num_vars)],
+                x_train=x,
+                y_train=y,
+                x_test=x,
+                y_test=y,
+                rng=rng,
+                eval_samples=int(args.eval_samples),
+                flow_steps=int(args.flow_steps),
+                complexity_weight=float(args.complexity_weight),
+                decoder_budgets=list(args.decoder_budgets or []),
+                selection_eta_logprob=float(args.selection_eta_logprob),
+                sampler_method=str(getattr(args, "sampler_method", "policy")),
+                postprocess_top_k=int(getattr(args, "postprocess_top_k", 32)),
+                selection_validation_fraction=float(getattr(args, "selection_validation_fraction", 0.25)),
+                head_fit_mode=str(getattr(args, "head_fit_mode", "linear")),
+            ))
+    return {"summary": summarize_benchmark_records(records), "records": records}
+
+
+def _evaluate_conditional_dataset_task(
+    model: ConditionalEdgeFlowModel,
+    template: RegisterOperatorTemplate,
+    *,
+    task_id: str,
+    suite: str,
+    num_vars: int,
+    ground_truth: str | None,
+    variable_names: list[str],
+    x_train: torch.Tensor,
+    y_train: torch.Tensor,
+    x_test: torch.Tensor,
+    y_test: torch.Tensor,
+    rng: random.Random,
+    eval_samples: int,
+    flow_steps: int,
+    complexity_weight: float,
+    decoder_budgets: list[int],
+    selection_eta_logprob: float,
+    sampler_method: str,
+    postprocess_top_k: int,
+    selection_validation_fraction: float,
+    head_fit_mode: str,
+) -> dict:
+    samples, train_rewards, best = _conditional_sample_and_select(
+        model,
+        template,
+        x_train,
+        y_train,
+        active_variable_count=int(num_vars),
+        rng=rng,
+        samples=eval_samples,
+        complexity_weight=complexity_weight,
+        eta_logprob=selection_eta_logprob,
+        sampler_method=sampler_method,
+        flow_steps=flow_steps,
+        postprocess_top_k=postprocess_top_k,
+        selection_validation_fraction=selection_validation_fraction,
+        head_fit_mode=head_fit_mode,
+    )
+    coef = train_rewards.affine_coef[best]
+    fitted_expr = render_sparse_expression(samples[best], coef)
+    expr_text = to_string(fitted_expr, template.num_vars, simplify=True)
+    raw_expr_text = to_string(samples[best].expression, template.num_vars, simplify=True)
+    r2, nmse_value, raw_r2 = _test_sample_metrics(samples[best], x_test, y_test, coef)
+    reward = float(r2 - float(complexity_weight) * int(samples[best].complexity))
+    decoder_curve = _conditional_decoder_budget_curve(
+        model,
+        template,
+        ground_truth=ground_truth or "",
+        x_train=x_train,
+        y_train=y_train,
+        x_test=x_test,
+        y_test=y_test,
+        rng=rng,
+        budgets=decoder_budgets,
+        complexity_weight=complexity_weight,
+        eta_logprob=selection_eta_logprob,
+        sampler_method=sampler_method,
+        flow_steps=flow_steps,
+        postprocess_top_k=postprocess_top_k,
+        selection_validation_fraction=selection_validation_fraction,
+        active_variable_count=int(num_vars),
+        head_fit_mode=head_fit_mode,
+    )
+    structure = _expression_structure(fitted_expr, template.num_vars)
+    template_diag = _template_diagnostics(template)
+    entropies = [
+        float(sample.entropy_tensor.detach().cpu().item())
+        for sample in samples
+        if sample.entropy_tensor is not None
+    ]
+    return {
+        "task_id": str(task_id),
+        "suite": str(suite),
+        "num_vars": int(num_vars),
+        "variable_names": list(variable_names),
+        "ground_truth": str(ground_truth or ""),
+        "expression": expr_text,
+        "raw_expression": raw_expr_text,
+        "affine_a": float(coef[0].item()) if int(coef.numel()) else 0.0,
+        "affine_b": float(coef[-1].item()) if int(coef.numel()) else 0.0,
+        "sparse_head_terms": int(len(samples[best].head_terms)),
+        "selected_head_term_index": int(train_rewards.selected_term_index[best].item()) if train_rewards.selected_term_index.numel() else -1,
+        "head_fit_mode": str(head_fit_mode),
+        "r2": float(r2),
+        "nmse": float(nmse_value),
+        "reward": reward,
+        "complexity": int(samples[best].complexity),
+        "solved": bool(accuracy_rate(float(r2))),
+        "train_r2": float(train_rewards.r2[best].item()),
+        "train_nmse": float(train_rewards.nmse[best].item()),
+        "train_reward": float(train_rewards.rewards[best].item()),
+        "best_raw_term_r2": float(train_rewards.best_raw_term_r2[best].item()) if train_rewards.best_raw_term_r2.numel() else 0.0,
+        "fitted_head_gain": float(train_rewards.fitted_head_gain[best].item()) if train_rewards.fitted_head_gain.numel() else 0.0,
+        "head_coef_nonzero_count": int(train_rewards.head_coef_nonzero_count[best].item()) if train_rewards.head_coef_nonzero_count.numel() else 0,
+        "head_coef_norm": float(train_rewards.head_coef_norm[best].item()) if train_rewards.head_coef_norm.numel() else 0.0,
+        "base_head_selected_rate": float((samples[best].diagnostics or {}).get("base_head_selected_rate", 0.0)),
+        "raw_test_r2_without_affine": float(raw_r2),
+        "calibration_gain": float(r2 - raw_r2),
+        "train_test_r2_gap": float(float(train_rewards.r2[best].item()) - r2),
+        "valid_expression_fraction": float(train_rewards.valid_mask.float().mean().item()),
+        "unique_expression_fraction": float(len({str(s.expression) for s in samples}) / max(len(samples), 1)),
+        "decision_entropy_mean": float(sum(entropies) / max(len(entropies), 1)),
+        "active_variable_count": int(num_vars),
+        "best_log_prob": float(samples[best].log_prob),
+        "sampler_method": str(sampler_method),
+        "device": str(next(model.parameters()).device),
+        "decoder_budget_curve": decoder_curve,
+        **template_diag,
+        **structure,
+    }
+
+
+def _conditional_sample_and_select(
+    model: ConditionalEdgeFlowModel,
+    template: RegisterOperatorTemplate,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    *,
+    rng: random.Random,
+    samples: int,
+    complexity_weight: float,
+    eta_logprob: float,
+    sampler_method: str,
+    flow_steps: int,
+    postprocess_top_k: int = 32,
+    selection_validation_fraction: float = 0.0,
+    active_variable_count: int | None = None,
+    head_fit_mode: str = "linear",
+):
+    with torch.no_grad():
+        sampled = ConditionalEdgeFlowSampler(
+            template,
+            model,
+            method=sampler_method,
+            flow_steps=flow_steps,
+        ).sample(
+            x,
+            y,
+            batch_size=int(samples),
+            rng=rng,
+            active_variable_count=active_variable_count,
+        )
+        rewards = evaluate_expression_rewards(
+            sampled,
+            x,
+            y,
+            RewardConfig(complexity_weight=complexity_weight, head_fit_mode=head_fit_mode),
+        )
+    if rewards.rewards.numel() == 0:
+        return sampled, rewards, 0
+    scores = structure_prior_scores(
+        rewards.r2,
+        torch.tensor([s.log_prob for s in sampled], dtype=rewards.r2.dtype, device=rewards.r2.device),
+        rewards.complexity,
+        prior_weight=float(eta_logprob),
+        complexity_weight=float(complexity_weight),
+    )
+    best = int(torch.argmax(scores).item())
+    if float(selection_validation_fraction) > 0.0 and int(postprocess_top_k) > 1 and x.shape[0] >= 8:
+        best = _postprocess_select(
+            sampled,
+            scores,
+            x,
+            y,
+            complexity_weight=complexity_weight,
+            eta_logprob=eta_logprob,
+            top_k=postprocess_top_k,
+            validation_fraction=selection_validation_fraction,
+            head_fit_mode=head_fit_mode,
+        )
+    return sampled, rewards, best
+
+
+def _postprocess_select(
+    sampled,
+    scores: torch.Tensor,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    *,
+    complexity_weight: float,
+    eta_logprob: float,
+    top_k: int,
+    validation_fraction: float,
+    head_fit_mode: str,
+) -> int:
+    frac = max(0.0, min(float(validation_fraction), 0.9))
+    if frac <= 0.0 or scores.numel() == 0:
+        return int(torch.argmax(scores).item())
+    k = min(max(int(top_k), 1), int(scores.numel()))
+    _, indices = torch.topk(scores, k=k)
+    candidates = [sampled[int(idx)] for idx in indices.tolist()]
+    cut = max(2, int(round(float(x.shape[0]) * (1.0 - frac))))
+    cut = min(cut, int(x.shape[0]) - 2)
+    val_rewards = evaluate_expression_rewards(
+        candidates,
+        x[cut:],
+        y[cut:],
+        RewardConfig(complexity_weight=complexity_weight, head_fit_mode=head_fit_mode),
+    )
+    rerank = structure_prior_scores(
+        val_rewards.r2,
+        torch.tensor([s.log_prob for s in candidates], dtype=val_rewards.r2.dtype, device=val_rewards.r2.device),
+        val_rewards.complexity,
+        prior_weight=float(eta_logprob),
+        complexity_weight=float(complexity_weight),
+    )
+    local = int(torch.argmax(rerank).item())
+    return int(indices[local].item())
+
+
+def _conditional_decoder_budget_curve(
+    model: ConditionalEdgeFlowModel,
+    template: RegisterOperatorTemplate,
+    *,
+    ground_truth: str,
+    x_train: torch.Tensor,
+    y_train: torch.Tensor,
+    x_test: torch.Tensor,
+    y_test: torch.Tensor,
+    rng: random.Random,
+    budgets: list[int],
+    complexity_weight: float,
+    eta_logprob: float,
+    sampler_method: str,
+    flow_steps: int,
+    postprocess_top_k: int,
+    selection_validation_fraction: float,
+    active_variable_count: int,
+    head_fit_mode: str,
+) -> list[dict]:
+    rows = []
+    for budget in budgets:
+        sampled, rewards, best = _conditional_sample_and_select(
+            model,
+            template,
+            x_train,
+            y_train,
+            rng=rng,
+            samples=int(budget),
+            complexity_weight=complexity_weight,
+            eta_logprob=eta_logprob,
+            sampler_method=sampler_method,
+            flow_steps=flow_steps,
+            postprocess_top_k=postprocess_top_k,
+            selection_validation_fraction=selection_validation_fraction,
+            active_variable_count=active_variable_count,
+            head_fit_mode=head_fit_mode,
+        )
+        if not sampled:
+            continue
+        coef = rewards.affine_coef[best]
+        r2, nmse_value, raw_r2 = _test_sample_metrics(sampled[best], x_test, y_test, coef)
+        expr_text = to_string(render_sparse_expression(sampled[best], coef), template.num_vars, simplify=True)
+        rows.append({
+            "budget": int(budget),
+            "r2": float(r2),
+            "nmse": float(nmse_value),
+            "raw_r2_without_affine": float(raw_r2),
+            "skeleton_match": bool(skeleton_match(ground_truth, expr_text)),
+            "complexity": int(sampled[best].complexity),
+            "expression": expr_text,
+            "unique_fraction": float(len({str(s.expression) for s in sampled}) / max(len(sampled), 1)),
+            "valid_fraction": float(rewards.valid_mask.float().mean().item()),
+            "best_log_prob": float(sampled[best].log_prob),
+            "selected_head_term_index": int(rewards.selected_term_index[best].item()) if rewards.selected_term_index.numel() else -1,
+        })
+    return rows
 
 
 def _evaluate_dataset_task(
@@ -258,9 +623,13 @@ def _sample_and_select(
     rewards = evaluate_expression_rewards(sampled, x, y, RewardConfig(complexity_weight=complexity_weight))
     if rewards.rewards.numel() == 0:
         return sampled, rewards, 0
-    scores = rewards.rewards.clone()
-    if float(eta_logprob) != 0.0:
-        scores = scores + float(eta_logprob) * torch.tensor([s.log_prob for s in sampled], dtype=scores.dtype)
+    scores = structure_prior_scores(
+        rewards.r2,
+        torch.tensor([s.log_prob for s in sampled], dtype=rewards.r2.dtype, device=rewards.r2.device),
+        rewards.complexity,
+        prior_weight=float(eta_logprob),
+        complexity_weight=float(complexity_weight),
+    )
     return sampled, rewards, int(torch.argmax(scores).item())
 
 
@@ -269,6 +638,36 @@ def _test_metrics(expr, x_test: torch.Tensor, y_test: torch.Tensor, coef: list[f
         semantics = torch.nan_to_num(eval_expr(expr, x_test), nan=0.0, posinf=0.0, neginf=0.0)
         pred = float(coef[0]) * semantics + float(coef[1])
         raw_pred = semantics
+        finite = torch.isfinite(pred).all() and pred.abs().max() < 1e8
+    except Exception:
+        pred = torch.zeros_like(y_test)
+        raw_pred = torch.zeros_like(y_test)
+        finite = torch.tensor(False)
+    if not bool(finite):
+        return 0.0, float("inf"), 0.0
+    return r2_score(y_test.detach().cpu().numpy(), pred.detach().cpu().numpy()), nmse(
+        y_test.detach().cpu().numpy(),
+        pred.detach().cpu().numpy(),
+    ), r2_score(y_test.detach().cpu().numpy(), raw_pred.detach().cpu().numpy())
+
+
+def _test_sample_metrics(sample, x_test: torch.Tensor, y_test: torch.Tensor, coef: torch.Tensor) -> tuple[float, float, float]:
+    try:
+        terms = tuple(sample.head_terms) if sample.head_terms else (sample.expression,)
+        columns = [
+            torch.nan_to_num(eval_expr(term, x_test), nan=0.0, posinf=0.0, neginf=0.0)
+            for term in terms
+        ]
+        semantics = torch.stack(columns, dim=1) if columns else torch.zeros(
+            (x_test.shape[0], 1),
+            dtype=x_test.dtype,
+            device=x_test.device,
+        )
+        c = torch.as_tensor(coef, dtype=semantics.dtype, device=semantics.device).flatten()
+        if int(c.numel()) < semantics.shape[1] + 1:
+            c = torch.cat([c, torch.zeros(semantics.shape[1] + 1 - int(c.numel()), dtype=c.dtype, device=c.device)])
+        pred = semantics @ c[:semantics.shape[1]] + c[semantics.shape[1]]
+        raw_pred = semantics.sum(dim=1)
         finite = torch.isfinite(pred).all() and pred.abs().max() < 1e8
     except Exception:
         pred = torch.zeros_like(y_test)

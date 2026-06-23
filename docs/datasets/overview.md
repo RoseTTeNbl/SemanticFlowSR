@@ -1,87 +1,51 @@
 # Benchmark 数据集概览
 
-当前统一 benchmark 已经物化到 CSV split，并由一个 manifest 管理：
+当前评估通过统一 manifest 读取：
 
 ```text
 data/benchmark_suites/benchmark_manifest.json
 data/benchmark_suites/benchmark_index.csv
-data/benchmark_suites/materialized/<suite>/<task>/{train,val,test}.csv
 ```
 
-当前 manifest 规模：
+当前 Fisher / Euclidean 对比使用：
 
-| 分组 | Suites | Tasks | 用途 |
-|---|---|---:|---|
-| dev | Nguyen / Constant / Livermore / Jin | 34 | workflow、debug、旧公式结果对齐 |
-| main | SRSD-Feynman easy / medium / hard | 120 | scientific discovery 主表 |
-| main | PMLB regression filtered | 50 | 黑盒回归、鲁棒性、runtime |
-| appendix | SRSD-Feynman dummy easy / medium / hard | 120 | dummy variable / feature selection |
+| suite | tasks | 用途 |
+|---|---:|---|
+| nguyen | 12 | 经典符号回归公式 |
+| constant | 8 | 常数与单变量组合 |
+| livermore | 8 | Livermore 公式 |
+| jin | 6 | Jin 公式 |
 
 总计：
 
 ```text
-324 tasks = 34 dev + 170 main + 120 appendix
+34 tasks
 ```
 
-## Manifest 字段
+## Manifest Task 字段
 
-每个任务至少包含：
+每个 task 至少提供：
 
 ```json
 {
-  "task_id": "srsd_feynman_hard/feynman-i.30.3",
-  "suite": "srsd_feynman_hard",
-  "num_vars": 4,
-  "variable_names": ["x0", "x1", "x2", "x3"],
-  "train_path": "materialized/.../train.csv",
-  "val_path": "materialized/.../val.csv",
-  "test_path": "materialized/.../test.csv",
+  "task_id": "nguyen/Nguyen-1",
+  "suite": "nguyen",
+  "num_vars": 1,
+  "variable_names": ["x0"],
+  "train_path": ".../train.csv",
+  "val_path": ".../val.csv",
+  "test_path": ".../test.csv",
   "target_column": "target",
-  "ground_truth": "optional sympy string",
-  "domain": "physics",
-  "metrics": ["r2", "nmse", "complexity"]
+  "ground_truth": "x0**3 + x0**2 + x0"
 }
 ```
 
-## 验证命令
+`scripts/run_edge_flow.py` 会把不同维度任务 padding 到 checkpoint 支持的 `template.num_vars`，并保留 inactive-variable mask。
 
-每次重修数据集后先跑：
+## 当前评估命令片段
 
 ```bash
-conda run -n semflow python scripts/validate_benchmark_manifest.py \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --root data/benchmark_suites \
-  --out results/dataset_validation \
-  --fail-on-error
-```
-
-输出：
-
-```text
-manifest_validation_summary.json
-manifest_validation_suites.csv
-manifest_validation_tasks.csv
-manifest_validation_failures.jsonl
-```
-
-这一步检查 split 文件是否存在、变量列和 target 是否齐全、数据是否 finite，并统计
-每个 suite / 维度的任务数。
-
-## Suite Groups
-
-评测矩阵统一使用这些组：
-
-```text
-formula_dev
-srsd_main
-srsd_dummy
-pmlb
-all_complete
-```
-
-它们定义在：
-
-```text
-configs/eval/sfsr_full_benchmark.yaml
-configs/eval/external_baselines.yaml
+--manifest data/benchmark_suites/benchmark_manifest.json
+--manifest_root data/benchmark_suites
+--manifest_suite nguyen constant livermore jin
 ```

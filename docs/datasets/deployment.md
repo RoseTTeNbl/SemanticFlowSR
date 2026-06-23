@@ -2,61 +2,50 @@
 
 所有命令在 `SemanticFlowSR/` 下执行。
 
-## 1. 生成完整 benchmark
+## 1. 生成训练子集
 
 ```bash
-conda run -n semflow python scripts/prepare_benchmark_suites.py \
-  --sources formula_dev srsd_main srsd_dummy pmlb \
-  --pmlb-fetch-missing \
-  --pmlb-limit 50 \
-  --pmlb-max-samples 5000 \
-  --pmlb-max-features 20 \
-  --out-root data/benchmark_suites/materialized \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --index data/benchmark_suites/benchmark_index.csv
+conda run --no-capture-output -n semflow \
+  python scripts/generate_symbolicgpt_subset.py \
+  --root data/generated/symbolicgpt_subset \
+  --train_count 747 --val_count 160 --test_count 161 \
+  --num_vars 3 --num_points 100 --max_depth 4
 ```
 
-生成后目录应包含：
+输出目录：
 
 ```text
-data/benchmark_suites/benchmark_manifest.json
-data/benchmark_suites/benchmark_index.csv
-data/benchmark_suites/materialized/
+data/generated/symbolicgpt_subset/train
+data/generated/symbolicgpt_subset/val
+data/generated/symbolicgpt_subset/test
 ```
 
-## 2. 校验 manifest
+## 2. 校验 Benchmark Manifest
 
 ```bash
-conda run -n semflow python scripts/validate_benchmark_manifest.py \
+conda run --no-capture-output -n semflow \
+  python scripts/validate_benchmark_manifest.py \
   --manifest data/benchmark_suites/benchmark_manifest.json \
   --root data/benchmark_suites \
   --out results/dataset_validation \
   --fail-on-error
 ```
 
-这一步必须在 SFSR 或 baseline 长跑前通过。
+校验输出：
 
-## 3. 生成 SFSR 评测命令
-
-```bash
-conda run -n semflow python scripts/run_sfsr_benchmark_matrix.py \
-  --suite_group formula_dev srsd_main srsd_dummy pmlb \
-  --ckpt_by_vars \
-    1:checkpoints/d1.pt \
-    2:checkpoints/d2.pt \
-    3:checkpoints/d3.pt \
-  --plan_out results/benchmark_plans/sfsr_risk_flow_commands.json
+```text
+manifest_validation_summary.json
+manifest_validation_suites.csv
+manifest_validation_tasks.csv
+manifest_validation_failures.jsonl
 ```
 
-确认命令后加 `--execute`。正式完整评测需要补齐更高维 checkpoint；缺失维度会在
-`*_skipped.json` 中记录。
+## 3. 当前评估 Suite
 
-## 4. 生成外部 baseline 命令
+当前结果只使用：
 
-```bash
-conda run -n semflow python scripts/run_external_baseline_matrix.py \
-  --suite_group formula_dev srsd_main srsd_dummy pmlb \
-  --plan_out results/benchmark_plans/external_baseline_commands.json
+```text
+nguyen constant livermore jin
 ```
 
-外部 baseline 的环境和预算在 `configs/eval/external_baselines.yaml` 里统一维护。
+如需扩展到更多 suite，必须在 [../RESULTS.md](../RESULTS.md) 中单独记录任务集合、checkpoint、评估预算和指标。
