@@ -409,7 +409,8 @@ def weighted_complexity(expression: str) -> int:
 
 
 def tokenize_expression(expression: str) -> list[str]:
-    return re.findall(r"[A-Za-z_]\w*|\d+(?:\.\d+)?(?:e[+-]?\d+)?|[+\-*/^(),]", str(expression))
+    """Tokenize formulas with the DiffSR notebook convention."""
+    return re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*|[()+\-*/]|\d+\.?\d*", str(expression))
 
 
 def _record_from_mapping(spec: MethodSpec, row: dict[str, Any]) -> PaperRecord:
@@ -471,7 +472,8 @@ def _computed_token_similarity(record: PaperRecord) -> float | None:
     pred = tokenize_expression(record.expression)
     if not ref and not pred:
         return None
-    return _round(_lcs_len(ref, pred) / max(len(ref), len(pred), 1))
+    correct = sum(1 for a, b in zip(ref, pred) if a == b)
+    return _round(correct / max(len(ref), 1))
 
 
 def _computed_edit_distance(record: PaperRecord) -> float | None:
@@ -483,17 +485,21 @@ def _computed_edit_distance(record: PaperRecord) -> float | None:
 
 
 def bleu_score(reference: list[str], prediction: list[str], max_order: int = 4) -> float | None:
+    """Sentence BLEU compatible with DiffSR's NLTK method1 usage.
+
+    The project does not require NLTK at runtime, so this mirrors the relevant
+    behavior: sentence-level modified n-gram precision, brevity penalty, and a
+    small epsilon for zero-overlap precisions.
+    """
     if not reference or not prediction:
         return None
     precisions = []
     for order in range(1, max_order + 1):
         ref_counts = _ngram_counts(reference, order)
         pred_counts = _ngram_counts(prediction, order)
-        if not pred_counts:
-            precisions.append(1e-9)
-            continue
         overlap = sum(min(count, ref_counts.get(ngram, 0)) for ngram, count in pred_counts.items())
-        precisions.append((overlap + 1.0) / (sum(pred_counts.values()) + 1.0))
+        denom = max(sum(pred_counts.values()), 1)
+        precisions.append((float(overlap) if overlap > 0 else 0.1) / float(denom))
     brevity = 1.0 if len(prediction) > len(reference) else math.exp(1.0 - len(reference) / max(len(prediction), 1))
     return _round(brevity * math.exp(sum(math.log(p) for p in precisions) / max_order))
 

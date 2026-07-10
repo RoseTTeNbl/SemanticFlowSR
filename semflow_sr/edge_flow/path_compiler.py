@@ -1,4 +1,4 @@
-"""Compile ground-truth formulas into trainable CSEF paths when representable."""
+"""Compile ground-truth formulas into trainable SPFF construction traces."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,7 +30,7 @@ class CompileResult:
     decision_count: int
 
 
-def compile_formula_to_csef_sample(
+def compile_formula_to_spff_sample(
     formula: str,
     *,
     variable_count: int,
@@ -42,7 +42,7 @@ def compile_formula_to_csef_sample(
     flow_steps: int = 1,
     flow_time: float | None = None,
 ) -> CircuitSample | None:
-    """Return a differentiable CSEF sample for simple representable formulas.
+    """Return a differentiable SPFF construction sample for simple formulas.
 
     The compiler is intentionally conservative. It supports formulas whose op
     tree depth fits the template and whose constants are already represented by
@@ -68,7 +68,7 @@ def compile_formula_to_csef_sample(
     return result.sample if result is not None else None
 
 
-def compile_expr_to_csef_sample(
+def compile_expr_to_spff_sample(
     expr: Expr,
     *,
     variable_count: int,
@@ -80,7 +80,7 @@ def compile_expr_to_csef_sample(
     flow_steps: int = 1,
     flow_time: float | None = None,
 ) -> CircuitSample | None:
-    """Return a differentiable CSEF sample for an already parsed expression."""
+    """Return a differentiable SPFF construction sample for a parsed expression."""
 
     try:
         result = _compile_expr(
@@ -97,6 +97,12 @@ def compile_expr_to_csef_sample(
     except Exception:
         return None
     return result.sample if result is not None else None
+
+
+# Compatibility aliases for older checkpoints/tests that still import the
+# pre-SPFF function names.
+compile_formula_to_csef_sample = compile_formula_to_spff_sample
+compile_expr_to_csef_sample = compile_expr_to_spff_sample
 
 
 def _compile_expr(
@@ -242,6 +248,13 @@ def _compile_expr(
                 src_idx = _find_expr_index(source_exprs, child)
                 if src_idx is None or not bool(source_mask[int(src_idx)].item()):
                     return None
+                source_candidate_semantics = _source_output_semantics(
+                    int(node.op_id),
+                    slot,
+                    source_sem,
+                    child_semantics,
+                    fallback=y,
+                ).detach()
                 dist = model.source_probs(
                     target_token=reg_tokens[target],
                     source_tokens=source_tokens,
@@ -253,6 +266,8 @@ def _compile_expr(
                     method=method,
                     flow_steps=flow_steps,
                     source_mask=source_mask.to(source_tokens.device),
+                    candidate_semantics=source_candidate_semantics,
+                    target_semantics=y,
                     return_details=True,
                     flow_time=flow_time,
                 )
@@ -265,13 +280,7 @@ def _compile_expr(
                     group_id=f"L{layer}:TARGET{target}:BRANCH0:ARG{slot}:SRC",
                     choice=int(src_idx),
                     current_probs=dist["current_probs"],
-                    candidate_semantics=_source_output_semantics(
-                        int(node.op_id),
-                        slot,
-                        source_sem,
-                        child_semantics,
-                        fallback=y,
-                    ).detach(),
+                    candidate_semantics=source_candidate_semantics,
                     predicted_sqrt_velocity=dist["predicted_sqrt_velocity"],
                     initial_probs=dist["initial_probs"],
                     velocity_fn=dist["velocity_fn"],

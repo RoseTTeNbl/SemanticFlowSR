@@ -49,8 +49,8 @@ class CircuitSampler:
         out: list[CircuitSample] = []
         for mode, count in enumerate(quotas):
             for _ in range(count):
-                choices, log_prob = self._sample_choices(edge_dist, mode, rng)
-                expr = self._execute_choices(choices)
+                choices, log_prob, log_prob_tensor = self._sample_choices(edge_dist, mode, rng)
+                expr, head_terms = self._execute_choices_with_terms(choices)
                 out.append(CircuitSample(
                     sample_id=len(out),
                     mode=mode,
@@ -58,6 +58,9 @@ class CircuitSampler:
                     expression=expr,
                     log_prob=float(log_prob),
                     complexity=int(expr.complexity),
+                    head_terms=head_terms,
+                    log_prob_tensor=log_prob_tensor,
+                    active_log_prob_tensor=log_prob_tensor,
                 ))
         return out
 
@@ -88,17 +91,32 @@ class CircuitSampler:
                 counts[int(idx)] += 1
         return counts
 
-    def _sample_choices(self, edge_dist: EdgeDistribution, mode: int, rng: random.Random) -> tuple[dict[str, int], float]:
+    def _sample_choices(
+        self,
+        edge_dist: EdgeDistribution,
+        mode: int,
+        rng: random.Random,
+    ) -> tuple[dict[str, int], float, torch.Tensor]:
         choices: dict[str, int] = {}
-        log_prob = math.log(max(float(edge_dist.mixture_probs[mode].item()), 1e-12))
+        log_terms: list[torch.Tensor] = []
+        mix_prob = edge_dist.mixture_probs[int(mode)].clamp_min(1e-12)
+        log_terms.append(mix_prob.log())
+        log_prob = math.log(max(float(mix_prob.detach().cpu().item()), 1e-12))
         for group in self.groups:
             probs = edge_dist.group_probs[group.group_id][mode].detach().cpu().tolist()
             pos = _sample_index(probs, rng)
             choices[group.group_id] = int(pos)
-            log_prob += math.log(max(float(probs[pos]), 1e-12))
-        return choices, log_prob
+            selected = edge_dist.group_probs[group.group_id][int(mode), int(pos)].clamp_min(1e-12)
+            log_terms.append(selected.log())
+            log_prob += math.log(max(float(selected.detach().cpu().item()), 1e-12))
+        log_prob_tensor = torch.stack(log_terms).sum() if log_terms else torch.zeros((), dtype=edge_dist.mixture_probs.dtype)
+        return choices, log_prob, log_prob_tensor
 
     def _execute_choices(self, choices: dict[str, int]) -> Expr:
+        expr, _head_terms = self._execute_choices_with_terms(choices)
+        return expr
+
+    def _execute_choices_with_terms(self, choices: dict[str, int]) -> tuple[Expr, tuple[Expr, ...]]:
         regs = _initial_registers(self.template.num_vars, self.template.num_registers)
         primitive_count = len(self.template.primitives)
         for layer in range(self.template.num_layers):
@@ -118,7 +136,19 @@ class CircuitSampler:
             regs = next_regs
             if len(regs) != self.template.num_registers or primitive_count < 0:
                 raise RuntimeError("invalid register update")
-        return regs[int(choices["OUT:SELECT"])]
+        terms: list[Expr] = []
+        seen_terms: set[Expr] = set()
+        output_groups = [group for group in self.template.groups if group.group_type == "OUTPUT_SELECT"]
+        for group in output_groups:
+            choice = int(choices.get(group.group_id, 0))
+            choice = max(0, min(choice, int(group.num_candidates) - 1))
+            term = Expr.const(0.0) if int(choice) >= len(regs) else regs[int(choice)]
+            if not _is_zero_const(term) and term not in seen_terms:
+                terms.append(term)
+                seen_terms.add(term)
+        if not terms:
+            terms.append(Expr.const(0.0))
+        return _sum_exprs(tuple(terms)), tuple(terms)
 
 
 def _initial_registers(num_vars: int, num_registers: int) -> list[Expr]:
@@ -131,6 +161,24 @@ def _initial_registers(num_vars: int, num_registers: int) -> list[Expr]:
         else:
             regs.append(Expr.const(0.0))
     return regs
+
+
+def _is_zero_const(expr: Expr) -> bool:
+    return expr.kind == "const" and abs(float(expr.value)) < 1.0e-12
+
+
+def _sum_exprs(terms: tuple[Expr, ...]) -> Expr:
+    if not terms:
+        return Expr.const(0.0)
+    out = terms[0]
+    for term in terms[1:]:
+        if _is_zero_const(term):
+            continue
+        if _is_zero_const(out):
+            out = term
+        else:
+            out = Expr.op(NAME_TO_ID["add"], (out, term))
+    return out
 
 
 def _sample_index(probs: list[float], rng: random.Random) -> int:

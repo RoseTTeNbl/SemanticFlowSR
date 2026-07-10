@@ -1,4 +1,4 @@
-"""Selection scores for CSEF inference reranking."""
+"""Selection scores for SPFF inference reranking."""
 from __future__ import annotations
 
 import torch

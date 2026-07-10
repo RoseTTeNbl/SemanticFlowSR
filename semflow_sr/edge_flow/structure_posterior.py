@@ -1,4 +1,4 @@
-"""Structure-conditioned endpoint posterior utilities for CSEF."""
+"""Structure-conditioned endpoint posterior utilities."""
 from __future__ import annotations
 
 import math

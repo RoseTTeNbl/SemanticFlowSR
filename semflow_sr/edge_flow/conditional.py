@@ -1,6 +1,6 @@
-"""Conditional Semantic Edge Flow.
+"""Semantic Pullback Fisher Flow conditional construction model.
 
-The current CSEF mainline does not learn one global edge-probability table.
+The current SPFF mainline does not learn one global edge-probability table.
 It encodes the current register roots and scores source choices conditioned on
 the target register root being expanded. Register semantics are normalized and
 encoded as curves; they are not exposed as hand-written candidate statistics.
@@ -8,6 +8,7 @@ encoded as curves; they are not exposed as hand-written candidate statistics.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import field
 import math
 import random
 
@@ -17,6 +18,16 @@ from torch import nn
 from ..sr.ast import Expr
 from ..sr.ops import NAME_TO_ID, N_OPS, get_op
 from .circuit_sampler import CircuitSample
+from .pullback_chart import (
+    IdentitySemanticChart,
+    LowRankSemanticChart,
+    NeuralODESemanticChart,
+    normalize_sphere,
+    project_tangent,
+    simplex_to_sphere,
+    sphere_to_simplex,
+)
+from .reward import prune_tiny_coefficients
 from .semantic_teacher import DecisionTrace
 from .template import RegisterOperatorTemplate
 
@@ -35,6 +46,24 @@ class ConditionalEdgeFlowConfig:
     include_base_source_pool: bool = True
     task_encoder: str = "mean"
     min_prob: float = 1e-6
+    term_factorized: bool = False
+    term_num_heads: int = 0
+    term_prior_strength: float = 0.0
+    term_prior_type: str = "natural"
+    spff_enabled: bool = False
+    spff_geometry: str = "pullback"
+    spff_chart_type: str = "ode"
+    spff_context_mode: str = "semantic"
+    spff_num_candidates: int = 0
+    spff_sem_dim: int = 96
+    spff_chart_hidden: int = 96
+    spff_velocity_hidden: int = 96
+    spff_chart_rank: int = 2
+    spff_ode_steps: int = 4
+    spff_inference_steps: int = 4
+    spff_max_chart_velocity: float = 0.05
+    spff_max_velocity: float = 1.0
+    constant_values: tuple[float, ...] = field(default_factory=lambda: (1.0,))
 
 
 class ConditionalEdgeFlowModel(nn.Module):
@@ -84,6 +113,12 @@ class ConditionalEdgeFlowModel(nn.Module):
             nn.Linear(hidden, hidden),
             nn.SiLU(),
         )
+        self.head_context_fuse = nn.Sequential(
+            nn.Linear(4 * hidden + 3, hidden),
+            nn.SiLU(),
+            nn.Linear(hidden, hidden),
+            nn.SiLU(),
+        )
         self.op_embedding = nn.Embedding(N_OPS, hidden)
         self.update_embedding = nn.Embedding(2, hidden)
         self.operator_scorer = nn.Sequential(
@@ -96,6 +131,48 @@ class ConditionalEdgeFlowModel(nn.Module):
             nn.SiLU(),
             nn.Linear(hidden, 1),
         )
+        self.spff_num_candidates = int(cfg.spff_num_candidates or 0)
+        self.spff_enabled = bool(cfg.spff_enabled and self.spff_num_candidates > 1)
+        if self.spff_enabled:
+            sem_dim = int(cfg.spff_sem_dim)
+            spff_feature_dim = 4 * self.spff_num_candidates + 6
+            self.spff_context_encoder = nn.Sequential(
+                nn.Linear(spff_feature_dim, sem_dim),
+                nn.SiLU(),
+                nn.Linear(sem_dim, sem_dim),
+                nn.SiLU(),
+            )
+            self.spff_velocity_head = nn.Sequential(
+                nn.Linear(sem_dim + self.spff_num_candidates + 1, int(cfg.spff_velocity_hidden)),
+                nn.SiLU(),
+                nn.Linear(int(cfg.spff_velocity_hidden), int(cfg.spff_velocity_hidden)),
+                nn.SiLU(),
+                nn.Linear(int(cfg.spff_velocity_hidden), self.spff_num_candidates),
+            )
+            chart_type = str(cfg.spff_chart_type).lower()
+            if chart_type in {"identity", "none"}:
+                self.spff_chart = IdentitySemanticChart(self.spff_num_candidates, sem_dim)
+            elif chart_type in {"low_rank", "lowrank"}:
+                self.spff_chart = LowRankSemanticChart(
+                    self.spff_num_candidates,
+                    sem_dim,
+                    rank=int(cfg.spff_chart_rank),
+                    hidden_dim=int(cfg.spff_chart_hidden),
+                )
+            elif chart_type in {"ode", "neural_ode", "neural-ode"}:
+                self.spff_chart = NeuralODESemanticChart(
+                    self.spff_num_candidates,
+                    sem_dim,
+                    hidden_dim=int(cfg.spff_chart_hidden),
+                    ode_steps=int(cfg.spff_ode_steps),
+                    max_velocity=float(cfg.spff_max_chart_velocity),
+                )
+            else:
+                raise ValueError(f"unknown SPFF chart type: {cfg.spff_chart_type}")
+        else:
+            self.spff_context_encoder = None
+            self.spff_velocity_head = None
+            self.spff_chart = None
 
     def task_embedding(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         x_used = _pad_x(x.float(), self.cfg.num_vars)
@@ -140,6 +217,53 @@ class ConditionalEdgeFlowModel(nn.Module):
             ))
             tokens.append(self.register_fuse(torch.cat([task, sem, tree], dim=0)))
         return torch.stack(tokens, dim=0)
+
+    def head_context_target_token(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        head_exprs: list[Expr] | tuple[Expr, ...],
+        head_semantics: torch.Tensor,
+        *,
+        head_index: int,
+        layer_id: int,
+        active_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        head_list = list(head_exprs)
+        if len(head_list) != int(head_semantics.shape[1]):
+            raise ValueError("head context expression count must match semantic columns")
+        if not 0 <= int(head_index) < len(head_list):
+            raise ValueError("head index is out of range for the head context")
+        tokens = self.register_tokens(
+            x,
+            y,
+            head_list,
+            head_semantics,
+            layer_id=layer_id,
+        )
+        d = int(tokens.shape[0])
+        mask = _candidate_mask(active_mask, d=d, device=tokens.device)
+        if bool(mask.any()):
+            active_tokens = tokens[mask]
+            pooled_mean = active_tokens.mean(dim=0)
+            pooled_max = active_tokens.max(dim=0).values
+        else:
+            pooled_mean = torch.zeros(tokens.shape[1], device=tokens.device, dtype=tokens.dtype)
+            pooled_max = torch.zeros_like(pooled_mean)
+        denom_heads = max(d - 1, 1)
+        task = self.task_embedding(x, y).to(tokens.device, tokens.dtype)
+        meta = torch.tensor([
+            float(head_index) / float(denom_heads),
+            float(layer_id) / 10.0,
+            float(mask.to(dtype=tokens.dtype).mean().detach().cpu().item()),
+        ], device=tokens.device, dtype=tokens.dtype)
+        return self.head_context_fuse(torch.cat([
+            tokens[int(head_index)],
+            pooled_mean,
+            pooled_max,
+            task,
+            meta,
+        ], dim=0))
 
     def endpoint_from_logits(
         self,
@@ -216,6 +340,128 @@ class ConditionalEdgeFlowModel(nn.Module):
             }
         return p
 
+    def spff_context_from_semantics(
+        self,
+        candidate_semantics: torch.Tensor,
+        target_semantics: torch.Tensor,
+        *,
+        layer_id: int,
+        target_register: int,
+        branch_id: int,
+        arity_slot: int,
+        primitive_id: int,
+        source_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if not self.spff_enabled or self.spff_context_encoder is None:
+            raise RuntimeError("SPFF context requested while SPFF is disabled")
+        sem = torch.as_tensor(candidate_semantics).float()
+        if sem.ndim == 1:
+            sem = sem.unsqueeze(1)
+        if int(sem.shape[1]) != int(self.spff_num_candidates):
+            raise ValueError(
+                f"SPFF candidate semantics has {int(sem.shape[1])} candidates; "
+                f"expected {int(self.spff_num_candidates)}"
+            )
+        device = sem.device
+        dtype = sem.dtype
+        y = torch.as_tensor(target_semantics, device=device, dtype=dtype).flatten()
+        if int(y.numel()) != int(sem.shape[0]):
+            y = torch.zeros(int(sem.shape[0]), device=device, dtype=dtype)
+        sem_clean = torch.nan_to_num(sem, nan=0.0, posinf=0.0, neginf=0.0)
+        sem_norm = sem_clean - sem_clean.mean(dim=0, keepdim=True)
+        sem_std = sem_norm.std(dim=0, unbiased=False, keepdim=True).clamp_min(1e-6)
+        sem_norm = sem_norm / sem_std
+        y_norm = _normalize_vector(y).to(device=device, dtype=dtype)
+        corr = (sem_norm * y_norm.unsqueeze(1)).mean(dim=0)
+        means = sem_clean.mean(dim=0)
+        stds = sem_clean.std(dim=0, unbiased=False)
+        if source_mask is None:
+            mask = torch.ones(int(self.spff_num_candidates), device=device, dtype=dtype)
+        else:
+            mask = torch.as_tensor(source_mask, device=device).flatten().to(dtype=dtype)
+            if int(mask.numel()) != int(self.spff_num_candidates):
+                raise ValueError("SPFF source mask candidate count mismatch")
+        active_fraction = mask.mean()
+        denom_regs = max(int(self.spff_num_candidates) - 1, 1)
+        meta = torch.tensor([
+            float(layer_id) / 10.0,
+            float(max(target_register, 0)) / float(denom_regs),
+            float(max(branch_id, 0)) / 10.0,
+            float(max(arity_slot, 0)) / 2.0,
+            float(max(primitive_id, 0)) / float(max(N_OPS - 1, 1)),
+            float(active_fraction.detach().cpu().item()),
+        ], device=device, dtype=dtype)
+        features = torch.cat([corr, means, stds, mask, meta], dim=0).unsqueeze(0)
+        if str(self.cfg.spff_context_mode).lower() in {"constant", "none", "zero", "no_semantic"}:
+            features = torch.zeros_like(features)
+        return self.spff_context_encoder(features)
+
+    def spff_velocity(
+        self,
+        sem_context: torch.Tensor,
+        r_t: torch.Tensor,
+        t: torch.Tensor | float,
+        *,
+        mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if not self.spff_enabled or self.spff_velocity_head is None:
+            raise RuntimeError("SPFF velocity requested while SPFF is disabled")
+        state = normalize_sphere(r_t)
+        if sem_context.ndim == 1:
+            sem_context = sem_context.unsqueeze(0)
+        if sem_context.shape[0] == 1 and state.shape[0] > 1:
+            sem_context = sem_context.expand(state.shape[0], -1)
+        if isinstance(t, torch.Tensor):
+            tau = t.to(device=state.device, dtype=state.dtype)
+            if tau.ndim == 0:
+                tau = tau.expand(state.shape[0])
+            tau = tau.reshape(state.shape[0], 1)
+        else:
+            tau = torch.full((state.shape[0], 1), float(t), device=state.device, dtype=state.dtype)
+        raw = self.spff_velocity_head(torch.cat([sem_context.to(state.device, state.dtype), state, tau], dim=-1))
+        raw = torch.tanh(raw) * float(self.cfg.spff_max_velocity)
+        return project_tangent(raw, state, mask=mask)
+
+    def spff_source_probs_from_context(
+        self,
+        sem_context: torch.Tensor,
+        *,
+        source_mask: torch.Tensor | None,
+        flow_steps: int | None = None,
+        p0: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        d = int(self.spff_num_candidates)
+        device = sem_context.device
+        dtype = sem_context.dtype
+        mask = _candidate_mask(source_mask, d=d, device=device)
+        if p0 is None:
+            p0_value = mask.to(dtype)
+            p0_value = p0_value / p0_value.sum().clamp_min(float(self.cfg.min_prob))
+        else:
+            p0_value = torch.as_tensor(p0, device=device, dtype=dtype).flatten()
+            if int(p0_value.numel()) != d:
+                raise ValueError("SPFF p0 candidate count mismatch")
+            p0_value = torch.where(mask, p0_value.clamp_min(0.0), torch.zeros_like(p0_value))
+            p0_value = p0_value / p0_value.sum().clamp_min(float(self.cfg.min_prob))
+        geometry = str(self.cfg.spff_geometry).lower()
+        if geometry in {"simplex", "fisher", "plain_simplex"}:
+            r = simplex_to_sphere(p0_value.unsqueeze(0), mask=mask.unsqueeze(0))
+            use_chart = False
+        else:
+            if self.spff_chart is None:
+                raise RuntimeError("SPFF chart is not initialized")
+            r = self.spff_chart(simplex_to_sphere(p0_value.unsqueeze(0)), sem_context, mask=mask.unsqueeze(0))
+            use_chart = True
+        steps = max(int(flow_steps or self.cfg.spff_inference_steps), 1)
+        for step in range(steps):
+            t = float(step) / float(steps)
+            v = self.spff_velocity(sem_context, r, t, mask=mask.unsqueeze(0))
+            r = normalize_sphere(r + (1.0 / float(steps)) * v, mask=mask.unsqueeze(0))
+        s = self.spff_chart.inverse(r, sem_context, mask=mask.unsqueeze(0)) if use_chart else r
+        probs = sphere_to_simplex(s, mask=mask.unsqueeze(0)).squeeze(0)
+        probs = probs.clamp_min(float(self.cfg.min_prob)) * mask.to(dtype)
+        return probs / probs.sum().clamp_min(float(self.cfg.min_prob))
+
     def operator_probs(
         self,
         *,
@@ -230,7 +476,19 @@ class ConditionalEdgeFlowModel(nn.Module):
         flow_time: float | None = None,
     ) -> torch.Tensor:
         ids = torch.tensor(primitive_ids, dtype=torch.long, device=target_token.device)
-        op_tokens = self.op_embedding(ids)
+        if int(ids.numel()) <= 0:
+            raise ValueError("operator probability group must have candidates")
+        op_tokens = torch.zeros(
+            (int(ids.numel()), int(target_token.numel())),
+            dtype=target_token.dtype,
+            device=target_token.device,
+        )
+        real_mask = ids >= 0
+        if bool(real_mask.any()):
+            op_tokens[real_mask] = self.op_embedding(ids[real_mask])
+        if bool((~real_mask).any()):
+            stop_ids = torch.zeros(int((~real_mask).sum().item()), dtype=torch.long, device=target_token.device)
+            op_tokens[~real_mask] = self.update_embedding(stop_ids)
         d = int(ids.numel())
         denom_ops = max(N_OPS - 1, 1)
 
@@ -249,7 +507,11 @@ class ConditionalEdgeFlowModel(nn.Module):
                 ],
                 probs=p,
             )
-            op_norm = ids.to(target_token.dtype).unsqueeze(1) / float(denom_ops)
+            op_norm = torch.where(
+                ids >= 0,
+                ids.to(target_token.dtype) / float(denom_ops),
+                torch.full_like(ids.to(target_token.dtype), -1.0),
+            ).unsqueeze(1)
             target = target_token.expand(d, -1)
             return self.operator_scorer(torch.cat([target, op_tokens, meta, op_norm], dim=1)).squeeze(1)
 
@@ -322,10 +584,87 @@ class ConditionalEdgeFlowModel(nn.Module):
         method: str,
         flow_steps: int,
         source_mask: torch.Tensor | None = None,
+        source_p0: torch.Tensor | None = None,
+        candidate_semantics: torch.Tensor | None = None,
+        target_semantics: torch.Tensor | None = None,
         return_details: bool = False,
         flow_time: float | None = None,
     ) -> torch.Tensor:
         d = int(source_tokens.shape[0])
+        has_spff_context = (
+            self.spff_enabled
+            and int(target_register) >= 0
+            and int(branch_id) >= 0
+            and int(arity_slot) >= 0
+            and int(primitive_id) >= 0
+            and candidate_semantics is not None
+            and target_semantics is not None
+        )
+        if has_spff_context and int(d) > int(self.spff_num_candidates):
+            raise ValueError(
+                f"SPFF runtime candidates {int(d)} exceed chart width {int(self.spff_num_candidates)}"
+            )
+        if has_spff_context:
+            padded_semantics = _pad_candidate_semantics(
+                candidate_semantics,
+                d=d,
+                target_d=int(self.spff_num_candidates),
+                device=source_tokens.device,
+            )
+            padded_mask = _pad_candidate_mask(
+                source_mask,
+                d=d,
+                target_d=int(self.spff_num_candidates),
+                device=source_tokens.device,
+            )
+            padded_p0 = _pad_candidate_distribution(
+                source_p0,
+                mask=source_mask,
+                d=d,
+                target_d=int(self.spff_num_candidates),
+                device=source_tokens.device,
+                dtype=source_tokens.dtype,
+                min_prob=float(self.cfg.min_prob),
+            )
+            sem_context = self.spff_context_from_semantics(
+                padded_semantics,
+                target_semantics.to(source_tokens.device),
+                layer_id=int(layer_id),
+                target_register=int(target_register),
+                branch_id=int(branch_id),
+                arity_slot=int(arity_slot),
+                primitive_id=int(primitive_id),
+                source_mask=padded_mask,
+            )
+            full_probs = self.spff_source_probs_from_context(
+                sem_context,
+                source_mask=padded_mask,
+                flow_steps=flow_steps,
+                p0=padded_p0,
+            )
+            probs = full_probs[:d]
+            mask = _candidate_mask(source_mask, d=d, device=source_tokens.device)
+            probs = torch.where(mask, probs, torch.zeros_like(probs))
+            probs = probs / probs.sum().clamp_min(float(self.cfg.min_prob))
+            mask = _candidate_mask(source_mask, d=d, device=source_tokens.device)
+            p0 = padded_p0[:d].to(source_tokens.dtype)
+            p0 = torch.where(mask, p0, torch.zeros_like(p0))
+            p0 = p0 / p0.sum().clamp_min(float(self.cfg.min_prob))
+            if return_details:
+                return {
+                    "probs": probs,
+                    "current_probs": p0,
+                    "initial_probs": p0.clone(),
+                    "predicted_sqrt_velocity": torch.zeros_like(probs),
+                    "velocity_fn": None,
+                    "flow_time": 1.0 if flow_time is None else float(flow_time),
+                    "spff_sem_context": sem_context,
+                    "spff_full_probs": full_probs,
+                    "spff_full_mask": padded_mask,
+                    "spff_full_p0": padded_p0,
+                    "spff_padded_candidate_count": int(self.spff_num_candidates) - int(d),
+                }
+            return probs
         denom_src = max(d - 1, 1)
         denom_ops = max(N_OPS - 1, 1)
 
@@ -385,6 +724,22 @@ class ConditionalEdgeFlowSampler:
         rng: random.Random,
         active_variable_count: int | None = None,
     ) -> list[CircuitSample]:
+        if bool(getattr(self.model.cfg, "term_factorized", False)):
+            from .term_graph import TermGraphSampler
+
+            return TermGraphSampler(
+                self.template,
+                self.model,
+                method=self.method,
+                flow_steps=self.flow_steps,
+                time_sampling=self.time_sampling,
+            ).sample(
+                x,
+                y,
+                batch_size=batch_size,
+                rng=rng,
+                active_variable_count=active_variable_count,
+            )
         out: list[CircuitSample] = []
         for sample_id in range(max(int(batch_size), 0)):
             out.append(self._sample_one(
@@ -575,6 +930,13 @@ class ConditionalEdgeFlowSampler:
                         active_traces: list[int] = [op_trace_id]
                         for slot in range(op.arity):
                             src_group = f"L{layer}:TARGET{target_reg}:BRANCH{branch}:ARG{slot}:SRC"
+                            source_candidate_semantics = _source_output_semantics(
+                                op_id,
+                                slot,
+                                source_sem,
+                                child_semantics,
+                                fallback=y,
+                            ).detach()
                             dist = self.model.source_probs(
                                 target_token=reg_tokens[target_reg],
                                 source_tokens=source_tokens,
@@ -586,6 +948,8 @@ class ConditionalEdgeFlowSampler:
                                 method=self.method,
                                 flow_steps=self.flow_steps,
                                 source_mask=source_mask.to(source_tokens.device),
+                                candidate_semantics=source_candidate_semantics,
+                                target_semantics=y,
                                 return_details=True,
                                 flow_time=self._sample_flow_time(rng),
                             )
@@ -596,13 +960,7 @@ class ConditionalEdgeFlowSampler:
                                 group_id=src_group,
                                 choice=int(src_idx),
                                 current_probs=dist["current_probs"],
-                                candidate_semantics=_source_output_semantics(
-                                    op_id,
-                                    slot,
-                                    source_sem,
-                                    child_semantics,
-                                    fallback=y,
-                                ).detach(),
+                                candidate_semantics=source_candidate_semantics,
                                 predicted_sqrt_velocity=dist["predicted_sqrt_velocity"],
                                 initial_probs=dist["initial_probs"],
                                 velocity_fn=dist["velocity_fn"],
@@ -961,8 +1319,19 @@ def conditional_elite_policy_loss(
     }
 
 
-def render_sparse_expression(sample: CircuitSample, coef: torch.Tensor | list[float]) -> Expr:
-    coeffs = [float(v) for v in torch.as_tensor(coef).detach().cpu().flatten().tolist()]
+def render_sparse_expression(
+    sample: CircuitSample,
+    coef: torch.Tensor | list[float],
+    *,
+    prune_rel: float = 1.0e-4,
+    prune_abs: float = 1.0e-6,
+) -> Expr:
+    pruned = prune_tiny_coefficients(
+        torch.as_tensor(coef).detach().float().cpu().flatten(),
+        rel=float(prune_rel),
+        abs_threshold=float(prune_abs),
+    )
+    coeffs = [float(v) for v in pruned.tolist()]
     terms = tuple(sample.head_terms) if sample.head_terms else (sample.expression,)
     if len(coeffs) < len(terms) + 1:
         coeffs = coeffs + [0.0 for _ in range(len(terms) + 1 - len(coeffs))]
@@ -1199,6 +1568,66 @@ def _candidate_mask(mask: torch.Tensor | None, *, d: int, device: torch.device) 
     if not bool(out.any()):
         out = torch.ones(int(d), dtype=torch.bool, device=device)
     return out
+
+
+def _pad_candidate_mask(
+    mask: torch.Tensor | None,
+    *,
+    d: int,
+    target_d: int,
+    device: torch.device,
+) -> torch.Tensor:
+    if int(d) > int(target_d):
+        raise ValueError(f"SPFF runtime candidates {int(d)} exceed chart width {int(target_d)}")
+    out = torch.zeros(int(target_d), dtype=torch.bool, device=device)
+    out[:int(d)] = _candidate_mask(mask, d=int(d), device=device)
+    return out
+
+
+def _pad_candidate_semantics(
+    candidate_semantics: torch.Tensor,
+    *,
+    d: int,
+    target_d: int,
+    device: torch.device,
+) -> torch.Tensor:
+    if int(d) > int(target_d):
+        raise ValueError(f"SPFF runtime candidates {int(d)} exceed chart width {int(target_d)}")
+    sem = torch.as_tensor(candidate_semantics, device=device).float()
+    if sem.ndim == 1:
+        sem = sem.unsqueeze(1)
+    if int(sem.shape[1]) != int(d):
+        raise ValueError(f"candidate semantics has {int(sem.shape[1])} columns for {int(d)} source candidates")
+    if int(d) == int(target_d):
+        return sem
+    out = torch.zeros((int(sem.shape[0]), int(target_d)), device=device, dtype=sem.dtype)
+    out[:, :int(d)] = sem
+    return out
+
+
+def _pad_candidate_distribution(
+    probs: torch.Tensor | None,
+    *,
+    mask: torch.Tensor | None,
+    d: int,
+    target_d: int,
+    device: torch.device,
+    dtype: torch.dtype,
+    min_prob: float,
+) -> torch.Tensor:
+    active = _pad_candidate_mask(mask, d=int(d), target_d=int(target_d), device=device)
+    if probs is None:
+        out = active.to(dtype=dtype)
+        return out / out.sum().clamp_min(float(min_prob))
+    raw = torch.as_tensor(probs, device=device, dtype=dtype).flatten()
+    if int(raw.numel()) != int(d):
+        raise ValueError(f"source_p0 has {int(raw.numel())} entries for {int(d)} source candidates")
+    out = torch.zeros(int(target_d), device=device, dtype=dtype)
+    out[:int(d)] = raw.clamp_min(0.0)
+    out = torch.where(active, out, torch.zeros_like(out))
+    if not bool(out.sum() > 0):
+        out = active.to(dtype=dtype)
+    return out / out.sum().clamp_min(float(min_prob))
 
 
 def _entropy(probs: torch.Tensor) -> torch.Tensor:

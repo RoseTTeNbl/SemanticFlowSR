@@ -5,18 +5,36 @@ the registry; constants become const leaves.
 """
 from __future__ import annotations
 import sympy as sp
+from sympy.parsing.sympy_parser import convert_xor, parse_expr, standard_transformations
 from .ast import Expr
 from .ops import NAME_TO_ID
 
 _FUNC_MAP = {
-    "sin": "sin", "cos": "cos", "exp": "exp",
+    "sin": "sin", "cos": "cos", "tanh": "tanh", "exp": "exp",
     "log": "protected_log", "sqrt": "protected_sqrt",
 }
 
 
 def parse_formula(formula: str, variables: list[str]) -> Expr:
     local = {v: sp.Symbol(v) for v in variables}
-    s = sp.sympify(formula, locals=local)
+    local.update({
+        "sin": sp.sin,
+        "cos": sp.cos,
+        "tanh": sp.tanh,
+        "exp": sp.exp,
+        "log": sp.log,
+        "sqrt": sp.sqrt,
+        "Abs": sp.Abs,
+        "abs": sp.Abs,
+        "pi": sp.pi,
+        "E": sp.E,
+    })
+    s = parse_expr(
+        formula,
+        local_dict=local,
+        transformations=standard_transformations + (convert_xor,),
+        evaluate=True,
+    )
     var_idx = {sp.Symbol(v): i for i, v in enumerate(variables)}
     return _from_sympy(sp.expand(s) if False else s, var_idx)
 
@@ -24,6 +42,8 @@ def parse_formula(formula: str, variables: list[str]) -> Expr:
 def _from_sympy(s: sp.Expr, var_idx: dict) -> Expr:
     if s.is_Symbol:
         return Expr.var(var_idx[s])
+    if s.is_number and not s.free_symbols:
+        return Expr.const(float(s.evalf()))
     if s.is_Number:
         return Expr.const(float(s))
     if s.is_Add:
@@ -41,14 +61,19 @@ def _from_sympy(s: sp.Expr, var_idx: dict) -> Expr:
             return Expr.op(NAME_TO_ID["protected_sqrt"], (base,))
         # integer powers -> repeated mul
         if exp.is_Integer and int(exp) > 0:
-            node = base
-            for _ in range(int(exp) - 1):
-                node = Expr.op(NAME_TO_ID["mul"], (node, base))
-            return node
+            return _positive_integer_power(base, int(exp))
         if exp.is_Integer and int(exp) < 0:
             denom = _positive_integer_power(base, -int(exp))
             return Expr.op(NAME_TO_ID["protected_div"], (Expr.const(1.0), denom))
-        raise ValueError(f"Unsupported power exponent: {exp}")
+        if exp.is_Rational:
+            try:
+                if int(exp.p) > 0:
+                    return _positive_rational_power(base, int(exp.p), int(exp.q))
+                positive = _positive_rational_power(base, -int(exp.p), int(exp.q))
+                return Expr.op(NAME_TO_ID["protected_div"], (Expr.const(1.0), positive))
+            except ValueError:
+                return _general_power(base, _from_sympy(exp, var_idx))
+        return _general_power(base, _from_sympy(exp, var_idx))
     if isinstance(s, sp.Function):
         fname = type(s).__name__
         if fname == "Abs":
@@ -114,7 +139,30 @@ def _positive_integer_power(base: Expr, exponent: int) -> Expr:
         return Expr.op(NAME_TO_ID["square"], (base,))
     if int(exponent) == 3:
         return Expr.op(NAME_TO_ID["cube"], (base,))
-    node = base
-    for _ in range(int(exponent) - 1):
-        node = Expr.op(NAME_TO_ID["mul"], (node, base))
-    return node
+    if int(exponent) % 2 == 0:
+        half = _positive_integer_power(base, int(exponent) // 2)
+        return Expr.op(NAME_TO_ID["square"], (half,))
+    if int(exponent) % 3 == 0:
+        third = _positive_integer_power(base, int(exponent) // 3)
+        return Expr.op(NAME_TO_ID["cube"], (third,))
+    return Expr.op(NAME_TO_ID["mul"], (_positive_integer_power(base, int(exponent) - 1), base))
+
+
+def _positive_rational_power(base: Expr, numerator: int, denominator: int) -> Expr:
+    if int(numerator) <= 0 or int(denominator) <= 0:
+        raise ValueError(f"Unsupported rational power: {numerator}/{denominator}")
+    root = base
+    denom = int(denominator)
+    while denom > 1:
+        if denom % 2 != 0:
+            raise ValueError(f"Unsupported non-dyadic rational power denominator: {denominator}")
+        root = Expr.op(NAME_TO_ID["protected_sqrt"], (root,))
+        denom //= 2
+    return _positive_integer_power(root, int(numerator))
+
+
+def _general_power(base: Expr, exponent: Expr) -> Expr:
+    """Protected fallback for variable or non-dyadic powers: exp(exponent * log(abs(base)))."""
+    log_base = Expr.op(NAME_TO_ID["protected_log"], (base,))
+    product = Expr.op(NAME_TO_ID["mul"], (exponent, log_base))
+    return Expr.op(NAME_TO_ID["exp"], (product,))

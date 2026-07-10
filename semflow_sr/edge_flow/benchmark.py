@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import re
+import signal
 from typing import Any
 
 import sympy as sp
@@ -283,17 +284,30 @@ def with_skeleton_metrics(row: dict[str, Any]) -> dict[str, Any]:
     out = dict(row)
     gt = str(out.get("ground_truth", "") or "")
     pred = str(out.get("expression", "") or out.get("raw_expression", "") or "")
-    gt_skeleton = expression_skeleton(gt)
-    pred_skeleton = expression_skeleton(pred)
+    structural_status = "ok"
+    if _too_large_for_structural_metrics(gt) or _too_large_for_structural_metrics(pred):
+        gt_skeleton = ""
+        pred_skeleton = ""
+        symbolic_eq = False
+        gt_dep = ""
+        pred_dep = ""
+        structural_status = "skipped_complex_expression"
+    else:
+        gt_skeleton = _with_metric_timeout(lambda: expression_skeleton(gt), default="")
+        pred_skeleton = _with_metric_timeout(lambda: expression_skeleton(pred), default="")
+        symbolic_eq = bool(simplified_symbolic_equivalence(gt, pred))
+        gt_dep = _with_metric_timeout(lambda: operator_dependency_signature(gt), default="")
+        pred_dep = _with_metric_timeout(lambda: operator_dependency_signature(pred), default="")
+        if not pred_skeleton and pred:
+            structural_status = "parse_failed_or_timeout"
     out["gt_skeleton"] = gt_skeleton
     out["pred_skeleton"] = pred_skeleton
     out["skeleton_match"] = bool(gt_skeleton and pred_skeleton and gt_skeleton == pred_skeleton)
-    out["simplified_symbolic_equivalence"] = bool(simplified_symbolic_equivalence(gt, pred))
-    gt_dep = operator_dependency_signature(gt)
-    pred_dep = operator_dependency_signature(pred)
+    out["simplified_symbolic_equivalence"] = bool(symbolic_eq)
     out["operator_dependency_gt"] = gt_dep
     out["operator_dependency_pred"] = pred_dep
     out["operator_dependency_match"] = bool(gt_dep and pred_dep and gt_dep == pred_dep)
+    out["structural_metric_status"] = structural_status
     out.update(token_sequence_metrics(gt, pred))
     return out
 
@@ -304,11 +318,58 @@ def skeleton_match(ground_truth: str, generated: str) -> bool:
     return bool(gt and pred and gt == pred)
 
 
+class _SymbolicEquivalenceTimeout(Exception):
+    pass
+
+
+def _symbolic_equivalence_timeout(_signum, _frame) -> None:
+    raise _SymbolicEquivalenceTimeout()
+
+
+def _too_large_for_structural_metrics(expr_text: str, *, max_chars: int = 4000, max_tokens: int = 800) -> bool:
+    text = str(expr_text or "")
+    if len(text) > int(max_chars):
+        return True
+    return len(_formula_tokens(text)) > int(max_tokens)
+
+
+def _with_metric_timeout(fn, *, default: Any, seconds: float = 1.0) -> Any:
+    old_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _symbolic_equivalence_timeout)
+    signal.setitimer(signal.ITIMER_REAL, float(seconds))
+    try:
+        return fn()
+    except Exception:
+        return default
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, old_handler)
+
+
 def simplified_symbolic_equivalence(ground_truth: str, generated: str) -> bool:
     try:
         gt = sp.sympify(str(ground_truth or ""), locals={"Abs": sp.Abs})
         pred = sp.sympify(str(generated or ""), locals={"Abs": sp.Abs})
-        return bool(sp.simplify(sp.expand(gt - pred)) == 0)
+        if gt == pred:
+            return True
+        diff = gt - pred
+        if sp.count_ops(diff) > 250 or len(str(diff)) > 5000:
+            return False
+        diff = sp.expand(diff)
+        if diff == 0:
+            return True
+        if sp.count_ops(diff) > 250 or len(str(diff)) > 5000:
+            return False
+        old_handler = signal.getsignal(signal.SIGALRM)
+        signal.signal(signal.SIGALRM, _symbolic_equivalence_timeout)
+        signal.setitimer(signal.ITIMER_REAL, 1.0)
+        try:
+            return bool(sp.simplify(diff) == 0)
+        except _SymbolicEquivalenceTimeout:
+            return False
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            signal.signal(signal.SIGALRM, old_handler)
     except Exception:
         return False
 
@@ -352,22 +413,20 @@ def token_sequence_metrics(ground_truth: str, generated: str) -> dict[str, float
 
 
 def _formula_tokens(text: str) -> list[str]:
-    return re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*|\d+\.\d+|\d+|\*\*|[()+\-*/]", str(text or ""))
+    return re.findall(r"[a-zA-Z_][a-zA-Z0-9_]*|[()+\-*/]|\d+\.?\d*", str(text or ""))
 
 
 def _simple_bleu(reference: list[str], candidate: list[str], max_n: int = 4) -> float:
+    """Sentence BLEU with DiffSR/NLTK-method1-style smoothing."""
     if not reference or not candidate:
         return 0.0
     precisions = []
     for n in range(1, int(max_n) + 1):
         ref_counts = _ngram_counts(reference, n)
         cand_counts = _ngram_counts(candidate, n)
-        total = sum(cand_counts.values())
-        if total <= 0:
-            precisions.append(1e-9)
-            continue
+        total = max(sum(cand_counts.values()), 1)
         overlap = sum(min(count, ref_counts.get(key, 0)) for key, count in cand_counts.items())
-        precisions.append(max(float(overlap / total), 1e-9))
+        precisions.append((float(overlap) if overlap > 0 else 0.1) / float(total))
     brevity = 1.0 if len(candidate) >= len(reference) else math.exp(1.0 - float(len(reference)) / max(len(candidate), 1))
     return float(brevity * math.exp(sum(math.log(p) for p in precisions) / len(precisions)))
 

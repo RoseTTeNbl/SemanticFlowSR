@@ -1,198 +1,71 @@
-# Agent Handoff: SemanticFlowSR
+# SemanticFlowSR agent handoff
 
-This is the first file a new coding agent should read in this repository.
+Read this file first when working in this repository.
 
-## Repository Root
-
-Work from:
+## 仓库根目录
 
 ```text
 /home/ywj/wyh/SFSR/SemanticFlowSR
 ```
 
-Use the `semflow` conda environment unless the user says otherwise.
+除非用户另有说明，使用 `semflow` conda 环境。
 
 ```bash
 conda activate semflow
 ```
 
-If the environment must be recreated:
+## 文档边界
 
-```bash
-conda create -n semflow python=3.11
-conda activate semflow
-pip install --index-url https://download.pytorch.org/whl/cu126 torch
-pip install numpy scipy sympy pyyaml pandas scikit-learn tqdm einops pytest
-pip install deap gplearn
-pip install -e .
-```
-
-## Current Main Method
-
-The current method is Conditional Semantic Edge Flow, CSEF.
-
-CSEF performs teacher velocity matching on explicit categorical probability
-shapes over the expression construction graph. A ground-truth expression is
-compiled to a canonical construction path. GT-neighborhood perturbations provide
-noisy contexts, while the target probability shape flows to the clean GT action
-as a smoothed one-hot endpoint. The hidden network does not store that shape
-directly; it predicts conditional velocities from the task, construction
-prefix, register semantics, current probability state, and time.
-
-The active geometry split is:
+完整表达式 One-Step Semantic Fisher Cycle 主线算法和架构写在：
 
 ```text
-CSEF-Fisher:    Fisher-Rao probability-shape teacher path
-CSEF-Euclidean: Euclidean probability-coordinate ablation
+docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md
+docs/ARCHITECTURE_COMPLETE_EXPRESSION_SEMANTIC_FM.md
+docs/MATH.md
 ```
 
-Semantic information is used as network input and as a local output-semantic
-calibration matrix for velocity errors. It does not change the Fisher-Rao
-teacher path.
-
-Do not modify `/home/ywj/wyh/SFSR/paper` unless the user explicitly asks for
-paper edits.
-
-## Main Files
-
-| Purpose | File |
-|---|---|
-| Template and register metadata | `semflow_sr/edge_flow/template.py` |
-| Conditional CSEF model and sampler | `semflow_sr/edge_flow/conditional.py` |
-| Probability-shape teacher velocity and semantic calibration | `semflow_sr/edge_flow/semantic_teacher.py` |
-| GT-neighborhood noisy-context sampler | `semflow_sr/edge_flow/gt_neighborhood.py` |
-| Formula-to-CSEF compiler | `semflow_sr/edge_flow/path_compiler.py` |
-| Structure similarity and endpoint evidence helpers | `semflow_sr/edge_flow/structure_posterior.py` |
-| Reward evaluation and sparse head fitting | `semflow_sr/edge_flow/reward.py` |
-| Structure-prior rerank score | `semflow_sr/edge_flow/selection.py` |
-| Benchmark loading and result writing | `semflow_sr/edge_flow/benchmark.py` |
-| Training CLI | `semflow_sr/edge_flow/train_edge_flow.py` |
-| Evaluation CLI | `scripts/run_edge_flow.py` |
-| Paper metrics bundle builder | `scripts/archive_paper_metrics.py` |
-
-Useful docs:
-
-- `README.md`: quick command entry points and current headline metrics.
-- `docs/ALGORITHM.md`: current algorithm and mathematical derivation.
-- `docs/ARCHITECTURE.md`: code layout and data flow.
-- `docs/MATH.md`: compact mathematical reference.
-- `docs/RESULTS.md`: current Fisher and Euclidean GPU results.
-- `docs/IMPROVEMENT_NOTES.md`: current evidence, limitations, and next checks.
-
-## Current Commands
-
-Fisher probability-shape training:
-
-```bash
-CUDA_VISIBLE_DEVICES=2 conda run --no-capture-output -n semflow \
-  python -u -m semflow_sr.edge_flow.train_edge_flow \
-  --config configs/train/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.yaml
-```
-
-Euclidean ablation training:
-
-```bash
-CUDA_VISIBLE_DEVICES=2 conda run --no-capture-output -n semflow \
-  python -u -m semflow_sr.edge_flow.train_edge_flow \
-  --config configs/train/conditional_edge_flow_gt_sampler_teacher_path_euclidean_gpu.yaml
-```
-
-Fisher evaluation:
-
-```bash
-CUDA_VISIBLE_DEVICES=2 conda run --no-capture-output -n semflow \
-  python -u scripts/run_edge_flow.py \
-  --ckpt checkpoints/teacher_path_geometry/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.pt \
-  --out results/teacher_path_geometry_fisher_gpu \
-  --tag teacher_path_geometry_fisher_gpu \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --manifest_root data/benchmark_suites \
-  --manifest_suite nguyen constant livermore jin \
-  --feynman_root data/materialized/feynman \
-  --eval_samples 64 \
-  --flow_steps 1 \
-  --sampler_method policy \
-  --head_fit_mode linear \
-  --device cuda:1
-```
-
-Euclidean evaluation:
-
-```bash
-CUDA_VISIBLE_DEVICES=2 conda run --no-capture-output -n semflow \
-  python -u scripts/run_edge_flow.py \
-  --ckpt checkpoints/teacher_path_geometry/conditional_edge_flow_gt_sampler_teacher_path_euclidean_gpu.pt \
-  --out results/teacher_path_geometry_euclidean_gpu_20260623 \
-  --tag teacher_path_geometry_euclidean_gpu_20260623 \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --manifest_root data/benchmark_suites \
-  --manifest_suite nguyen constant livermore jin \
-  --feynman_root data/materialized/feynman \
-  --eval_samples 64 \
-  --flow_steps 1 \
-  --sampler_method policy \
-  --head_fit_mode linear \
-  --device cuda:1
-```
-
-Build comparison metrics and figures:
-
-```bash
-conda run --no-capture-output -n semflow python scripts/archive_paper_metrics.py \
-  --out results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623 \
-  --suite nguyen constant livermore jin \
-  --bootstrap_samples 1000 \
-  --method CSEF-Fisher SFSR sfsr_method samples_jsonl results/teacher_path_geometry_fisher_gpu/teacher_path_geometry_fisher_gpu_samples.jsonl \
-  --method CSEF-Euclidean SFSR sfsr_method samples_jsonl results/teacher_path_geometry_euclidean_gpu_20260623/teacher_path_geometry_euclidean_gpu_20260623_samples.jsonl
-```
-
-Regression tests:
-
-```bash
-CUDA_VISIBLE_DEVICES=2 conda run --no-capture-output -n semflow \
-  pytest tests/test_edge_flow_core.py tests/test_edge_flow_training.py \
-         tests/test_external_adapter_outputs.py tests/test_paper_metrics.py -q
-```
-
-Dataset validation:
-
-```bash
-conda run -n semflow python scripts/validate_benchmark_manifest.py \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --root data/benchmark_suites \
-  --out results/dataset_validation \
-  --fail-on-error
-```
-
-## Current Results
-
-The current result directories are:
+诊断验证记录写在：
 
 ```text
-results/teacher_path_geometry_fisher_gpu/
-results/teacher_path_geometry_euclidean_gpu_20260623/
-results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623/
+docs/STRUCTURAL_CLOSURE.md
 ```
 
-Headline metrics:
+不要把 fixed-pool、GT/proxy、failure taxonomy、128-task matrix 或 distillation
+诊断写入主线算法/架构文档。
+
+只有诊断工作改变采样、训练目标或构造图行为时，才更新主线算法/架构文档。
+
+## 训练状态
+
+清理期间已明确停止训练。除非用户要求，不要重启 128-task、dynamic-pool、
+semantic FM、structural-closure 或其他长 GPU 任务。
+
+当前默认入口：
 
 ```text
-Fisher:    n_tasks 34, R2 mean 0.937383, solution rate 0.323529, skeleton accuracy 0.029412
-Euclidean: n_tasks 34, R2 mean 0.940868, solution rate 0.294118, skeleton accuracy 0.0
+scripts/train_complete_expression_semantic_fm.py
+scripts/run_one_step_semantic_fisher_cycle_gpu.sh
 ```
 
-These retained artifacts should be regenerated after changing the teacher target
-or rerank weights.
+`target_conditioned_reference`、semantic latent endpoint、semantic endpoint correction
+和 token semantic pushforward 都是历史/失败探针，不要作为默认入口恢复。
 
-## Editing Rules For This Repo
+## 主要文件
+
+```text
+scripts/train_complete_expression_semantic_fm.py
+semflow_sr/one_step_fisher.py
+semflow_sr/latent_endpoint.py
+semflow_sr/edge_flow/template.py
+semflow_sr/edge_flow/path_compiler.py
+```
+
+## 编辑规则
 
 - Prefer `rg` for searches.
-- Keep generated documentation aligned with the current CSEF Fisher/Euclidean
-  mainline.
-- Keep result documentation limited to the current result directories above.
+- Do not modify `/home/ywj/wyh/SFSR/paper` unless the user explicitly asks.
+- Keep diagnostic results in `docs/STRUCTURAL_CLOSURE.md`.
 - Do not run full training unless the user explicitly asks.
-- Future result and reflection documents should be written in Chinese,
-  especially `docs/RESULTS.md` and `docs/IMPROVEMENT_NOTES.md`.
-- When changing current behavior or entry points, update `AGENTS.md`,
-  `README.md`, `docs/ALGORITHM.md`, `docs/ARCHITECTURE.md`,
-  `docs/MATH.md`, and `docs/RESULTS.md` as needed.
+- Future result and reflection documents should be written in Chinese.
+
+重要！每次算法上的大修改需要同步到git；每次跑实验要及时检查和清理过期的log和result目录（旧的实验结果）避免过多堆叠的冗余目录

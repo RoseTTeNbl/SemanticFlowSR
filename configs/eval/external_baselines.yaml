@@ -9,6 +9,14 @@ root: data/benchmark_suites
 out: results/external_baselines
 
 suite_groups:
+  benchmark_nguyen:
+    - nguyen
+  benchmark_constant:
+    - constant
+  benchmark_livermore:
+    - livermore
+  benchmark_jin:
+    - jin
   formula_dev:
     - nguyen
     - constant
@@ -67,6 +75,66 @@ methods:
     script: scripts/run_dsr_baseline.py
     args:
       n_samples: 100000
+
+  - id: TPSR-E2E
+    role: external_comparison
+    env: tpsr
+    script: scripts/run_tpsr_manifest_baseline.py
+    args:
+      mode: e2e
+      beam_size: 1
+      n_trees_to_refine: 1
+      max_input_points: 64
+      max_number_bags: 1
+
+  - id: LocalDiffusionProposal
+    role: external_comparison
+    env: current
+    script: scripts/run_diffusion_sr_baseline.py
+    args:
+      diffusion_root: external/Symbolic_Regression_With_Diffusion_Models
+      proposal_limit: 2000
+      candidate_limit: 512
+
+  - id: SymGPT
+    role: external_comparison
+    env: current
+    script: scripts/run_symbolicgpt_baseline.py
+    args:
+      repo_root: external/symbolicgpt
+
+  - id: NeSymReS
+    role: external_comparison
+    env: current
+    script: scripts/run_nesymres_baseline.py
+    args:
+      repo_root: external/NeuralSymbolicRegressionThatScales
+
+  - id: E2E
+    role: external_comparison
+    env: tpsr
+    script: scripts/run_e2e_baseline.py
+    args:
+      tpsr_root: external/TPSR
+      model_path: symbolicregression/weights/model1.pt
+      beam_size: 1
+      n_trees_to_refine: 1
+      max_input_points: 64
+      max_number_bags: 1
+
+  - id: HVAE
+    role: external_comparison
+    env: current
+    script: scripts/run_hvae_baseline.py
+    args:
+      repo_root: external/HVAE
+
+  - id: NGGP
+    role: external_comparison
+    env: current
+    script: scripts/run_nggp_baseline.py
+    args:
+      repo_root: external/deep-symbolic-optimization-pytorch
 
   - id: TPSR
     enabled: false

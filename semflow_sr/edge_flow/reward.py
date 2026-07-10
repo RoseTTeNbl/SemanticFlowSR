@@ -14,6 +14,8 @@ class RewardConfig:
     complexity_weight: float = 0.001
     invalid_reward: float = -1.0e6
     head_fit_mode: str = "linear"
+    tiny_coeff_prune_rel: float = 1.0e-4
+    tiny_coeff_prune_abs: float = 1.0e-6
 
 
 @dataclass
@@ -68,6 +70,12 @@ def evaluate_expression_rewards(
             y,
             mode=str(cfg.head_fit_mode),
         )
+        coef = prune_tiny_coefficients(
+            coef,
+            rel=float(cfg.tiny_coeff_prune_rel),
+            abs_threshold=float(cfg.tiny_coeff_prune_abs),
+        )
+        pred = _prediction_from_coefficients(semantics, coef)
         best_raw_r2 = _best_single_term_r2(semantics, y)
         r2 = _r2(y, pred) if bool(finite) else torch.tensor(0.0, dtype=y.dtype, device=y.device)
         mse = torch.mean((y - pred) ** 2)
@@ -145,6 +153,42 @@ def _linear_fit(semantics: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor,
         coef = torch.linalg.pinv(G) @ rhs
     pred = A @ coef
     return coef, pred
+
+
+def prune_tiny_coefficients(
+    coef: torch.Tensor,
+    *,
+    rel: float = 1.0e-4,
+    abs_threshold: float = 1.0e-6,
+) -> torch.Tensor:
+    """Prune fitted top-level coefficients before rendering/evaluation."""
+
+    values = torch.as_tensor(coef).clone()
+    if int(values.numel()) == 0:
+        return values
+    structural = values[:-1] if int(values.numel()) > 1 else values
+    scale = structural.abs().max().clamp_min(float(abs_threshold))
+    keep_struct = (structural.abs() >= float(abs_threshold)) & (structural.abs() >= float(rel) * scale)
+    if int(values.numel()) > 1:
+        out = values.clone()
+        out[:-1] = torch.where(keep_struct, structural, torch.zeros_like(structural))
+        out[-1] = torch.where(
+            out[-1].abs() >= float(abs_threshold),
+            out[-1],
+            torch.zeros_like(out[-1]),
+        )
+        return out
+    return torch.where(keep_struct, values, torch.zeros_like(values))
+
+
+def _prediction_from_coefficients(semantics: torch.Tensor, coef: torch.Tensor) -> torch.Tensor:
+    S = torch.nan_to_num(semantics.float())
+    if S.ndim == 1:
+        S = S.unsqueeze(1)
+    c = torch.as_tensor(coef, dtype=S.dtype, device=S.device).flatten()
+    if int(c.numel()) < int(S.shape[1]) + 1:
+        c = torch.cat([c, torch.zeros(int(S.shape[1]) + 1 - int(c.numel()), dtype=S.dtype, device=S.device)])
+    return S @ c[: int(S.shape[1])] + c[int(S.shape[1])]
 
 
 def _fit_sample_prediction(

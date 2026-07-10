@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Smoke/evaluation runner for Edge-Parameterized Semantic Flow."""
+"""Smoke/evaluation runner for Semantic Pullback Fisher Flow."""
 from __future__ import annotations
 
 import argparse
@@ -26,9 +26,10 @@ from semflow_sr.edge_flow.conditional import (
 )
 from semflow_sr.edge_flow.dataset import EdgeFlowRecord
 from semflow_sr.edge_flow.edge_distribution import EdgeDistribution
+from semflow_sr.edge_flow.local_targets import build_local_input_targets
 from semflow_sr.edge_flow.model import EdgeFlowModel, EdgeFlowModelConfig
 from semflow_sr.edge_flow.projection import project_elites_to_edge_target
-from semflow_sr.edge_flow.reward import RewardConfig, evaluate_expression_rewards
+from semflow_sr.edge_flow.reward import RewardConfig, evaluate_expression_rewards, prune_tiny_coefficients
 from semflow_sr.edge_flow.selection import structure_prior_scores
 from semflow_sr.edge_flow.template import RegisterOperatorTemplate
 from semflow_sr.edge_flow.train_edge_flow import _resolve_device
@@ -41,8 +42,8 @@ from semflow_sr.sr.printer import to_string
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", required=True)
-    parser.add_argument("--out", default="results/edge_flow_smoke")
-    parser.add_argument("--tag", default="edge_flow_smoke")
+    parser.add_argument("--out", default="results/spff_smoke")
+    parser.add_argument("--tag", default="spff_smoke")
     parser.add_argument("--num_tasks", type=int, default=2)
     parser.add_argument("--eval_samples", type=int, default=64)
     parser.add_argument("--flow_steps", type=int, default=4)
@@ -64,7 +65,7 @@ def main() -> None:
     parser.add_argument("--sampler_method", default="policy", choices=["policy", "natural", "natural_policy", "ode"])
     parser.add_argument("--postprocess_top_k", type=int, default=32)
     parser.add_argument("--selection_validation_fraction", type=float, default=0.25)
-    parser.add_argument("--head_fit_mode", default="linear")
+    parser.add_argument("--head_fit_mode", default="selector")
     parser.add_argument("--device", default="auto")
     args = parser.parse_args()
 
@@ -81,7 +82,19 @@ def run(args) -> dict:
         "primitives": tuple(ckpt["template"]["primitives"]),
     })
     algorithm = str(ckpt.get("algorithm", "fixed_theta_edge_flow"))
-    if algorithm == "conditional_semantic_edge_flow":
+    if algorithm in {
+        "semantic_pullback_fisher_flow",
+        "spff",
+        "spf",
+        "conditional_semantic_edge_flow_spff",
+        "conditional_semantic_edge_flow",
+        "structural_closure",
+        "structural_closure_setprod",
+        "setprod",
+        "term_structural_closure_setprod",
+        "simple_structural_closure",
+        "term_structural_closure",
+    }:
         return _run_conditional(args, ckpt, template)
     model = EdgeFlowModel(EdgeFlowModelConfig(**ckpt["model_cfg"]))
     model.load_state_dict(ckpt["model"])
@@ -273,7 +286,7 @@ def _evaluate_conditional_dataset_task(
         selection_validation_fraction=selection_validation_fraction,
         head_fit_mode=head_fit_mode,
     )
-    coef = train_rewards.affine_coef[best]
+    coef = prune_tiny_coefficients(train_rewards.affine_coef[best])
     fitted_expr = render_sparse_expression(samples[best], coef)
     expr_text = to_string(fitted_expr, template.num_vars, simplify=True)
     raw_expr_text = to_string(samples[best].expression, template.num_vars, simplify=True)
@@ -305,6 +318,14 @@ def _evaluate_conditional_dataset_task(
         for sample in samples
         if sample.entropy_tensor is not None
     ]
+    spff_local = _spff_local_eval_metrics(
+        model,
+        template,
+        ground_truth=str(ground_truth or ""),
+        num_vars=int(num_vars),
+        x_train=x_train,
+        y_train=y_train,
+    )
     return {
         "task_id": str(task_id),
         "suite": str(suite),
@@ -330,6 +351,7 @@ def _evaluate_conditional_dataset_task(
         "fitted_head_gain": float(train_rewards.fitted_head_gain[best].item()) if train_rewards.fitted_head_gain.numel() else 0.0,
         "head_coef_nonzero_count": int(train_rewards.head_coef_nonzero_count[best].item()) if train_rewards.head_coef_nonzero_count.numel() else 0,
         "head_coef_norm": float(train_rewards.head_coef_norm[best].item()) if train_rewards.head_coef_norm.numel() else 0.0,
+        "coef_pruned_nonzero_count": int((torch.as_tensor(coef).flatten()[:-1].abs() > 0).sum().item()) if int(torch.as_tensor(coef).numel()) > 1 else int((torch.as_tensor(coef).flatten().abs() > 0).sum().item()),
         "base_head_selected_rate": float((samples[best].diagnostics or {}).get("base_head_selected_rate", 0.0)),
         "raw_test_r2_without_affine": float(raw_r2),
         "calibration_gain": float(r2 - raw_r2),
@@ -344,6 +366,73 @@ def _evaluate_conditional_dataset_task(
         "decoder_budget_curve": decoder_curve,
         **template_diag,
         **structure,
+        **spff_local,
+    }
+
+
+def _spff_local_eval_metrics(
+    model: ConditionalEdgeFlowModel,
+    template: RegisterOperatorTemplate,
+    *,
+    ground_truth: str,
+    num_vars: int,
+    x_train: torch.Tensor,
+    y_train: torch.Tensor,
+) -> dict:
+    if not bool(getattr(model, "spff_enabled", False)) or not str(ground_truth or "").strip():
+        return {
+            "source_gt_recovery_rate": 0.0,
+            "local_input_top1_accuracy": 0.0,
+            "local_input_nll": 0.0,
+            "subexpression_recovery_rate": 0.0,
+            "spff_eval_local_record_count": 0,
+        }
+    with torch.no_grad():
+        records, diag = build_local_input_targets(
+            str(ground_truth),
+            variable_count=int(num_vars),
+            template=template,
+            model=model,
+            x=x_train,
+            y=y_train,
+            smoothing=0.0,
+            max_paths_per_term=8,
+            task_id=str(ground_truth),
+        )
+        top1_values: list[float] = []
+        nll_values: list[float] = []
+        for record in records:
+            if int(record.p0.numel()) != int(getattr(model, "spff_num_candidates", 0)):
+                continue
+            mask = record.active_source_mask.to(device=x_train.device, dtype=torch.bool)
+            try:
+                ctx = model.spff_context_from_semantics(
+                    record.candidate_semantics.to(device=x_train.device, dtype=torch.float32),
+                    record.target_semantics.to(device=x_train.device, dtype=torch.float32),
+                    layer_id=int(record.layer),
+                    target_register=int(record.target_register),
+                    branch_id=int(record.branch_id),
+                    arity_slot=int(record.slot),
+                    primitive_id=int(record.operator_id),
+                    source_mask=mask,
+                )
+                probs = model.spff_source_probs_from_context(ctx, source_mask=mask)
+            except Exception:
+                continue
+            target = record.p1.to(device=probs.device, dtype=probs.dtype)
+            gt = int(torch.argmax(target).item())
+            chosen = probs[max(0, min(gt, int(probs.numel()) - 1))]
+            rank = int((probs > chosen).sum().item()) + 1
+            top1_values.append(1.0 if rank == 1 else 0.0)
+            nll_values.append(float(-(target * probs.clamp_min(1e-12).log()).sum().detach().cpu().item()))
+    compiled = float(diag.get("spff_compiled_trace_count", 0.0))
+    paths = float(max(diag.get("spff_equivalent_path_count", 0.0), 1.0))
+    return {
+        "source_gt_recovery_rate": float(sum(top1_values) / max(len(top1_values), 1)),
+        "local_input_top1_accuracy": float(sum(top1_values) / max(len(top1_values), 1)),
+        "local_input_nll": float(sum(nll_values) / max(len(nll_values), 1)),
+        "subexpression_recovery_rate": float(compiled / paths),
+        "spff_eval_local_record_count": int(len(records)),
     }
 
 
@@ -485,7 +574,7 @@ def _conditional_decoder_budget_curve(
         )
         if not sampled:
             continue
-        coef = rewards.affine_coef[best]
+        coef = prune_tiny_coefficients(rewards.affine_coef[best])
         r2, nmse_value, raw_r2 = _test_sample_metrics(sampled[best], x_test, y_test, coef)
         expr_text = to_string(render_sparse_expression(sampled[best], coef), template.num_vars, simplify=True)
         rows.append({
@@ -500,6 +589,7 @@ def _conditional_decoder_budget_curve(
             "valid_fraction": float(rewards.valid_mask.float().mean().item()),
             "best_log_prob": float(sampled[best].log_prob),
             "selected_head_term_index": int(rewards.selected_term_index[best].item()) if rewards.selected_term_index.numel() else -1,
+            "coef_pruned_nonzero_count": int((torch.as_tensor(coef).flatten()[:-1].abs() > 0).sum().item()) if int(torch.as_tensor(coef).numel()) > 1 else int((torch.as_tensor(coef).flatten().abs() > 0).sum().item()),
         })
     return rows
 
@@ -541,7 +631,7 @@ def _evaluate_dataset_task(
         complexity_weight=complexity_weight,
         eta_logprob=selection_eta_logprob,
     )
-    coef = train_rewards.affine_coef[best].tolist()
+    coef = prune_tiny_coefficients(train_rewards.affine_coef[best]).tolist()
     expr_text = to_string(samples[best].expression, template.num_vars, simplify=True)
     generated = f"{coef[0]:.6g}*({expr_text}) + {coef[1]:.6g}"
     r2, nmse_value, raw_r2 = _test_metrics(samples[best].expression, x_test, y_test, coef)
@@ -709,7 +799,7 @@ def _decoder_budget_curve(
         )
         if not sampled:
             continue
-        coef = rewards.affine_coef[best].tolist()
+        coef = prune_tiny_coefficients(rewards.affine_coef[best]).tolist()
         r2, nmse_value, raw_r2 = _test_metrics(sampled[best].expression, x_test, y_test, coef)
         expr_text = to_string(sampled[best].expression, template.num_vars, simplify=True)
         rows.append({
@@ -756,7 +846,7 @@ def _oracle_diagnostics(
         complexity_weight=complexity_weight,
         eta_logprob=0.0,
     )
-    prior_coef = prior_rewards.affine_coef[prior_best].tolist()
+    prior_coef = prune_tiny_coefficients(prior_rewards.affine_coef[prior_best]).tolist()
     prior_r2, _, _ = _test_metrics(prior_samples[prior_best].expression, x_test, y_test, prior_coef)
     prior_expr = to_string(prior_samples[prior_best].expression, template.num_vars, simplify=True)
     theta_star, proj_diag = project_elites_to_edge_target(
@@ -793,7 +883,7 @@ def _oracle_diagnostics(
             complexity_weight=complexity_weight,
             eta_logprob=0.0,
         )
-        star_coef = star_rewards.affine_coef[star_best].tolist()
+        star_coef = prune_tiny_coefficients(star_rewards.affine_coef[star_best]).tolist()
         star_r2, _, _ = _test_metrics(star_samples[star_best].expression, x_test, y_test, star_coef)
         star_expr = to_string(star_samples[star_best].expression, template.num_vars, simplify=True)
         out.update({

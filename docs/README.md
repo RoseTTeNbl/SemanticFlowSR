@@ -1,72 +1,70 @@
-# SemanticFlowSR 文档入口
+# SemanticFlowSR Docs
 
-本文档目录只记录当前 CSEF 主线。路径、配置名、字段名、指标名和命令参数保持代码原名；算法解释和实验结论使用中文。
-
-## 当前主线
+Current active line:
 
 ```text
-Conditional Semantic Edge Flow, CSEF
+One-Step Semantic Fisher Cycle
 ```
 
-核心文档：
+The current runnable mainline is the `register_categorical_blocks`
+construction branch. It samples source particles, proposes complete soft
+endpoints, applies complete-expression semantic tilt, rebuilds a
+source-preserving Fisher coupling, and trains both the Fisher velocity field
+and the proposer from the same coupling:
 
-| 文档 | 内容 |
-|---|---|
-| [ALGORITHM.md](ALGORITHM.md) | 当前 CSEF 训练、推理、GT target shape 和 teacher velocity 流程 |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 代码结构、模块责任、训练和评估数据流 |
-| [MATH.md](MATH.md) | 显式概率形、Fisher path、Euclidean 消融和语义校准数学 |
-| [RESULTS.md](RESULTS.md) | 当前 Fisher / Euclidean 结果、图表和结论 |
-| [IMPROVEMENT_NOTES.md](IMPROVEMENT_NOTES.md) | 当前瓶颈和下一步改进事项 |
-
-补充文档：
-
-| 文档 | 内容 |
-|---|---|
-| [datasets/README.md](datasets/README.md) | benchmark manifest、数据生成和评估数据接口 |
-| [baselines/README.md](baselines/README.md) | 外部符号回归基线和论文指标输出接口 |
-| [../README.md](../README.md) | 项目快速入口 |
-| [../AGENTS.md](../AGENTS.md) | 会话交接信息和工程约束 |
-
-## 当前命令入口
-
-训练：
-
-```bash
-conda run --no-capture-output -n semflow \
-  python -m semflow_sr.edge_flow.train_edge_flow \
-  --config configs/train/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.yaml
+```text
+theta0 -> G_phi(theta0, D)
+       -> complete-expression semantic tilt
+       -> Fisher source-endpoint coupling
+       -> V_psi(theta_t, theta0, D, t)
+       -> same-coupling proposer update
 ```
 
-评估：
+Target-conditioned Stage1, semantic latent endpoint, token construction, and
+Stage2 endpoint correction remain historical/failed probes. They should not be
+used as current validation paths.
 
-```bash
-conda run --no-capture-output -n semflow python scripts/run_edge_flow.py \
-  --ckpt checkpoints/teacher_path_geometry/conditional_edge_flow_gt_sampler_teacher_path_semantic_gpu.pt \
-  --out results/teacher_path_geometry_fisher_gpu \
-  --tag teacher_path_geometry_fisher_gpu \
-  --manifest data/benchmark_suites/benchmark_manifest.json \
-  --manifest_root data/benchmark_suites \
-  --manifest_suite nguyen constant livermore jin \
-  --eval_samples 64 \
-  --flow_steps 1 \
-  --sampler_method policy \
-  --head_fit_mode linear \
-  --device cuda:1
+Read in this order:
+
+```text
+ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md
+MATH.md
+ARCHITECTURE_COMPLETE_EXPRESSION_SEMANTIC_FM.md
+STRUCTURAL_CLOSURE.md
+DIAGNOSTIC_EXPERIMENTS_COMPLETE_EXPRESSION_FLOW.md
 ```
 
-结果指标输出：
+Active scripts:
 
-```bash
-conda run --no-capture-output -n semflow python scripts/archive_paper_metrics.py \
-  --out results/paper_metrics/csef_fisher_vs_euclidean_gpu_20260623 \
-  --suite nguyen constant livermore jin \
-  --method CSEF-Fisher SFSR sfsr_method samples_jsonl results/teacher_path_geometry_fisher_gpu/teacher_path_geometry_fisher_gpu_samples.jsonl \
-  --method CSEF-Euclidean SFSR sfsr_method samples_jsonl results/teacher_path_geometry_euclidean_gpu_20260623/teacher_path_geometry_euclidean_gpu_20260623_samples.jsonl
+```text
+scripts/train_complete_expression_semantic_fm.py
+scripts/run_one_step_semantic_fisher_cycle_gpu.sh
 ```
 
-## 文档维护规则
+Current validation artifacts:
 
-1. 算法变化同步更新 [ALGORITHM.md](ALGORITHM.md)、[ARCHITECTURE.md](ARCHITECTURE.md) 和 [MATH.md](MATH.md)。
-2. 新实验只记录当前有效结果，写入 [RESULTS.md](RESULTS.md) 并保留 artifact 路径。
-3. 失败分析写入 [IMPROVEMENT_NOTES.md](IMPROVEMENT_NOTES.md)，先列证据，再列判断和下一步。
-4. 新增结果目录必须能被 `scripts/archive_paper_metrics.py` 读取或被 [RESULTS.md](RESULTS.md) 明确说明。
+```text
+results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/
+```
+
+Preserved comparison baseline:
+
+```text
+results/clean_benchmark_20260701/ablations/clean_boundary_20260702/
+```
+
+Do not reintroduce as current mainline:
+
+```text
+target_conditioned_reference Stage1
+semantic_latent_endpoint family mass
+semantic_gradient local teacher
+collocation_mixture state sampler
+local tau_b semantic interpolation
+group-sampling semantic_improvement_stage
+endpoint_shape / denoising parameterization
+terminal anchor/prior training objective
+contrastive auxiliary loss
+fixed expression pool distribution distillation
+inactive prior supervision
+```

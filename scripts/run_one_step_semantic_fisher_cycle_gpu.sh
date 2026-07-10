@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+trap 'code=$?; echo "[one-step fisher cycle exit] $(date -Is) code=${code}"; exit ${code}' EXIT
+
+cd /home/ywj/wyh/SFSR/SemanticFlowSR
+PY="${PY:-/home/ywj/miniconda3/envs/semflow/bin/python}"
+RUN_GPU="${RUN_GPU:-1}"
+export CUDA_VISIBLE_DEVICES="$RUN_GPU"
+
+SCALE="${SCALE:-smoke}"
+TAG="${TAG:-one_step_semantic_fisher_cycle_v4_lineage_l12_20260711_${SCALE}}"
+BASE="${RESULT_BASE:-results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs}"
+LOG_DIR="${LOG_DIR:-logs/complete_expression_semantic_fm}"
+OUT="${OUT:-$BASE/$TAG}"
+LOG="$LOG_DIR/$TAG.log"
+mkdir -p "$LOG_DIR"
+if [ -e "$OUT" ]; then echo "Refusing existing OUT=$OUT" >&2; exit 3; fi
+
+case "$SCALE" in
+  smoke)
+    TRAIN_LIMIT="${TRAIN_LIMIT:-4}"; EVAL_LIMIT="${EVAL_LIMIT:-2}"
+    BOOTSTRAP_EPOCHS="${BOOTSTRAP_EPOCHS:-4}"; BOOTSTRAP_STEPS="${BOOTSTRAP_STEPS:-30}"
+    PARTICLES="${PARTICLES:-4}"
+    FLOW_EPOCHS="${FLOW_EPOCHS:-3}"; CYCLE_STEPS="${CYCLE_STEPS:-30}"
+    HIDDEN="${HIDDEN:-96}"
+    EVAL_THETA0_SAMPLES="${EVAL_THETA0_SAMPLES:-4}"
+    ;;
+  medium)
+    TRAIN_LIMIT="${TRAIN_LIMIT:-12}"; EVAL_LIMIT="${EVAL_LIMIT:-8}"
+    BOOTSTRAP_EPOCHS="${BOOTSTRAP_EPOCHS:-6}"; BOOTSTRAP_STEPS="${BOOTSTRAP_STEPS:-60}"
+    PARTICLES="${PARTICLES:-8}"
+    FLOW_EPOCHS="${FLOW_EPOCHS:-6}"; CYCLE_STEPS="${CYCLE_STEPS:-60}"
+    HIDDEN="${HIDDEN:-128}"
+    EVAL_THETA0_SAMPLES="${EVAL_THETA0_SAMPLES:-8}"
+    ;;
+  overfit)
+    TRAIN_LIMIT="${TRAIN_LIMIT:-8}"; EVAL_LIMIT="${EVAL_LIMIT:-4}"
+    BOOTSTRAP_EPOCHS="${BOOTSTRAP_EPOCHS:-12}"; BOOTSTRAP_STEPS="${BOOTSTRAP_STEPS:-80}"
+    PARTICLES="${PARTICLES:-8}"
+    FLOW_EPOCHS="${FLOW_EPOCHS:-6}"; CYCLE_STEPS="${CYCLE_STEPS:-80}"
+    HIDDEN="${HIDDEN:-128}"
+    EVAL_THETA0_SAMPLES="${EVAL_THETA0_SAMPLES:-8}"
+    ;;
+  *) echo "SCALE must be smoke, medium, or overfit" >&2; exit 2;;
+esac
+OUTER_ITERATIONS="${CYCLE_ITERATIONS:-3}"
+
+ARGS=(
+  --out "$OUT" --device cuda:0
+  --training-flow one_step_semantic_fisher_cycle
+  --construction-graph register_categorical_blocks
+  --task-conditioning xy --task-encoder-mode hybrid_stats --global-state-mode full
+  --suites nguyen constant
+  --train-task-limit "$TRAIN_LIMIT" --eval-task-limit "$EVAL_LIMIT"
+  --num-vars 3 --num-layers 12 --num-registers 17
+  --ops copy,add,sub,mul,protected_div,sin,cos,square,cube,protected_log,protected_sqrt,exp
+  --output-terms 1 --gt-traces-per-task 4
+  --hidden "$HIDDEN" --metadata-embedding-dim 16
+  --max-train-points 64 --max-eval-points 64
+  --epochs "$BOOTSTRAP_EPOCHS" --steps-per-epoch "$BOOTSTRAP_STEPS" --train-batch-size 4
+  --lr "${BOOTSTRAP_LR:-5e-4}" --weight-decay 1e-5 --grad-clip 1.0
+  --theta0-noise-scale 1.0 --theta0-endpoint-coupling none
+  --inactive-block-target-mode start --inactive-block-loss-weight 0.0
+  --cycle-iterations "$OUTER_ITERATIONS"
+  --cycle-particles-per-task "$PARTICLES" --cycle-expression-samples 0
+  --cycle-proposer-source learned_flow --cycle-proposer-rollout-steps "${PROPOSER_ROLLOUT_STEPS:-8}"
+  --cycle-proximal-radius "${PROXIMAL_RADIUS:-0.35}"
+  --cycle-proximal-candidate-budget "${PROXIMAL_CANDIDATES:-6}"
+  --cycle-proximal-alt-actions "${PROXIMAL_ALT_ACTIONS:-1}"
+  --cycle-manifold-fr-mean-gate "${MANIFOLD_FR_MEAN_GATE:-0.15}"
+  --cycle-manifold-fr-p95-gate "${MANIFOLD_FR_P95_GATE:-0.35}"
+  --cycle-flow-gt-probe-samples "${FLOW_GT_PROBE_SAMPLES:-4}"
+  --cycle-landscape-sources "${LANDSCAPE_SOURCES:-4}"
+  --cycle-landscape-task-limit "${LANDSCAPE_TASK_LIMIT:-1}"
+  --cycle-landscape-time-points "${LANDSCAPE_TIME_POINTS:-5}"
+  --cycle-projection-sharpness 1.0 --cycle-mutation-samples 0 --cycle-elite-modes 0 --cycle-archive-size 0
+  --no-cycle-soft-endpoint-samples --cycle-eval-each-iteration
+  --cycle-flow-epochs "$FLOW_EPOCHS" --cycle-proposer-epochs 0
+  --cycle-steps-per-epoch "$CYCLE_STEPS"
+  --cycle-flow-lr "${FLOW_LR:-5e-4}" --cycle-proposer-lr 0
+  --cycle-time-sampling stratified_fisher
+  --cycle-readout-loss-weight "${READOUT_LOSS_WEIGHT:-3.0}" --cycle-op-loss-weight "${OP_LOSS_WEIGHT:-1.5}"
+  --cycle-inactive-identity-weight 0.05
+  --cycle-endpoint-loss-weight 0.25 --cycle-consistency-examples 16 --cycle-terminal-rk2-steps 8
+  --cycle-gt-replay-fraction 0.25 --cycle-gt-teacher-weight 0.10
+  --time-sampling low_t_mixture --low-t-sampling-prob 0.4 --low-t-max 0.1
+  --ode-steps "${ODE_STEPS:-32}" --ode-sweep-steps "${ODE_SWEEP_STEPS:-}"
+  --eval-theta0-samples "$EVAL_THETA0_SAMPLES" --eval-samples "${EVAL_SAMPLES:-2}"
+  --eval-flow-gt-probe-samples "${EVAL_FLOW_GT_PROBE_SAMPLES:-4}"
+  --eval-theta0-mode deterministic_random
+  --eval-endpoint-decode-mode hard_argmax
+  --no-eval-theta0-use-gt-trace --rollout-guidance-mode off
+  --temporal-visualization-steps 16
+  --seed "${SEED:-20260711}" --log-epochs
+)
+
+echo "[one-step fisher cycle] $(date -Is) scale=$SCALE gpu=$RUN_GPU out=$OUT" | tee "$LOG"
+echo "[budget] tasks=$TRAIN_LIMIT lineages=$PARTICLES outer_iterations=$OUTER_ITERATIONS local_candidates=${PROXIMAL_CANDIDATES:-6} flow_epochs=$FLOW_EPOCHS" | tee -a "$LOG"
+"$PY" scripts/train_complete_expression_semantic_fm.py "${ARGS[@]}" 2>&1 | tee -a "$LOG"

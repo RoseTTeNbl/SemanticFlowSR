@@ -1,4 +1,4 @@
-"""GT-neighborhood sampler for CSEF target probability shapes."""
+"""Legacy GT-neighborhood sampler for target probability shapes."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -40,7 +40,7 @@ def build_gt_neighborhood_samples(
     """Compile canonical GT plus small symbolic perturbations.
 
     The perturbation kernel is intentionally conservative: every generated
-    neighbor must compile through the same CSEF compiler before it can affect
+    neighbor must compile through the same construction compiler before it can affect
     the target probability shape.
     """
 

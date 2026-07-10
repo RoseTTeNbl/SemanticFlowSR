@@ -14,13 +14,96 @@ from semflow_sr.edge_flow.model import EdgeFlowModel, EdgeFlowModelConfig, edge_
 from semflow_sr.edge_flow.proposals import load_diffusion_formula_proposals, simple_gp_proposals
 from semflow_sr.edge_flow.reward import RewardConfig, evaluate_expression_rewards
 from semflow_sr.edge_flow.template import RegisterOperatorTemplate
-from semflow_sr.edge_flow.train_edge_flow import _resolve_device, run as run_edge_flow_train
+from semflow_sr.edge_flow.train_edge_flow import _fixed_pool_task_seed, _resolve_device, run as run_edge_flow_train
 from semflow_sr.sr.ast import Expr
 
 
 def test_training_device_resolver_supports_cpu_and_auto():
     assert _resolve_device({"device": "cpu"}).type == "cpu"
     assert isinstance(_resolve_device({"device": "auto"}), torch.device)
+
+
+def test_fixed_pool_task_seed_is_deterministic_and_task_specific():
+    assert _fixed_pool_task_seed(47, 0) == _fixed_pool_task_seed(47, 0)
+    assert _fixed_pool_task_seed(47, 0) != _fixed_pool_task_seed(47, 1)
+    assert _fixed_pool_task_seed(47, 1) != _fixed_pool_task_seed(48, 1)
+
+
+def test_task_id_fixed_pool_training_records_cpu_pool_device(tmp_path):
+    ckpt = run_edge_flow_train({
+        "seed": 3,
+        "algorithm": "task_id_theta_oracle_overfit",
+        "out": str(tmp_path),
+        "checkpoint_name": "task_id_fixed_pool_cpu_test.pt",
+        "num_tasks": 2,
+        "runtime": {"torch_num_threads": 1, "torch_num_interop_threads": 1, "device": "cpu"},
+        "template": {
+            "num_vars": 1,
+            "num_registers": 4,
+            "num_layers": 2,
+            "mixture_modes": 1,
+            "primitives": ["add", "mul", "square"],
+        },
+        "gen": {"num_vars": 1, "max_depth": 2, "probe_size": 12},
+        "train": {
+            "epochs": 1,
+            "task_batch_size": 1,
+            "task_limit": 2,
+            "samples_per_task": 4,
+            "gt_injection_count": 1,
+            "gt_rewrite_count": 1,
+            "proxy_proposal_count": 0,
+            "fixed_pool_device": "cpu",
+            "gt_mass_weight": 0.1,
+            "group_weight": 1.0,
+            "pair_weight": 1.0,
+            "lr": 0.01,
+        },
+    })
+
+    saved = torch.load(ckpt, map_location="cpu", weights_only=False)
+    rows = list(csv.DictReader((tmp_path / "train_curve_task_id_fixed_pool_cpu_test.csv").open()))
+
+    assert saved["fixed_pool_device"] == "cpu"
+    assert rows
+    assert {row["fixed_pool_device"] for row in rows} == {"cpu"}
+
+
+def test_task_id_fixed_pool_training_can_save_epoch_checkpoint(tmp_path):
+    ckpt = run_edge_flow_train({
+        "seed": 5,
+        "algorithm": "task_id_theta_oracle_overfit",
+        "out": str(tmp_path),
+        "checkpoint_name": "task_id_epoch_checkpoint_test.pt",
+        "num_tasks": 1,
+        "runtime": {"torch_num_threads": 1, "torch_num_interop_threads": 1, "device": "cpu"},
+        "template": {
+            "num_vars": 1,
+            "num_registers": 4,
+            "num_layers": 2,
+            "mixture_modes": 1,
+            "primitives": ["add", "mul", "square"],
+        },
+        "gen": {"num_vars": 1, "max_depth": 2, "probe_size": 12},
+        "train": {
+            "epochs": 1,
+            "task_batch_size": 1,
+            "task_limit": 1,
+            "samples_per_task": 4,
+            "gt_injection_count": 1,
+            "gt_rewrite_count": 1,
+            "proxy_proposal_count": 0,
+            "fixed_pool_device": "cpu",
+            "save_every_epoch": True,
+            "lr": 0.01,
+        },
+    })
+
+    saved = torch.load(ckpt, map_location="cpu", weights_only=False)
+
+    assert saved["completed_epochs"] == 1
+    assert saved["optimizer_step"] == 1
+    assert "optimizer" in saved
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA device is required for reward device regression")
@@ -201,11 +284,11 @@ def test_structure_metrics_include_symbolic_and_operator_dependency_audits():
     assert dependency["operator_dependency_match"] is True
 
 
-def test_train_entrypoint_defaults_to_conditional_semantic_edge_flow(tmp_path):
+def test_train_entrypoint_defaults_to_semantic_pullback_fisher_flow(tmp_path):
     ckpt = run_edge_flow_train({
         "seed": 0,
         "out": str(tmp_path),
-        "checkpoint_name": "csef_test.pt",
+        "checkpoint_name": "spff_default_test.pt",
         "num_tasks": 1,
         "runtime": {"torch_num_threads": 1, "torch_num_interop_threads": 1, "device": "cpu"},
         "template": {
@@ -216,33 +299,43 @@ def test_train_entrypoint_defaults_to_conditional_semantic_edge_flow(tmp_path):
             "primitives": ["add", "mul", "square"],
         },
         "gen": {"max_depth": 2, "probe_size": 16},
-        "model": {"hidden": 24, "head_terms": 2},
+        "model": {
+            "hidden": 24,
+            "head_terms": 1,
+            "exclude_base_head_candidates": True,
+            "spff_enabled": True,
+            "spff_chart_type": "ode",
+            "spff_sem_dim": 24,
+            "spff_ode_steps": 1,
+            "spff_max_chart_velocity": 0.02,
+        },
         "train": {
-            "epochs": 1,
-            "samples_per_task": 8,
-            "elite_k": 2,
-            "sampler_method": "ode",
-            "flow_steps": 2,
-            "complexity_weight": 0.001,
+            "chart_pretrain_epochs": 1,
+            "velocity_epochs": 1,
+            "task_batch_size": 1,
             "lr": 0.001,
+            "spff_chart_iso_weight": 0.01,
+            "spff_chart_identity_weight": 0.001,
+            "spff_chart_roundtrip_weight": 0.001,
         },
     })
 
     saved = torch.load(ckpt, map_location="cpu", weights_only=False)
 
-    assert saved["algorithm"] == "conditional_semantic_edge_flow"
-    assert saved["model_cfg"]["head_terms"] == 2
-    curve = (tmp_path / "train_curve_csef_test.csv")
+    assert saved["algorithm"] == "semantic_pullback_fisher_flow"
+    assert saved["model_cfg"]["head_terms"] == 1
+    curve = (tmp_path / "train_curve_spff_default_test.csv")
     assert curve.exists()
     header = curve.read_text().splitlines()[0]
     assert "device" in header
-    assert "fitted_head_gain_mean" in header
-    assert "head_coef_norm_mean" in header
+    assert "spff_velocity_loss" in header
+    assert "spff_chart_iso_loss" in header
 
 
 def test_conditional_training_writes_minibatch_and_replay_fields(tmp_path):
     ckpt = run_edge_flow_train({
         "seed": 1,
+        "algorithm": "conditional_semantic_edge_flow",
         "out": str(tmp_path),
         "checkpoint_name": "csef_batch_test.pt",
         "num_tasks": 3,
@@ -297,6 +390,7 @@ def test_conditional_training_loads_symbolicgpt_subset_source(tmp_path):
 
     ckpt = run_edge_flow_train({
         "seed": 4,
+        "algorithm": "conditional_semantic_edge_flow",
         "out": str(tmp_path),
         "checkpoint_name": "csef_symbolicgpt_test.pt",
         "runtime": {"torch_num_threads": 1, "torch_num_interop_threads": 1, "device": "cpu"},
@@ -339,6 +433,7 @@ def test_conditional_training_loads_symbolicgpt_subset_source(tmp_path):
 def test_conditional_training_saves_anti_proxy_and_pointnet_config_fields(tmp_path):
     ckpt = run_edge_flow_train({
         "seed": 6,
+        "algorithm": "conditional_semantic_edge_flow",
         "out": str(tmp_path),
         "checkpoint_name": "csef_antiproxy_test.pt",
         "num_tasks": 1,
@@ -387,6 +482,7 @@ def test_conditional_training_saves_anti_proxy_and_pointnet_config_fields(tmp_pa
 def test_conditional_training_writes_semantic_teacher_and_structure_diagnostics(tmp_path):
     ckpt = run_edge_flow_train({
         "seed": 8,
+        "algorithm": "conditional_semantic_edge_flow",
         "out": str(tmp_path),
         "checkpoint_name": "csef_teacher_test.pt",
         "num_tasks": 1,
@@ -458,6 +554,7 @@ def test_conditional_training_writes_semantic_teacher_and_structure_diagnostics(
 def test_conditional_training_uses_structural_denoising_teacher_targets(tmp_path):
     ckpt = run_edge_flow_train({
         "seed": 9,
+        "algorithm": "conditional_semantic_edge_flow",
         "out": str(tmp_path),
         "checkpoint_name": "csef_structural_denoising_test.pt",
         "num_tasks": 1,

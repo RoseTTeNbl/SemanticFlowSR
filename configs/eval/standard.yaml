@@ -1,8 +1,8 @@
-# Default smoke evaluation settings for Edge-Parameterized Semantic Flow.
+# Default smoke evaluation settings for Semantic Pullback Fisher Flow.
 runner: scripts/run_edge_flow.py
-checkpoint: checkpoints/edge_flow_smoke.pt
-out: results/edge_flow_smoke
-tag: edge_flow_smoke
+checkpoint: checkpoints/spff/spff_ode_gpu.pt
+out: results/spff_smoke
+tag: spff_smoke
 num_tasks: 2
 eval_samples: 64
 flow_steps: 4

@@ -39,6 +39,7 @@ _OPERATORS: list[Operator] = [
     Operator("protected_log", 1, P.p_log, 2.0, _sym_log),
     Operator("protected_sqrt", 1, P.p_sqrt, 2.0, _sym_sqrt),
     Operator("exp", 1, P.p_exp, 2.0, sp.exp),
+    Operator("tanh", 1, P.p_tanh, 2.0, sp.tanh),
 ]
 
 OPERATORS: tuple[Operator, ...] = tuple(_OPERATORS)
@@ -60,5 +61,5 @@ def default_op_subset() -> list[str]:
     add/sub are kept because linear readout only combines terminal columns; nonlinear
     compositions such as sin(x+x^2) require an intermediate add/sub register.
     """
-    return ["add", "sub", "mul", "protected_div", "sin", "cos", "square", "cube",
+    return ["add", "sub", "mul", "protected_div", "sin", "cos", "tanh", "square", "cube",
             "exp", "protected_log", "protected_sqrt"]

@@ -1,4 +1,4 @@
-"""Conditional Semantic Edge Flow mainline."""
+"""Semantic Pullback Fisher Flow mainline."""
 
 from .conditional import (
     ConditionalEdgeFlowConfig,

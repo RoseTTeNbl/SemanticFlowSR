@@ -1,0 +1,12 @@
+{
+  "expected_objective": "endpoint_semantic_signature_pushforward_projection",
+  "stage1_loss_max": 0.3,
+  "cosine_min": 0.98,
+  "norm_ratio_min": 0.9,
+  "terminal_prob_min": 0.75,
+  "endpoint_loss_max": 0.3,
+  "accept_rate_min": 0.5,
+  "r2_min": 0.95,
+  "structure_min": 0.4,
+  "valid_expression_min": 0.5
+}

@@ -7,12 +7,15 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import time
 import traceback
 from typing import Any
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from semflow_sr.eval.baseline_runner import collect_tasks
 from semflow_sr.eval.external_adapters import normalize_tpsr_result
@@ -47,6 +50,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--width", type=int, default=1)
     ap.add_argument("--rollout", type=int, default=1)
     ap.add_argument("--horizon", type=int, default=60)
+    ap.add_argument("--per_task_timeout_sec", type=float, default=300.0)
     ap.add_argument("--no_resume", action="store_true")
     args = ap.parse_args(argv)
 
@@ -75,7 +79,7 @@ def main(argv: list[str] | None = None) -> None:
                 continue
             started = time.perf_counter()
             try:
-                row = runner.run_task(task)
+                row = _with_timeout(lambda: runner.run_task(task), timeout_sec=float(args.per_task_timeout_sec))
                 row["runtime_sec"] = float(row.get("runtime_sec", 0.0)) + (time.perf_counter() - started)
             except Exception as exc:  # noqa: BLE001 - long baseline runs should archive per-task failures.
                 row = {
@@ -124,7 +128,10 @@ class _TPSRRunner:
 
         self.args = args
         self.torch = torch
-        self.model = torch.load(args.model_path, map_location=torch.device("cpu"))
+        try:
+            self.model = torch.load(args.model_path, map_location=torch.device("cpu"), weights_only=False)
+        except TypeError:
+            self.model = torch.load(args.model_path, map_location=torch.device("cpu"))
         self.model.embedder.eval()
         self.model.encoder.eval()
         self.model.decoder.eval()
@@ -271,6 +278,27 @@ def _tree_expression(best: dict[str, Any]) -> str:
 
 def _infer_suite(task_id: str) -> str:
     return task_id.split("/", 1)[0] if "/" in task_id else "unknown"
+
+
+class _TaskTimeout(Exception):
+    pass
+
+
+def _timeout_handler(_signum, _frame) -> None:
+    raise _TaskTimeout("per-task TPSR timeout")
+
+
+def _with_timeout(fn, *, timeout_sec: float):
+    if float(timeout_sec) <= 0:
+        return fn()
+    old_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.setitimer(signal.ITIMER_REAL, float(timeout_sec))
+    try:
+        return fn()
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 if __name__ == "__main__":

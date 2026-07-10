@@ -1,4 +1,4 @@
-"""External complete-expression proposal samplers for CSEF training."""
+"""External complete-expression proposal samplers for SPFF training."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -38,7 +38,7 @@ def simple_gp_proposals(
     """Small tree-GP population proposal over the local Expr AST.
 
     This is intentionally lightweight: it supplies non-neural complete-expression
-    candidates so CSEF top-k is not fed only by its own random policy samples.
+    candidates so SPFF top-k is not fed only by its own random policy samples.
     """
 
     pop = [_random_expr(num_vars, primitives, max_depth=max_depth, rng=rng) for _ in range(max(int(population_size), 1))]

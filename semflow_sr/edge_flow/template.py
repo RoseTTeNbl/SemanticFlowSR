@@ -29,6 +29,7 @@ class RegisterOperatorTemplate:
     num_layers: int
     primitives: tuple[str, ...]
     mixture_modes: int = 1
+    output_terms: int = 1
 
     def __post_init__(self) -> None:
         if self.num_registers < self.num_vars + 1:
@@ -37,6 +38,10 @@ class RegisterOperatorTemplate:
             raise ValueError("num_layers must be positive")
         if self.mixture_modes <= 0:
             raise ValueError("mixture_modes must be positive")
+        if self.output_terms <= 0:
+            raise ValueError("output_terms must be positive")
+        if self.output_terms > 1 and self.num_registers < self.num_vars + 2:
+            raise ValueError("multi-term output requires a zero register")
         for name in self.primitives:
             if name not in NAME_TO_ID:
                 raise ValueError(f"unknown primitive: {name}")
@@ -69,17 +74,27 @@ class RegisterOperatorTemplate:
                     candidate_ids=update_candidates,
                     target_node=f"reg_{layer + 1}_{reg}",
                 ))
-        groups.append(EdgeGroup(
-            group_id="OUT:SELECT",
-            layer_id=self.num_layers,
-            mode_id=None,
-            group_type="OUTPUT_SELECT",
-            candidate_ids=tuple(range(self.num_registers)),
-            target_node="output",
-        ))
+        if int(self.output_terms) <= 1:
+            groups.append(EdgeGroup(
+                group_id="OUT:SELECT",
+                layer_id=self.num_layers,
+                mode_id=None,
+                group_type="OUTPUT_SELECT",
+                candidate_ids=tuple(range(self.num_registers)),
+                target_node="output",
+            ))
+        else:
+            for term_idx in range(int(self.output_terms)):
+                groups.append(EdgeGroup(
+                    group_id=f"OUT:TERM{term_idx}:SELECT",
+                    layer_id=self.num_layers,
+                    mode_id=None,
+                    group_type="OUTPUT_SELECT",
+                    candidate_ids=tuple(range(self.num_registers + 1)),
+                    target_node=f"output_term_{term_idx}",
+                ))
         return groups
 
     @property
     def group_ids(self) -> list[str]:
         return [group.group_id for group in self.groups]
-

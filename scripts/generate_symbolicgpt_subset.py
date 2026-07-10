@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Generate a local SymbolicGPT-style subset for CSEF training."""
+"""Generate a local SymbolicGPT-style subset for SPFF training."""
 from __future__ import annotations
 
 import argparse
@@ -33,6 +33,7 @@ def main() -> None:
             "cos",
             "square",
             "cube",
+            "exp",
             "protected_log",
             "protected_sqrt",
         ],

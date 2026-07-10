@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 import json
+import signal
 import time
 
 import pandas as pd
@@ -48,6 +49,7 @@ def run_baseline_records(
     kwargs: dict | None = None,
     continue_on_error: bool = True,
     resume: bool = False,
+    timeout_sec: float | None = None,
 ) -> dict[str, dict]:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -60,7 +62,10 @@ def run_baseline_records(
             continue
         started = time.perf_counter()
         try:
-            item = _call_baseline(task, baseline_fn, kwargs or {})
+            item = _call_with_optional_timeout(
+                lambda: _call_baseline(task, baseline_fn, kwargs or {}),
+                timeout_sec=timeout_sec,
+            )
             item = dict(item)
             item.setdefault("status", "ok")
             item.setdefault("error", "")
@@ -104,6 +109,27 @@ def run_baseline_records(
     return out
 
 
+class _TaskTimeout(Exception):
+    pass
+
+
+def _timeout_handler(_signum, _frame) -> None:
+    raise _TaskTimeout("per-task baseline timeout")
+
+
+def _call_with_optional_timeout(fn, *, timeout_sec: float | None):
+    if timeout_sec is None or float(timeout_sec) <= 0:
+        return fn()
+    old_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.setitimer(signal.ITIMER_REAL, float(timeout_sec))
+    try:
+        return fn()
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, old_handler)
+
+
 def _call_baseline(task: SRTask, baseline_fn: BaselineFn, kwargs: dict) -> dict:
     if kwargs:
         try:
@@ -139,17 +165,20 @@ def _collect_legacy_dir_tasks(data: list[str | Path], *, seed: int) -> list[SRTa
                 continue
             tr = pd.read_csv(task_dir / f"seed_{seed}_train.csv")
             te = pd.read_csv(task_dir / f"seed_{seed}_test.csv")
+            meta = {}
+            if (task_dir / "metadata.json").exists():
+                meta = json.loads((task_dir / "metadata.json").read_text())
             cols = [c for c in tr.columns if c != "target"]
-            suite = suite_dir.name
+            suite = str(meta.get("suite", suite_dir.name))
             tasks.append(SRTask(
-                task_dir.name,
+                f"{suite}/{task_dir.name}",
                 tr[cols].to_numpy(float),
                 tr["target"].to_numpy(float),
                 te[cols].to_numpy(float),
                 te["target"].to_numpy(float),
-                None,
-                cols,
-                {"suite": suite, "seed": seed},
+                meta.get("expression"),
+                list(meta.get("variables", cols)),
+                {"suite": suite, "seed": seed, **meta},
             ))
     return tasks
 

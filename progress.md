@@ -1,0 +1,962 @@
+# Progress
+
+## 2026-07-09 full graph Stage1 run
+
+- Continued the requested full Stage1 run for `graph_target_conditioned_stage1_full_20260709_r1`.
+- Confirmed controller PID `904878` and Python training PID `905134` are alive, using `cuda:0`.
+- The run initially spent several minutes in full-data loading / GT trace compilation before writing epoch logs.
+- Epoch 1 completed with `stage1_fm_loss=0.08991084497247356`, `stage1_best_loss=0.08991084497247356`, zero-pred loss `0.5989418806415051`, cosine `0.972767845261842`, norm ratio `1.0011066338307864`, and finite task encoder rate `1.0`.
+- Epoch 2 improved to `stage1_fm_loss=0.04043227504997048`, cosine `0.988559900559485`, norm ratio `0.9787452617910458`.
+- Epoch 3 improved to `stage1_fm_loss=0.022395529280474877`, cosine `0.9936886429786682`, norm ratio `0.9750550415739417`.
+- Epoch 4 improved to `stage1_fm_loss=0.017905442236806266`, cosine `0.994816890321672`, norm ratio `0.9782904290035367`.
+- The user clarified that the first full-data run can use 8 epochs. Stopped the old 24-epoch run before final outputs were written and preserved its log as convergence evidence.
+- Started `graph_target_conditioned_stage1_full_e8_20260709_r1` with `SCALE=full EPOCHS=8 RUN_GPU=0`; the command confirms full graph config and `--epochs 8`.
+- The 8-epoch run completed training:
+  - epoch losses: `0.0899`, `0.0404`, `0.0224`, `0.0179`, `0.0101`, `0.00818`, `0.00894`, `0.00954`;
+  - best Stage1 loss `0.008180854120000731` at epoch 6;
+  - epoch 8 cosine `0.9943187788501382`, norm ratio `1.007710670530796`.
+- The process is now in eval/rollout after training. No result summary/samples file exists yet for the new 8-epoch run; final R2, expression structure, and per-sample endpoint probability analysis remain pending until eval finishes.
+
+## 2026-07-09 graph Stage2 corrected-bridge theory update
+
+- Implemented the latest Stage2 theory in `scripts/train_complete_expression_semantic_fm.py`:
+  - objective version bumped to `iterative_semantic_endpoint_corrected_bridge_fm_v1`;
+  - cache signature now includes training mode, full-field flag, and bridge pair;
+  - new metadata fields record `semantic_endpoint_training_objective`, `semantic_endpoint_training_mode`, `semantic_endpoint_train_full_field`, and `semantic_endpoint_bridge_pair`;
+  - default Stage2 mode is `corrected_bridge_fm`, which trains the full next vector field on corrected bridge samples `(theta0, theta1_plus)`;
+  - residual/base-frozen correction is retained only as `residual_ablation` / explicit `--no-semantic-endpoint-train-base`.
+- Added `scripts/run_graph_semantic_endpoint_corrected_bridge_stage2_gpu.sh` as the graph-only Stage2 runner. It requires `STAGE1_CKPT`, defaults to corrected-bridge full-field FM, writes diagnostics JSON, and supports `SCALE=smoke|medium|full` plus `TRAIN_ONLY=1`.
+- Static checks passed:
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile scripts/train_complete_expression_semantic_fm.py`;
+  - `bash -n scripts/run_graph_semantic_endpoint_corrected_bridge_stage2_gpu.sh scripts/run_graph_target_conditioned_stage1_gpu.sh`;
+  - `git diff --check` on touched scripts/planning files.
+- `docs/reference/prom.md` was not modified.
+- Tiny train-only Stage2 smoke completed:
+  - run dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_stage2_corrected_bridge_smoke_trainonly_20260709`;
+  - source checkpoint `graph_target_conditioned_stage1_smoke_multivar_codex_20260709/typed_op_node_flow_checkpoint.pt`;
+  - endpoint collection reached 2/2 examples in about 16.3 seconds with tiny settings;
+  - summary shows `semantic_endpoint_training_mode=corrected_bridge_fm`, `semantic_endpoint_train_full_field=true`, trainable params equal total params (`259202`), and bridge pair `theta0_to_semantic_tilt_projected_theta1_plus`.
+- Tiny eval smoke completed:
+  - run dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_stage2_corrected_bridge_smoke_eval_20260709`;
+  - 2 Nguyen eval tasks wrote final samples and partial/final eval progress files;
+  - summary: `r2_mean=0.9865`, raw R2 mean `0.9564`, nontrivial expression rate `1.0`, endpoint trace-family active mean probability `0.9476`, argmax match `1.0`;
+  - sample inspection: Nguyen-5 recovered `sin(x0**2)*cos(x0)-1`; Nguyen-3 produced a high-R2 but structurally imperfect expression containing an extra `x1` term.
+- No matching graph Stage1/Stage2 training process remains running after the smoke checks.
+
+## 2026-07-09 read-only sample-level diagnostic
+
+- User requested a pause from iterative algorithm edits and asked for theory/runtime understanding plus severe-error analysis, with explicit attention to sample result files and generated expression vs GT gaps.
+- Current diagnostic mode is read-only for algorithm code: inspect docs, runtime entry points, result directories, metrics, and samples before proposing any fix.
+- Existing records already show a recurring mismatch: semantic posterior/pushforward statistics can look positive while held-out R2, structure metrics, and generated expressions remain poor; graph branch additionally appears gated by Stage1/reference-field or output-production failures.
+- Read current theory/runtime docs and runner scripts. Confirmed the intended theory is endpoint-only semantic pushforward after a Stage1 reference-flow gate, not iterative local semantic-value patching.
+- Located current retained sample files. Token eval files exist and show poor generated expressions versus GT; graph current retained result has zero sample rows and no eval output directory, so graph cannot yet be analyzed through expression-vs-GT samples.
+- Checked running processes; no `train_complete_expression_semantic_fm.py` or `train_token_policy_semantic_fm.py` process is currently writing these results.
+- Inspected token Stage2 collection checkpoint by sampling endpoint teachers. The endpoint buffer itself contains many constant-only, single-variable, parse-budget, and structurally wrong traces, so downstream correction is training on weak self-sampled teachers even when semantic-posterior aggregate diagnostics look positive.
+- Interrupted one full 8192-trace decode attempt because SymPy parsing/evalf hung on a complex generated expression; reran a bounded sampled decode with per-candidate timeout instead.
+- Continued the read-only diagnosis after context handoff:
+  - restored planning context from `task_plan.md`, `findings.md`, and `progress.md`;
+  - confirmed the worktree remains heavily dirty from pre-existing changes and no algorithm/source code was edited;
+  - confirmed no real `train_complete_expression_semantic_fm.py` or `train_token_policy_semantic_fm.py` process is currently running.
+- Recomputed retained result metrics from current JSON/JSONL files using `/home/ywj/miniconda3/envs/semflow/bin/python` because plain `python` is not available in the shell environment.
+- Rechecked current docs/runtime contract:
+  - run from `SemanticFlowSR/`;
+  - use the `semflow` conda environment;
+  - graph branch uses `scripts/train_complete_expression_semantic_fm.py`;
+  - token branch uses `scripts/train_token_policy_semantic_fm.py`;
+  - Stage2 should be interpreted only after Stage1 gate and sample outputs pass.
+- Recomputed token sample-level failure:
+  - Stage2 has 207 sample rows but only `r2_mean=0.108836`, `solution_rate=0.028986`, skeleton `0.057971`, op-dependency `0.019324`;
+  - no-variable constant expressions increased from 35/207 in Stage1 eval to 53/207 in Stage2 eval;
+  - Nguyen-3 and Nguyen-6 Stage2 predictions are constants (`4.0`, `5`) despite high terminal max probability;
+  - raw R2 without affine refit has median `-14.042396`, with 110/207 below `-10`.
+- Rechecked code-level causes:
+  - token ODE rollout integrates unconstrained full-vocabulary per-position logits;
+  - grammar mask is applied only at final decode sampling/argmax;
+  - Stage1 encode and Stage2 weighted-trace endpoints supervise all 64 positions including EOS/PAD tail;
+  - weighted-trace projected diagnostics resample from the collected posterior support rather than evaluating the trained rollout distribution;
+  - eval uses affine refit and train-set selection, so expression structure failure can be hidden by affine-normalized R2.
+- Rechecked graph branch:
+  - current retained graph sample file has 0 rows and no retained graph eval directory;
+  - retained graph Stage1 train-only summary fails the documented gate (`stage1_best_loss=1.199245`, cosine `0.910621`, norm ratio `0.791716`);
+  - current graph issue should be treated as missing eval evidence plus failed Stage1 reference field, not a Stage2 sample-quality result.
+- Appended the detailed evidence and file/code references to `findings.md`.
+
+## 2026-07-08
+- Resumed work after context compaction.
+- Confirmed active endpoint-attractor diagnostic is running on GPU0.
+- Fixed ODE sweep result writing so future runs perform actual per-step rollout instead of copying the main R2.
+- Endpoint-attractor diagnostic completed; Stage1 gate failed on endpoint/structure despite sharper terminal probabilities.
+- Fixed `copy` consequence semantics and vectorized fixed-symbol action consequence features.
+- Ran GPU smoke for semantic-action-feature Stage1; static and runtime checks passed.
+- Ran 100-step overfit comparisons: direct endpoint-attractor beat endpoint-bridge; trace family random-copy diagnostic was stopped due compiler overhead.
+- Fixed `bridge_plus_random` sampler fallback logic; previous run failed before training.
+- Stopped inconsistent random-state run with `min_remaining=0.05`; started constant-strength random-state endpoint-attractor diagnostic.
+- Stopped constant-strength random-state diagnostic after training curve showed poor fit; it is not the Stage1 mainline.
+- Added `--task-encoder-mode point_mlp|stats|hybrid_stats`; GPU smoke passed for `hybrid_stats`.
+- Stopped semantic-action-feature diagnostic after training curve failed Stage1 gate and eval was dragging.
+- Stopped `hybrid_stats` Stage1 diagnostic after it collapsed to zero-pred scale after epoch 2.
+- Added checkpoint loading compatibility for new task encoder branches.
+- Started a point-MLP endpoint-attractor continuation run from the stable Stage1 checkpoint with heavier low-t sampling.
+
+## 2026-07-09
+- Stopped assuming an active old runner: no matching `train_complete_expression`/semantic endpoint process was alive when checked.
+- Implemented endpoint semantic pushforward correction naming via `semantic_pushforward_correction`, retaining `semantic_endpoint_correction` as a compatibility alias.
+- Added absolute semantic kernel mass diagnostics for the KL tilt: prior/posterior kernel mass, kernel lift, weighted energy improvement, top-mass lift, bottom-mass suppression, and top/bottom odds lift.
+- Fixed graph online `semantic_mass_posterior_mix` direction so the value means a conservative step from current endpoint distribution toward the posterior, not the reverse.
+- Synced graph and token endpoint correction diagnostics and updated the complete algorithm document.
+- Static checks passed for `semflow_sr/semantic_mass.py`, graph/token training scripts, metrics/postfit scripts, and the endpoint correction shell scripts.
+- `tests/test_semantic_mass_ng.py` passed, including the new semantic pushforward sanity test.
+- GPU smoke passed on `cuda:0`: tiny graph Stage1 train-only plus `semantic_pushforward_correction` collection/training completed; pushforward diagnostics showed kernel lift about `2.93`, top mass lift about `2.98`, and bottom mass suppression about `0.037`.
+- Added `scripts/run_dual_semantic_pushforward_validation_gpu.sh` to run both construction branches under the same semantic pushforward theory:
+  - graph branch: `graph_dag_edge_simplex`, full syntax-prior Stage1 gate on GPU1, then `semantic_pushforward_correction` only if the gate passes.
+  - token branch: reuses the passed full token syntax-prior Stage1 checkpoint, then runs full `semantic_pushforward_correction` on GPU3 and eval.
+- Added auto-discovery of `semantic_pushforward_dual*` runs to `scripts/collect_semantic_mass_branch_metrics.py`, including kernel-mass lift fields.
+- Static checks passed for the new dual runner, collector, graph/token training scripts, and semantic mass utilities; `tests/test_semantic_mass_ng.py` passed.
+- Started full dual validation with tag `semantic_pushforward_dual_20260709_r1` using `setsid`:
+  - controller pid `432513`, log `logs/complete_expression_semantic_fm/semantic_pushforward_dual_20260709_r1.setsid.log`.
+  - graph train pid `432585`, log `logs/complete_expression_semantic_fm/stage1_graph_syntax_semantic_pushforward_dual_20260709_r1.pipeline.log`.
+  - token pushforward pid `432586`, log `logs/complete_expression_semantic_fm/token_pushforward_semantic_pushforward_dual_20260709_r1.pipeline.log`.
+  - After about 1.5 minutes both branch processes were alive; no epoch rows yet, likely still in full task construction/trace compilation or semantic endpoint collection.
+- The original token process in the dual runner was later killed before producing logs/results. A smaller token diagnostic (`token_pushforward_diag_20260709_r2`) showed the endpoint semantic posterior itself is behaving correctly before it also disappeared during collection:
+  - collection reached 112/128 examples before process disappearance.
+  - kernel mass lift stayed near `7.0`, top mass lift near `3.7`, bottom suppression near `3e-4`.
+  - This points to an engineering/resource/resumability issue in collection, not a semantic-pushforward theory failure.
+- Added collection progress logging and resumable collection checkpoints for graph and token endpoint correction:
+  - checkpoint stores pure tensor/dict payloads (`task_id`, `theta0`, `theta1`, `theta1_plus`, weights, diagnostics), not dataclass pickle.
+  - `--semantic-endpoint-progress-interval`, `--semantic-endpoint-collection-checkpoint`, and `--semantic-endpoint-resume-collection` were added.
+  - Smoke test verified checkpoint creation/load and token correction training.
+- Added `scripts/run_token_pushforward_resumable_gpu.sh`, which retries token pushforward training and resumes collection from the saved buffer if the process is killed.
+- Started token resumable run `token_pushforward_resumable_20260709_r3` on GPU3:
+  - controller pid `647004`, log `logs/complete_expression_semantic_fm/token_pushforward_resumable_20260709_r3.log`.
+  - first progress row: 32/512 examples, kernel mass lift about `6.49`, top mass lift about `3.60`, bottom suppression about `3.3e-4`.
+- Graph full syntax-prior Stage1 run is still active on GPU1:
+  - epoch 1 loss `2.72`, cosine `0.677`, norm ratio `0.658`.
+  - epoch 2 loss `1.87`, cosine `0.812`, norm ratio `0.742`.
+  - epoch 3 loss `1.28`, cosine `0.893`, norm ratio `0.875`.
+  - Low-t bins remain much harder than high-t; Stage1 gate is not yet met.
+- Stopped the active graph Stage1 and token pushforward runs after the endpoint semantic pushforward theory update request. Logs and result directories were preserved as pre-change diagnostics.
+- Implemented projected endpoint semantic diagnostics:
+  - shared `projected_distribution_diagnostics` checks theta1+ re-sampling, not only the ideal q+ posterior.
+  - graph/token endpoint correction now records projected energy improvement, projected kernel-mass lift, projected top-neighborhood lift, projected irrelevant suppression, and projected top/bottom odds lift.
+  - collection checkpoint resume now accepts existing buffers with a different recorded target count and truncates to the requested count, so large partial buffers can be reused for smaller diagnostics.
+- Synchronized algorithm/architecture docs and branch metrics collector with the new projected endpoint fields.
+- Static validation passed with `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile` for semantic mass utilities, graph/token training scripts, and collector.
+- `tests/test_semantic_mass_ng.py` passed (`5 passed`), including a new projected-distribution diagnostic test.
+- GPU smoke results:
+  - graph smoke `smoke_graph_pushforward_projection_check_20260709`: ideal posterior kernel lift `1.78`, top lift `1.88`, bottom suppression `5e-5`; projected kernel lift `1.13`, projected top lift `1.0`, projected irrelevant suppression `0.0`.
+  - token smoke `smoke_token_pushforward_projection_check_20260709`: ideal posterior kernel lift `1.75`, top lift `2.0`, bottom suppression `0.5`; projected kernel lift `92.84`, projected top lift `3.5`, but projected irrelevant suppression `1.75`. This flags the token independent-position marginal projection as potentially creating bad recombinations; if it persists at larger sample size, token Stage2 should switch to weighted full-trace or elite-trace endpoint compression instead of pure position marginals.
+- Reworked token Stage2 projection to default to full-trace posterior sampling:
+  - `--semantic-endpoint-token-projection posterior_sample` samples one complete trace from empirical `q+` and builds the FM endpoint from that full trace.
+  - `weighted_marginal` remains only as an ablation because it can recombine good token marginals into bad expressions.
+  - Token Stage2 now defaults to pure full-trace endpoints (`semantic_endpoint_mix=1`, `semantic_endpoint_fr_cap=0`) with separate sharpness controls `semantic_endpoint_trace_high=8`, `semantic_endpoint_trace_low=-8`.
+- Validation after token projection fix:
+  - `py_compile` passed for graph/token scripts, collector, and semantic mass utilities.
+  - `tests/test_semantic_mass_ng.py` passed.
+  - `token_semantic_pushforward_debug8_20260709`: projected kernel lift `2.54`, projected top-neighborhood lift `4.0`, projected irrelevant suppression `0.5`, FM loss `0.60`, cosine `0.972`.
+  - `token_semantic_pushforward_diag32_probe_20260709` with 32 tasks / 8 endpoint-buffer examples: projected kernel lift `4.97`, projected top-neighborhood lift `4.0`, projected irrelevant suppression `0.0`, FM loss `0.543`, cosine `0.986`. Max RSS was about `1.58GB`; no OOM.
+- Fixed token eval-only checkpoint loading so `task_conditioning` is restored from checkpoint summary. The previous eval-only path built an `off` model and could silently skip Stage2 residual weights under `strict=False`.
+- Token eval-only after the fix (`token_semantic_pushforward_diag32_probe_eval_xy_20260709`) loads with `task_conditioning=xy` and zero missing/unexpected keys, but 4-task eval is still poor: `r2_mean=-0.010`, structure metrics `0`, terminal max prob `0.148`. Conclusion: the corrected endpoint target is semantically sound and locally learnable, but the tiny 8-buffer correction is not enough to alter rollout behavior; larger/sharded correction training is needed.
+- Started graph/token medium runner `semantic_pushforward_medium_20260709_r1`; token branch in that runner was killed before logging under the older command, while graph continued. Graph first checkpoint at 16/64 endpoint examples: kernel lift `3.35`, top lift `2.95`, bottom suppression `0.0067`, elapsed about `681s`. Graph endpoint collection is semantically correct but slow.
+- Graph medium runner reached 32/64 endpoint examples: kernel lift `3.13`, top lift `2.81`, bottom suppression `0.0081`, elapsed about `1253s`. It is still active and expected to finish collection/training later.
+- Stopped the active graph medium runner (`942219/942230`) after the new endpoint semantic pushforward theory update request; logs/results were preserved as pre-change diagnostics.
+- Confirmed the implementation already follows the decoupled endpoint collection/training split: collection runs Stage1 flow once to obtain `theta1`, samples complete expressions, computes semantic KL tilt, projects to `theta1_plus`, and stores buffer items; the training loop consumes `(D, theta0, theta1_plus)` without running ODE inside each gradient step.
+- Added direct top-near versus bottom-far mass ratio diagnostics for the new theory:
+  - `top_bottom_mass_ratio_lift` in ideal semantic posterior diagnostics.
+  - `projected_top_bottom_mass_ratio_lift` in projected endpoint diagnostics.
+  - graph/token train curves, collection progress logs, summaries, branch collector, and docs now expose the corresponding `semantic_*_top_bottom_mass_ratio_lift_mean` fields.
+- Validation passed:
+  - `py_compile` for `semflow_sr/semantic_mass.py`, graph/token training scripts, and branch collector.
+  - `tests/test_semantic_mass_ng.py` passed (`5 passed`).
+  - `smoke_graph_pushforward_mean_metric_20260709` on GPU0 showed ideal posterior top lift `2.43`, bottom suppression `4.2e-5`, and projected top lift `1.5` with projected irrelevant suppression `0.0`.
+  - `smoke_token_pushforward_mean_metric_20260709` on GPU3 showed ideal posterior top lift `1.5`, bottom suppression `0.5`, but projected irrelevant suppression `2.0`; this confirms the new projected diagnostics can catch token full-trace/small-sample projection failures even when the ideal posterior tilt itself is correct.
+  - `scripts/collect_semantic_mass_branch_metrics.py` completed and wrote updated branch diagnostics with the new fields.
+- Fixed a critical graph Stage2 checkpoint-loading error:
+  - Before the fix, semantic endpoint graph runs could silently instantiate the wrong architecture (`hidden=256`, `op_copies=1`, `semantic_action_features=True`) while loading a Stage1 checkpoint trained with `hidden=384`, `op_copies=2`, `metadata_embedding_dim=16`, `semantic_action_features=False`. Only 1 key loaded, so Stage2 diagnostics were not measuring the intended reference field.
+  - `scripts/train_complete_expression_semantic_fm.py` now inherits graph architecture fields from the loaded checkpoint summary before model construction.
+  - Smoke `smoke_graph_pushforward_ckpt_inherit_20260709` confirmed `checkpoint_loaded_key_count=28`, `shape_mismatch=0`, `checkpoint_architecture_inherited_count=7`.
+- Fixed projected top/bottom diagnostics under tied prior energy quantiles:
+  - `projected_neighborhood_gap_valid` is now recorded. If top and bottom thresholds overlap, top/bottom neighborhood metrics are marked invalid instead of emitting misleading huge ratios or false irrelevant suppression.
+  - Unit tests now cover both valid and tied-threshold projected diagnostics (`6 passed`).
+- Algorithmic Stage2 projection conclusion from graph smoke:
+  - With correct checkpoint loading, ideal graph semantic posterior was good, but default conservative endpoint projection (`mix=0.75`, `fr_cap=2`) produced projected kernel lift `0.50`, i.e. it damaged the semantic mass after projection.
+  - Pure M-projection (`mix=1`, `fr_cap=0`) produced projected kernel lift `2.66`, projected top lift `3.0`, and projected irrelevant suppression `0.0`.
+  - Therefore graph mainline defaults were changed to `semantic_endpoint_mix=1.0` and `semantic_endpoint_fr_cap=0.0`; conservative mixing/capping is now an ablation only.
+- Collector improvements:
+  - `scripts/collect_semantic_mass_branch_metrics.py` now reads train curves from CSV when logs are absent.
+  - It auto-discovers pushforward result directories instead of only hard-coded tags.
+  - It records checkpoint loaded/mismatch/inherited counts for diagnosing checkpoint architecture compatibility.
+- Started updated medium validation `semantic_pushforward_medium_ckptinherit_pureproj_20260709`:
+  - controller pid `1443863`; graph pid `1443875`; token branch finished quickly.
+  - token medium result: endpoint FM loss `0.272`, ideal kernel lift `3.61`, projected kernel lift `3.63`, projected gap-valid `0.875`, invalid rate `0.406`.
+  - graph branch is still active on GPU0; no first 16-example progress row yet, which is expected under the larger correct graph checkpoint and 16x16 endpoint/projection sampling.
+- Stopped the active semantic pushforward runs after the updated theory request; no matching graph/token semantic FM training process remains active.
+- Implemented endpoint semantic pushforward acceptance diagnostics:
+  - `semantic_pushforward_acceptance_diagnostics` checks that the semantic KL posterior raises target-near top mass, suppresses target-far mass, improves top/bottom mass ratio, and that projected endpoint resampling improves semantic kernel mass.
+  - Graph/token endpoint correction now records `semantic_endpoint_tilt_ideal_accept_rate`, `semantic_endpoint_tilt_projected_accept_rate`, and `semantic_endpoint_tilt_accept_rate` in collection progress, train curves, summaries, result markdown, and branch diagnostics.
+  - This keeps the training path decoupled: collection runs flow once to get `theta1`, samples complete traces, estimates semantic statistics, projects to `theta1_plus`, and training consumes buffered `(D, theta0, theta1_plus)` without ODE inside each gradient step.
+- Validation after acceptance diagnostics:
+  - `py_compile` passed for semantic mass utilities, graph/token training scripts, and branch collector.
+  - `tests/test_semantic_mass_ng.py` passed (`7 passed`).
+  - Token smoke `smoke_token_pushforward_acceptance_20260709`: tilt accept rate `0.5`, kernel lift `2.5`, top lift `2.5`, bottom suppression `0.5`, endpoint FM loss `0.067`, cosine `0.9986`.
+  - Graph smoke `smoke_graph_pushforward_acceptance_20260709`: tilt accept rate `1.0`, kernel lift `2.94`, top lift `3.34`, bottom suppression `0.0119`, projected kernel lift `2.78`, endpoint FM loss `0.139`, cosine `0.9978`.
+  - Branch collector completed and wrote refreshed `semantic_mass_branch_diagnostics.json/md` with the new acceptance columns.
+- 2026-07-09 updated endpoint semantic-pushforward implementation after the new theory note:
+  - Stopped active graph/token semantic FM background jobs and preserved their logs/results as pre-change diagnostics.
+  - Confirmed Stage2 correction remains decoupled: collection runs the flow once to obtain `theta1`, samples complete expressions, estimates semantic pushforward statistics, projects to `theta1_plus`, and training consumes buffered `(D, theta0, theta1_plus)` without running ODE inside gradient steps.
+  - Added signed concentration diagnostics for the target-neighborhood objective:
+    - `target_top_mass_delta`
+    - `target_far_mass_reduction`
+    - `target_concentration_gain`
+    - projected counterparts after resampling from `theta1_plus`
+  - Tightened acceptance: ideal and projected accept now require positive target concentration gain; projected accept also requires a valid top/far neighborhood gap and cannot pass from mean/kernel improvement alone.
+  - Propagated the new fields through graph/token endpoint correction, online semantic-mass rollout diagnostics, summaries, markdown results, branch collector, and algorithm/architecture docs.
+  - Validation passed:
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py`
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`7 passed`)
+- 2026-07-09 target-distance semantic pushforward correction:
+  - Implemented the refined theory distinction between tilt energy `E_D(z)` and pure target-semantic distance `d_y(z)`.
+  - `posterior_tilt_diagnostics` now accepts `target_distances`; posterior weights and kernel mass can still use penalty-aware `E_D`, but target-near/top and target-far/bottom concentration diagnostics are ranked by pure `semantic_mse`.
+  - `projected_distribution_diagnostics` now accepts prior/projected target distances and reports:
+    - `target_distance_mean_improvement`
+    - `projected_target_distance_mean_improvement`
+    - target-distance mean/best fields for endpoint and online semantic-mass diagnostics.
+  - Tightened acceptance so ideal/projected pass requires positive target-distance improvement, not only kernel/energy improvement.
+  - Graph and token endpoint collection now pass `semantic_mse` as the target distance and write the new fields to train curves, summaries, and branch collector outputs.
+  - Fixed token Stage2 checkpoint handling:
+    - semantic endpoint correction from syntax-prior checkpoints now defaults to `task_conditioning=xy` instead of inheriting `off`;
+    - token branch now inherits checkpoint architecture fields and uses shape-filtered loading, matching the graph branch behavior.
+  - Synchronized docs with the new `E_D` versus `d_y` metric split and result fields.
+  - Validation passed:
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py`
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`9 passed`)
+  - GPU smoke `smoke_token_pushforward_targetdist_20260709`:
+    - `task_conditioning=xy`, `checkpoint_shape_mismatch_key_count=0`
+    - `semantic_endpoint_fm_loss=0.1917`, `pred_target_cosine_mean=0.9976`
+    - `semantic_endpoint_kernel_mass_lift_mean=2.8349`
+    - `semantic_endpoint_target_distance_mean_improvement_mean=4.6819`
+    - `semantic_endpoint_projected_target_distance_mean_improvement_mean=4.6902`
+    - ideal/projected/combined accept rates all `0.5` on the tiny 4-buffer smoke.
+  - GPU smoke `smoke_graph_pushforward_targetdist_20260709`:
+    - Used old target-conditioned checkpoint only as an interface smoke, not a clean syntax-prior Stage1 result.
+    - `task_conditioning=xy`, `checkpoint_shape_mismatch_key_count=0`
+    - `semantic_endpoint_fm_loss=0.2601`, `pred_target_cosine_mean=0.9989`
+    - ideal target-distance improvement positive (`0.1292`), but projected target-distance improvement negative (`-0.1645`) and projected accept `0.0`.
+    - This reinforces that graph projection/reference quality remains the bottleneck and should not be masked by Stage2.
+- 2026-07-09 latest theory update completed:
+  - Confirmed no active SFSR background jobs were running; unrelated GPU process was not touched.
+  - Implemented the endpoint semantic-pushforward mainline from the latest note:
+    - collection runs the flow once to obtain `theta1`;
+    - graph/token branches sample complete expressions from `q_theta1`;
+    - posterior weights default to pure target semantic distance `exp(-d_y/tau)` through `--semantic-tilt-energy target_distance`;
+    - penalty-aware energy remains only as explicit `penalized_energy` ablation;
+    - endpoint projection produces `theta1_plus`, and training consumes cached `(D, theta0, theta1_plus)` without ODE inside gradient steps.
+  - Added endpoint semantic centroid diagnostics for both graph and token branches:
+    - `semantic_endpoint_semantic_centroid_distance_improvement_mean`
+    - `semantic_endpoint_semantic_centroid_corr_improvement_mean`
+    - projected endpoint counterparts after resampling from `theta1_plus`
+  - Kept acceptance based on target-near mass lift, target-far suppression, target-distance improvement, and projected endpoint checks; centroid fields are diagnostic only.
+  - Synchronized branch collector and algorithm/architecture docs with the new endpoint centroid fields.
+  - Validation passed:
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py`
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`11 passed`)
+- 2026-07-09 dual-branch smoke after endpoint semantic-pushforward update:
+  - Ran GPU smoke `semantic_pushforward_targetdist_centroid_smoke_20260709` on graph and token branches.
+  - Token branch with `ode_steps=8` appeared to lose sharpness (`rollout_terminal_max_prob_mean=0.1449`), but a direct Stage1/xy-residual identity eval with `ode_steps=64` restored the reference-field sharpness:
+    - `token_stage1_direct_small_ode64_eval_20260709`: terminal max prob `0.81385`
+    - `token_xyresidual_stage1_identity_ode64_eval_20260709`: terminal max prob `0.81385`
+  - Conclusion: low ODE steps were under-integrating the reference flow and causing a false negative. Updated `scripts/run_semantic_pushforward_medium_diagnostics_20260709.sh` defaults to `GRAPH_ODE_STEPS=64`, `TOKEN_ODE_STEPS=64`.
+  - Fixed token Stage2 conditioning to support and default to `xy_residual` from syntax-prior checkpoints. This keeps the loaded Stage1 base field unchanged at initialization and routes target semantics only through the zero-initialized residual correction path.
+  - Token endpoint smoke with `xy_residual`, `ode_steps=64`, and a small buffer:
+    - `semantic_endpoint_tilt_accept_rate=0.875`
+    - `semantic_endpoint_target_distance_mean_improvement_mean=8.8208`
+    - `semantic_endpoint_projected_target_distance_mean_improvement_mean=8.8017`
+    - `semantic_endpoint_semantic_centroid_distance_improvement_mean=0.3222`
+    - `semantic_endpoint_projected_semantic_centroid_distance_improvement_mean=0.1848`
+    - `rollout_terminal_max_prob_mean=0.9056`
+    - `r2_mean=-0.1658`, `skeleton_accuracy=0.0`
+  - Interpretation: the semantic posterior/projection is now behaving as intended on collected endpoints and does not destroy Stage1 sharpness, but the small residual training did not yet generalize to held-out structures. Next diagnostic should scale the token buffer/tasks before changing theory.
+  - Graph branch smoke:
+    - semantic posterior/projection metrics are positive (`tilt_accept_rate=0.75`, projected target-distance improvement `0.4842`, projected centroid improvement `0.1290`);
+    - correction FM remains poor (`semantic_endpoint_best_loss=1.3659`, cosine `0.8098`) and eval structural metrics remain zero.
+  - Interpretation: graph branch is still gated by the old weak target-conditioned Stage1 checkpoint (`stage1_best_loss=0.5406`, endpoint active prob `0.0412` on eval), so graph Stage2 is only a projection smoke until a clean syntax-prior graph Stage1 passes.
+- 2026-07-09 latest semantic-space pushforward theory implementation:
+  - Confirmed no active SemanticFlowSR training processes were running before edits; GPU 0/1/3 were free and GPU 2 had an unrelated process.
+  - Kept the collection/training split required by the theory:
+    - collection runs Stage1 flow once to get `theta1`;
+    - samples complete expressions from `q_theta1`;
+    - computes pure target semantic distance `d_y` and posterior weights `alpha_i = softmax(-d_y/tau)`;
+    - lifts the semantic posterior back to complete traces and projects/stores supervised endpoints;
+    - training consumes cached endpoints without ODE inside gradient steps.
+  - Fixed semantic pushforward diagnostics so top-near / target-far ratio uses explicit top and bottom prior masses instead of an implicit hard-coded ratio.
+  - Added token `--semantic-endpoint-token-projection weighted_trace_fm` and made it the default:
+    - each collected endpoint group stores all sampled complete token traces with posterior weights;
+    - Stage2 training samples complete-trace endpoints proportionally to those weights;
+    - `posterior_sample`, `elite_trace`, and `weighted_marginal` remain ablations.
+  - Updated token runner defaults in:
+    - `scripts/run_token_pushforward_resumable_gpu.sh`
+    - `scripts/run_semantic_pushforward_medium_diagnostics_20260709.sh`
+    - `scripts/run_targetdist_dual_medium_diagnostics_20260709.sh`
+  - Synchronized algorithm/architecture docs and branch collector fields (`semantic_endpoint_group_count`, `semantic_endpoint_example_weight_sum`, `semantic_endpoint_example_weight_ess`).
+  - Validation passed:
+    - `py_compile` for semantic mass utilities, graph/token training scripts, and branch collector.
+    - `bash -n` for the updated token/dual runner scripts.
+    - `tests/test_semantic_mass_ng.py` (`11 passed`).
+  - GPU smoke `smoke_token_weighted_trace_fm_20260709` on GPU0 completed:
+    - collection: 2 endpoint groups, 8 complete-trace endpoints.
+    - `semantic_endpoint_token_projection=weighted_trace_fm`.
+    - `semantic_endpoint_example_weight_ess=6.86` over 8 trace endpoints.
+    - `semantic_endpoint_fm_loss=0.474`, cosine `0.986`, norm ratio `0.897`.
+    - semantic target-distance improvement was positive (`2.38`), top mass lift `1.17`, bottom suppression `0.5`, accept rate `0.5` on the tiny smoke.
+    - R2/structure remained poor in this smoke (`r2_mean=-0.108`, structure `0`) because it was only an interface/diagnostic run with 2 endpoint groups and `ode_steps=8`.
+- 2026-07-09 latest endpoint semantic-pushforward verification:
+  - Confirmed no active SemanticFlowSR training process was running before checks; GPU 0/1/3 were free and GPU 2 had an unrelated process.
+  - Re-read the newest theory note and verified the implementation follows the required decoupled chain:
+    `theta0 -> flow(theta1) -> sample complete expressions -> target-distance semantic KL tilt -> lift to complete-trace posterior -> project/cache theta1+ -> supervised FM correction`.
+  - Verified the mainline defaults remain theory-aligned:
+    `semantic_tilt_energy=target_distance`, graph endpoint projection uses pure M-projection by default (`mix=1`, `fr_cap=0`), and token endpoint projection defaults to `weighted_trace_fm`.
+  - Static validation passed:
+    - `py_compile` for semantic mass utilities, graph/token training scripts, and branch collector.
+    - `bash -n` for the semantic pushforward/token runner scripts.
+    - `pytest tests/test_semantic_mass_ng.py -q` passed (`12 passed`).
+  - GPU graph smoke `/tmp/semflow_graph_endpoint_latest_theory_smoke` completed:
+    - objective version `endpoint_semantic_pushforward_target_distance_v2`;
+    - `semantic_tilt_energy=target_distance`;
+    - target-distance improvement and projected target-distance improvement were positive;
+    - top-near mass lifted and far mass suppressed on the tiny buffer;
+    - interface loss was learnable (`semantic_endpoint_fm_loss ~= 0.302`, cosine `0.997`).
+    - This used the old graph Stage1 checkpoint and is only an implementation smoke, not a graph efficacy result.
+  - GPU token smoke `/tmp/semflow_token_endpoint_latest_theory_smoke` completed:
+    - `semantic_endpoint_token_projection=weighted_trace_fm`;
+    - 2 endpoint groups expanded to 8 weighted complete-trace endpoints;
+    - target-distance improvement was strongly positive (`~4.76`);
+    - ideal/projected accept rates were `1.0` on the tiny buffer;
+    - correction FM loss was high (`~2.06`) because this was a two-group smoke, not a training-quality run.
+- 2026-07-09 endpoint semantic-space KL tilt v3:
+  - User asked to pause full runs and implement the refined theory where the flow first produces endpoint `theta1`, then complete-expression samples define a semantic pushforward distribution, the target-neighborhood KL tilt is computed in semantic space, lifted back to complete traces, projected/cached as `theta1_plus`, and consumed by supervised FM correction. No local continuation value and no ODE inside optimizer gradient steps.
+  - Confirmed no matching SemanticFlowSR training/eval process is running after the pause:
+    `train_complete_expression`, `train_token_policy`, `complete_expression_semantic_fm`, `semantic_endpoint`, and `semantic_pushforward` process scan only matched the scan command itself.
+  - Implemented/cache-versioned the new objective as `endpoint_semantic_space_kl_tilt_v3` in both graph and token scripts. This invalidates stale endpoint-correction caches through signature mismatch.
+  - Added explicit semantic-space target mass diagnostics:
+    - ideal posterior: `target_near_mass_prior/posterior/lift`, `target_far_mass_prior/posterior/suppression`;
+    - projected endpoint: `projected_target_near_mass`, `projected_target_near_mass_lift`, `projected_target_far_mass`, `projected_target_far_mass_suppression`;
+  - 2026-07-09 v4 update after newest theory note:
+    - Confirmed no active SemanticFlowSR training/eval process was running before code edits.
+    - Kept the decoupled endpoint collection/training split: collection runs flow once to `theta1`, samples complete traces, estimates semantic-space tilt statistics, projects/caches `theta1_plus`, and the optimizer consumes the buffer without ODE inside each gradient step.
+    - Added signed semantic-space contrast diagnostics:
+      `target_near_far_contrast_prior_mean`, `target_near_far_contrast_posterior_mean`, `target_near_far_contrast_mean_improvement`, plus projected counterparts.
+    - Bumped graph/token endpoint objective version to `endpoint_semantic_space_kl_tilt_v4` to prevent v3 buffer reuse.
+    - Tightened semantic pushforward acceptance so the signed contrast improvement must be positive in ideal and projected diagnostics.
+    - Synchronized graph/token scripts, branch collector, algorithm docs, architecture docs, and tests.
+    - Validation passed:
+      `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py`
+      and `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`12 passed`).
+    - GPU token smoke on GPU0 at `/tmp/semflow_token_endpoint_v4_contrast_smoke` completed and wrote:
+      `semantic_endpoint_objective_version=endpoint_semantic_space_kl_tilt_v4`,
+      `semantic_endpoint_target_near_far_contrast_mean_improvement_mean=0.1667`,
+      `semantic_endpoint_projected_target_near_far_contrast_mean_improvement_mean=0.5`.
+    - Collector smoke to `/tmp/semantic_mass_branch_diagnostics_v4_smoke.json/md` completed and included the new fields.
+  - Started v4 dual-branch medium diagnostic on GPU with tag `semantic_pushforward_v4_contrast_medium_20260709_r1`:
+    - controller pid `735789`, controller log `logs/complete_expression_semantic_fm/semantic_pushforward_v4_contrast_medium_20260709_r1.setsid.log`.
+    - graph Stage1 syntax-prior gate uses GPU0 and writes to `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_stage1_syntax_semantic_pushforward_v4_contrast_medium_20260709_r1`.
+    - token v4 endpoint correction uses GPU3 and writes to `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/token_pushforward_semantic_pushforward_v4_contrast_medium_20260709_r1`.
+    - token collection progress at 16 endpoint groups: target-near mass lift `2.2200`, target-far suppression `0.0654`, target concentration gain `0.5387`, target near/far contrast improvement `0.5387`, ideal accept `1.0`, projected accept `0.9375`.
+    - Graph branch remains gated: if Stage1 reference field fails the existing loss/cosine/sharpness/legal-expression gate, graph Stage2 will be skipped rather than used to hide a bad reference field.
+    - compatibility aliases remain for older `top_mass_lift`, `bottom_mass_suppression`, `projected_top_neighborhood_lift`, and `projected_irrelevant_suppression` fields.
+  - Updated reporting in `semflow_sr/semantic_mass.py`, graph/token train scripts, `scripts/collect_semantic_mass_branch_metrics.py`, `tests/test_semantic_mass_ng.py`, and `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md`.
+  - Validation passed:
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py`
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`12 passed`)
+  - Permanent branch diagnostics were refreshed:
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_mass_branch_diagnostics.json`
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_mass_branch_diagnostics.md`
+  - GPU smoke result:
+    - run dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/smoke_token_endpoint_semantic_space_kl_v3_20260709`;
+    - `semantic_endpoint_objective_version=endpoint_semantic_space_kl_tilt_v3`;
+    - `semantic_tilt_energy=target_distance`;
+    - `semantic_endpoint_target_near_mass_lift_mean=1.33333337`;
+    - `semantic_endpoint_target_far_mass_suppression_mean=3.93e-17`;
+    - `semantic_endpoint_projected_target_near_mass_lift_mean=4.0`;
+    - `semantic_endpoint_projected_target_far_mass_suppression_mean=0.0`;
+    - `semantic_endpoint_tilt_accept_rate=1.0`;
+    - `semantic_endpoint_fm_loss=1.1797`, `pred_target_cosine_mean=0.9724`.
+  - Current interpretation: v3 matches the latest theoretical chain and the tiny smoke confirms the desired semantic-space mass lift/suppression. It is not a full-success result; full R2/structure targets remain unmet and should be tested only after the reference field gate is acceptable.
+- 2026-07-09 dual-branch v3 medium validation launched:
+  - Updated `scripts/run_targetdist_dual_medium_diagnostics_20260709.sh` so both graph/token branches explicitly use:
+    - `--semantic-tilt-energy target_distance`;
+    - ODE64 by default (`GRAPH_ODE_STEPS=64`, `TOKEN_ODE_STEPS=64`);
+    - graph ODE sweep `32,64`.
+  - `bash -n scripts/run_targetdist_dual_medium_diagnostics_20260709.sh` passed.
+  - Launched background dual-branch controller:
+    - controller log: `logs/complete_expression_semantic_fm/endpoint_v3_dual_gate_medium_20260709.controller.nohup.log`;
+    - controller pid file: `logs/complete_expression_semantic_fm/endpoint_v3_dual_gate_medium_20260709.controller.pid`;
+    - graph branch: GPU0, `graph_stage1_syntax_endpoint_v3_dual_gate_medium_20260709`;
+    - token branch: GPU3, `token_pushforward_endpoint_v3_dual_gate_medium_20260709`.
+  - Token endpoint collection and residual-only Stage2 completed:
+    - collection groups `64`, expanded complete-trace examples `1024`;
+    - `semantic_endpoint_objective_version=endpoint_semantic_space_kl_tilt_v3`;
+    - `semantic_endpoint_target_near_mass_lift_mean=2.0730`;
+    - `semantic_endpoint_target_far_mass_suppression_mean=0.0597`;
+    - `semantic_endpoint_projected_target_near_mass_lift_mean=3.5156`;
+    - `semantic_endpoint_projected_target_far_mass_suppression_mean=0.0234`;
+    - `semantic_endpoint_tilt_accept_rate=0.9375`;
+    - endpoint FM loss `0.3801`, cosine `0.9880`, norm ratio `0.9377`.
+  - Same-task/same-limit token eval comparison:
+    - base syntax-prior checkpoint: R2 mean `0.0460`, solution `0.0`, skeleton/opdep `0.0`, valid fraction `0.6667`, terminal max prob `0.8129`;
+    - residual-only v3 endpoint correction: R2 mean `0.0406`, solution `0.0417`, skeleton/opdep `0.0417`, valid fraction `0.6833`, terminal max prob `0.8704`;
+    - train-base v3 endpoint correction capacity diagnostic: endpoint FM loss `0.3351`, R2 mean `-0.0744`, solution/structure `0.0`, valid fraction `0.75`, terminal max prob `0.8625`.
+  - Token higher-sampling coverage diagnostic:
+    - `eval_theta0_samples=4, eval_samples=32` (`128` candidates/task) was terminated at record 2, so it is too expensive for this eval path.
+    - `eval_theta0_samples=2, eval_samples=16` (`32` candidates/task) completed.
+    - base syntax-prior sample32: R2 mean `0.2196`, structure `0.0`, valid fraction `0.7525`, terminal max prob `0.8179`;
+    - residual-only v3 endpoint correction sample32: R2 mean `0.3489`, solution `0.0417`, skeleton `0.0417`, opdep `0.0`, valid fraction `0.7537`, terminal max prob `0.8732`.
+    - Interpretation: v3 improves semantic candidate coverage under larger sampling, but still does not concentrate probability on structurally correct traces.
+  - Interpretation from token branch:
+    - semantic-space posterior statistics are behaving correctly and endpoint FM is learnable;
+    - freezing only residual is not the sole bottleneck because full-model Stage2 improves FM slightly but worsens R2/structure;
+    - the current endpoint posterior supervision sharpens/legalizes samples but does not reliably shift the token policy toward target structure.
+  - Graph branch status while token diagnostics completed:
+    - epoch 1: loss `2.9323`, cosine `0.6319`, norm ratio `0.5967`;
+    - epoch 2: loss `2.4600`, cosine `0.7327`, norm ratio `0.7046`;
+    - epoch 3: loss `2.2548`, cosine `0.7623`, norm ratio `0.7099`;
+    - epoch 8 final train: loss `1.1992`, cosine `0.9106`, norm ratio `0.7917`;
+    - final low-t bins remain high: `0-0.001=3.1070`, `0.001-0.005=3.2070`, `0.005-0.020=2.5732`, while high-t `0.1-1.0=0.4706`;
+    - graph reference field is still far from the Stage1 gate. At last check graph eval was running and no gate JSON had been written yet; graph Stage2 should be skipped if the eval gate confirms failure.
+- 2026-07-09 v5 semantic-signature endpoint correction:
+  - Implemented and verified the endpoint semantic-signature KL tilt v5 path:
+    `theta1 -> q_theta1(z|D) -> grouped semantic signature pushforward -> KL target-neighborhood tilt -> lifted q_plus -> projected theta1_plus -> supervised endpoint FM correction`.
+  - Main code/docs touched:
+    - `semflow_sr/semantic_mass.py`
+    - `scripts/train_complete_expression_semantic_fm.py`
+    - `scripts/train_token_policy_semantic_fm.py`
+    - `scripts/collect_semantic_mass_branch_metrics.py`
+    - `tests/test_semantic_mass_ng.py`
+    - `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md`
+  - Static/tests passed:
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py`
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`13 passed`)
+  - Added runner `scripts/run_token_endpoint_v5_signature_medium_20260709.sh`; `bash -n` passed.
+  - GPU smoke from previous handoff was confirmed in code/logs:
+    - `/tmp/semflow_token_endpoint_v5_signature_smoke`
+    - objective `endpoint_semantic_signature_kl_tilt_v5`
+    - target-distance improvement `4.6623`
+    - near/far contrast improvement `0.3334`
+    - projected target-distance improvement `4.6625`
+    - projected near/far contrast improvement `0.5`
+  - A direct foreground medium diagnostic with `timeout 90` confirmed the full medium configuration starts correctly on GPU1 and reaches endpoint collection; it was intentionally killed by timeout at code `124`.
+  - Started the official v5 token medium run in tmux because `nohup` wrapper attempts produced empty early exits with no traceback:
+    - tmux session `semflow_v5_token_medium_20260709`
+    - run dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/token_endpoint_v5_signature_medium_20260709_r1`
+    - log `logs/complete_expression_semantic_fm/token_endpoint_v5_signature_medium_20260709_r1.log`
+    - tmux metadata `logs/complete_expression_semantic_fm/token_endpoint_v5_signature_medium_20260709_r1.tmux`
+    - GPU1, reusing token Stage1 checkpoint `stage1_token_policy_budgeted_mass_main_20260708/typed_op_node_flow_checkpoint.pt`.
+  - Early official-run collection metrics at 32 groups:
+    - near mass lift `2.0400`
+    - far mass suppression `0.0675`
+    - target near/far contrast improvement `0.4931`
+    - ideal accept `1.0`
+    - projected accept `0.78125`
+  - Interpretation: v5 semantic statistic is now aligned with the requested "raise target-near/top semantics and suppress far/unrelated semantics" behavior at endpoint collection time. Full R2/structure success remains unproven until this run finishes eval.
+  - Official run finished; no related train processes remain.
+  - Final train collection/correction summary:
+    - `semantic_endpoint_objective_version=endpoint_semantic_signature_kl_tilt_v5`
+    - `semantic_endpoint_group_count=128`
+    - `semantic_endpoint_best_loss=0.380641`
+    - `pred_target_cosine_mean=0.988568`
+    - `pred_target_norm_ratio_mean=0.937689`
+    - `semantic_endpoint_target_distance_mean_improvement_mean=4.087622`
+    - `semantic_endpoint_target_near_far_contrast_mean_improvement_mean=0.505872`
+    - `semantic_endpoint_projected_target_distance_mean_improvement_mean=4.106032`
+    - `semantic_endpoint_projected_target_near_far_contrast_mean_improvement_mean=0.479492`
+    - `semantic_endpoint_tilt_ideal_accept_rate=1.0`
+    - `semantic_endpoint_tilt_accept_rate=0.75`
+  - Final eval summary:
+    - run dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/token_endpoint_v5_signature_medium_20260709_r1_eval`
+    - `n_tasks=40`
+    - `r2_mean=0.003984`
+    - `skeleton_accuracy=0.0`
+    - `operator_dependency_accuracy=0.0`
+    - `valid_expression_fraction_mean=0.78`
+    - `rollout_terminal_max_prob_mean=0.874790`
+  - Permanent diagnostics written:
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/token_endpoint_v5_signature_medium_20260709_r1_diagnostics.json`
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/token_endpoint_v5_signature_medium_20260709_r1_diagnostics.md`
+  - Conclusion: v5 satisfies the requested semantic-mass statistic behavior, but it does not reach the SR success target. The likely remaining bottleneck is endpoint posterior/projection-to-policy structure recovery, not the semantic KL tilt definition itself.
+- 2026-07-09 v6 endpoint semantic-signature pushforward projection:
+  - Confirmed no active `train_complete_expression_semantic_fm.py`, `train_token_policy_semantic_fm.py`, semantic endpoint, or semantic pushforward process was running; process scan only matched the scan command itself.
+  - Synced `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md` with v6 rank-utility diagnostics and acceptance semantics.
+  - Updated `task_plan.md` and `findings.md` with the v6 objective state.
+  - v6 objective version in code: `endpoint_semantic_signature_pushforward_projection_v6`.
+  - v6 adds ideal/projected target-rank utility checks on top of v5 grouped semantic signature distance, near/far mass lift, concentration gain, signed contrast, and top/bottom ratio diagnostics.
+  - Static checks passed:
+    `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py tests/test_semantic_mass_ng.py`.
+  - Unit tests passed:
+    `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`13 passed`).
+  - Graph branch GPU smoke completed on GPU0:
+    - run dir `/tmp/semflow_graph_endpoint_v6_rank_smoke`;
+    - loaded checkpoint `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_stage1_syntax_endpoint_v3_dual_gate_medium_20260709/typed_op_node_flow_checkpoint.pt`;
+    - objective `endpoint_semantic_signature_pushforward_projection_v6`;
+    - `semantic_endpoint_target_rank_utility_mean_improvement_mean=0.142303`;
+    - `semantic_endpoint_projected_target_rank_utility_mean_improvement_mean=0.666667`;
+    - `semantic_endpoint_target_near_mass_lift_mean=1.142307`;
+    - `semantic_endpoint_target_far_mass_suppression_mean=0.573095`;
+    - `semantic_endpoint_projected_target_near_mass_lift_mean=3.0`;
+    - `semantic_endpoint_projected_target_far_mass_suppression_mean=0.5`;
+    - `semantic_endpoint_tilt_accept_rate=0.5`;
+    - `semantic_endpoint_invalid_rate_mean=0.0`.
+  - `scripts/collect_semantic_mass_branch_metrics.py` exposes the v6 rank-utility columns. Directly passing a single `/tmp` run as `--results-root` is not a meaningful collector mode because the collector scans fixed branch run names under a parent result root; for the smoke, the summary JSON was read directly.
+- 2026-07-09 v6 dual-branch medium validation:
+  - Added `scripts/run_semantic_pushforward_v6_dual_medium_20260709.sh`.
+  - Updated `scripts/collect_semantic_mass_branch_metrics.py` so branch diagnostics include `semantic_endpoint_objective_version` and `semantic_signature_version`; this prevents v5/v6 endpoint results from being mixed without a visible version column.
+  - Static checks passed:
+    - `bash -n scripts/run_semantic_pushforward_v6_dual_medium_20260709.sh`
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile scripts/collect_semantic_mass_branch_metrics.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py semflow_sr/semantic_mass.py`
+  - Launched GPU background controller:
+    - controller PID `1906844`
+    - controller log `logs/complete_expression_semantic_fm/semantic_pushforward_v6_rank_medium_20260709_r1.controller.nohup.log`
+    - graph PID `1906909`, log `logs/complete_expression_semantic_fm/graph_endpoint_semantic_pushforward_v6_rank_medium_20260709_r1.log`, run dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_endpoint_semantic_pushforward_v6_rank_medium_20260709_r1`
+    - token PID `1906911`, log `logs/complete_expression_semantic_fm/token_endpoint_semantic_pushforward_v6_rank_medium_20260709_r1.log`, run dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/token_endpoint_semantic_pushforward_v6_rank_medium_20260709_r1`
+  - Token branch early collection at 32 endpoint groups:
+    - `semantic_endpoint_target_near_mass_lift_mean=2.0400`
+    - `semantic_endpoint_target_far_mass_suppression_mean=0.0675`
+    - `semantic_endpoint_target_near_far_contrast_mean_improvement_mean=0.4931`
+    - `semantic_endpoint_target_rank_utility_mean_improvement_mean=0.4867`
+    - `semantic_endpoint_tilt_accept_rate=0.78125`
+  - Graph branch had not emitted its first progress line at the first check; keep monitoring before drawing algorithmic conclusions.
+  - Token branch completed train/eval:
+    - train endpoint FM loss `0.380641`, cosine `0.988568`, norm ratio `0.937689`;
+    - endpoint semantic stats stayed strong: `target_rank_utility_mean_improvement=0.493573`, projected rank utility `0.484375`, target near mass lift `2.08547`, far suppression `0.06199`, accept rate `0.75`;
+    - default eval on 40 tasks: `R2_mean=-0.1892`, solution `0.0`, skeleton/opdep `0.0`, valid expression fraction `0.78`, terminal max prob `0.8748`;
+    - sample32 eval on 40 tasks: `R2_mean=-0.9391`, solution `0.075`, skeleton `0.075`, opdep `0.0`, valid expression fraction `0.7684`.
+  - Interpretation: v6 semantic pushforward statistics are correctly lifting target-near semantic mass, but the token branch still fails to convert the lifted complete-trace posterior into a robust target-conditioned expression policy. This is now a posterior/projection-to-policy or readout/structure bottleneck, not a local semantic-statistic failure.
+  - Stopped graph v6 medium after first progress showed it was too slow for this configuration:
+    - graph collection reached only 8/64 endpoint groups after `448.99s` (~56s/group);
+    - semantic stats were positive (`rank utility improvement=0.4955`, near lift `2.452`, far suppression `0.354`, accept `0.75`), so the issue is mainly graph endpoint collection/projection cost before we can evaluate full behavior.
+- 2026-07-09 v7 endpoint semantic-pushforward theory update:
+  - Confirmed no matching SemanticFlowSR training/eval background process was active before editing; only the process scan itself matched.
+  - Implemented `endpoint_semantic_signature_pushforward_projection_v7`.
+  - Added continuous target utility diagnostics to the shared semantic mass layer:
+    - ideal posterior: `target_soft_utility_prior_mean`, `target_soft_utility_posterior_mean`, `target_soft_utility_mean_improvement`, `target_background_utility_prior_mean`, `target_background_utility_posterior_mean`, `target_background_utility_reduction`;
+    - projected endpoint: `projected_target_soft_utility_prior_mean`, `projected_target_soft_utility_mean`, `projected_target_soft_utility_mean_improvement`, `projected_target_background_utility_prior_mean`, `projected_target_background_utility_mean`, `projected_target_background_utility_reduction`.
+  - The new continuous utility is normalized from the semantic target-distance kernel. It is diagnostic even when hard top/bottom neighborhoods are ambiguous; acceptance still requires a valid hard projected neighborhood gap.
+  - Propagated v7 fields through graph/token endpoint correction diagnostics, online semantic mass diagnostics, summaries, markdown output, and the branch metrics collector.
+  - Updated `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md` to describe v7 and the new soft utility/background suppression checks.
+  - Validation passed:
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py`
+    - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`14 passed`)
+- 2026-07-09 v8 endpoint semantic pushforward:
+  - Confirmed no matching SemanticFlowSR training/eval background process was active before edits.
+  - Implemented independent semantic-distance far/background utility in `semflow_sr/semantic_mass.py`.
+  - Bumped endpoint objective version to `endpoint_semantic_signature_pushforward_projection_v8` in graph and token scripts so v7 endpoint caches are rejected.
+  - Acceptance now uses `target_far_utility_reduction` / `projected_target_far_utility_reduction` as the primary far-semantics suppression checks, with v7 background fields as compatibility aliases.
+  - Propagated new fields through graph/token diagnostics, train curves, summaries, markdown output, and `scripts/collect_semantic_mass_branch_metrics.py`.
+  - Updated `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md`, `task_plan.md`, and `findings.md`.
+  - Static checks passed:
+    `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py tests/test_semantic_mass_ng.py`.
+  - Unit tests passed:
+    `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`15 passed`).
+  - Tiny GPU token smoke passed at `/tmp/semflow_token_endpoint_v8_smoke`:
+    - objective version `endpoint_semantic_signature_pushforward_projection_v8`;
+    - target soft utility gain `0.123720`;
+    - target far utility reduction `0.125005`;
+    - projected target soft utility gain `0.207863`;
+    - projected target far utility reduction `0.207854`;
+    - tilt accept rate `0.5`;
+    - endpoint FM loss `0.055339`.
+  - Final process scan matched only the scan command itself; no new long-running SemanticFlowSR job was left active.
+
+## 2026-07-09 Endpoint Semantic-Signature Pushforward Projection v9
+- User supplied a refined theory note: keep the clean endpoint chain `theta1 -> q_theta1(z|D) -> semantic pushforward -> semantic KL tilt -> lifted q_plus -> theta1_plus -> supervised FM correction`; do not use local continuation values and do not run ODE inside optimizer gradient steps.
+- Confirmed no matching SemanticFlowSR training/eval background process was active before edits; only the process scan itself matched.
+- Implemented v9 objective version `endpoint_semantic_signature_pushforward_projection_v9` in graph and token endpoint-correction scripts, so v8 endpoint buffers are rejected by cache signature mismatch.
+- Added the compact smooth target-vs-far statistic in `semflow_sr/semantic_mass.py`:
+  `target_semantic_contrast_utility = target_soft_utility - target_far_utility`.
+  Its mean improvement is the preferred smooth diagnostic for the intended behavior: raise target-near/top semantic probability while weakening far/unrelated semantic probability.
+- Propagated ideal and projected v9 fields through graph/token diagnostics, collection progress rows, summaries, markdown output, and `scripts/collect_semantic_mass_branch_metrics.py`.
+- Updated `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md` to describe v9 and the signed target-vs-far utility acceptance criterion.
+- Static checks passed:
+  `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py tests/test_semantic_mass_ng.py`.
+- Unit tests passed:
+  `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`15 passed`).
+- No new GPU training/smoke run was launched because all GPUs were busy with unrelated jobs and this turn requested code implementation first.
+
+## 2026-07-09 v9 Dual-Branch Waiting Validation Launch
+- Added `scripts/run_semantic_pushforward_v9_dual_probe_medium_20260709.sh` by updating the v8 waiting runner to the v9 objective/tag namespace. Static shell check passed with `bash -n`.
+- Launched waiting GPU controller for `semantic_pushforward_v9_dual_probe_medium_20260709_r1`:
+  - controller PID `2695810` in `logs/complete_expression_semantic_fm/semantic_pushforward_v9_dual_probe_medium_20260709_r1.controller.pid`;
+  - controller log `logs/complete_expression_semantic_fm/semantic_pushforward_v9_dual_probe_medium_20260709_r1.controller.nohup.log`;
+  - status stream `logs/complete_expression_semantic_fm/semantic_pushforward_v9_dual_probe_medium_20260709_r1.status.jsonl`;
+  - graph log `logs/complete_expression_semantic_fm/graph_endpoint_semantic_pushforward_v9_dual_probe_medium_20260709_r1.log`;
+  - token log `logs/complete_expression_semantic_fm/token_endpoint_semantic_pushforward_v9_dual_probe_medium_20260709_r1.log`.
+- Initial controller state: both branch subshells are waiting for GPU util to drop below the configured threshold (`GPU_MAX_UTIL=35`) and have not started training yet. This avoids stealing GPU from unrelated jobs.
+- The validation will use the existing Stage1 syntax-prior checkpoints:
+  - graph `graph_stage1_syntax_endpoint_v3_dual_gate_medium_20260709/typed_op_node_flow_checkpoint.pt`;
+  - token `stage1_token_policy_budgeted_mass_main_20260708/typed_op_node_flow_checkpoint.pt`.
+- The first v9 `nohup ... &` launch was reaped by the tool parent process group after only one GPU-check cycle; it did not start training. Relaunched the same controller with `setsid`.
+- Confirmed the `setsid` controller is stable after a full wait cycle:
+  - controller PID `2718617`, PPID `1`, SID/PGID `2718617`;
+  - graph waiting subshell PID `2718633`;
+  - token waiting subshell PID `2718634`;
+  - status appended a second GPU check at `2026-07-09T12:18:42+08:00`.
+- Current state remains waiting, not training: GPU0/GPU1 utilization is still above the configured threshold, so the controller has not launched the expensive branch runs yet.
+
+## 2026-07-09 v10 endpoint semantic pushforward implementation
+- Stopped the v9 waiting controller process group (`2718617`) before code edits. It was still waiting on GPU availability and had not launched graph/token training. Logs and result directories were preserved.
+- Re-read the latest theory note and confirmed the desired implementation remains endpoint-decoupled:
+  `theta1 -> q_theta1(z|D) -> semantic pushforward -> semantic KL tilt -> lifted q_plus -> theta1_plus -> supervised FM correction`.
+- Implemented `endpoint_semantic_signature_pushforward_projection_v10`.
+- Added `target_top_far_tail_utilities` in `semflow_sr/semantic_mass.py`:
+  - top target-neighborhood gate is defined by the prior sampled semantic support;
+  - far/unrelated tail gate is also defined by the prior sampled support;
+  - utility is a smooth signed top-minus-far statistic;
+  - positive posterior/projected mean improvement means target-top semantic probability rises and far-tail semantic probability weakens.
+- Propagated v10 fields through:
+  - graph endpoint correction and online semantic mass diagnostics;
+  - token endpoint correction and weighted complete-trace FM diagnostics;
+  - collection progress rows;
+  - train curve summaries;
+  - markdown result summaries;
+  - branch metrics collector.
+- Updated `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md` to describe v10 and the new top/far-tail acceptance gate.
+- Updated `task_plan.md` and `findings.md`.
+- Static checks passed:
+  `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py tests/test_semantic_mass_ng.py`.
+- Unit tests passed:
+  `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`16 passed`).
+- Final process scan matched only the scan command itself; no SemanticFlowSR background training process remains active.
+
+## 2026-07-09 v10 smoke waiting controller launch
+- Re-read `task_plan.md`, `findings.md`, `progress.md`, and the latest theory note `/home/ywj/.codex/attachments/88813ee2-2089-41c1-ab12-04453168bdbe/pasted-text.txt` after context compaction.
+- Confirmed no active SemanticFlowSR training/eval process before launch; only process scans matched.
+- Re-validated the v10 implementation after compaction:
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py tests/test_semantic_mass_ng.py`
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`16 passed`).
+- Static shell checks passed for:
+  - `scripts/run_semantic_pushforward_v9_dual_probe_medium_20260709.sh`
+  - `scripts/run_semantic_pushforward_v10_dual_smoke_wait_20260709.sh`
+- Confirmed both Stage1 syntax-prior checkpoints exist:
+  - graph `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_stage1_syntax_endpoint_v3_dual_gate_medium_20260709/typed_op_node_flow_checkpoint.pt`
+  - token `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/stage1_token_policy_budgeted_mass_main_20260708/typed_op_node_flow_checkpoint.pt`
+- Launched the v10 dual-branch smoke waiting controller with `setsid` so it survives the tool parent process:
+  - controller PID `3023882`
+  - PID file `logs/complete_expression_semantic_fm/semantic_pushforward_v10_dual_smoke_20260709_r1.controller.pid`
+  - controller log `logs/complete_expression_semantic_fm/semantic_pushforward_v10_dual_smoke_20260709_r1.controller.nohup.log`
+  - status stream `logs/complete_expression_semantic_fm/semantic_pushforward_v10_dual_smoke_20260709_r1.status.jsonl`
+  - graph log `logs/complete_expression_semantic_fm/graph_endpoint_semantic_pushforward_v10_dual_smoke_20260709_r1.log`
+  - token log `logs/complete_expression_semantic_fm/token_endpoint_semantic_pushforward_v10_dual_smoke_20260709_r1.log`
+- Confirmed the controller is detached and waiting, not training:
+  - PID `3023882`, PPID `1`, SID/PGID `3023882`.
+  - graph waiting subshell PID `3023949`; token waiting subshell PID `3023950`.
+  - first GPU checks at `2026-07-09T12:40:25+08:00`: GPU0 util `100`, GPU1 util `100`, both above the smoke threshold `GPU_MAX_UTIL=20`, so neither branch started.
+- Next inspection should check whether the controller has moved past waiting and then read summary fields:
+  - `semantic_endpoint_objective_version == endpoint_semantic_signature_pushforward_projection_v10`
+  - `semantic_endpoint_target_top_far_tail_utility_mean_improvement_mean > 0`
+  - `semantic_endpoint_projected_target_top_far_tail_utility_mean_improvement_mean > 0`
+  - `semantic_endpoint_tilt_accept_rate`, endpoint FM loss/cosine/norm ratio, and smoke R2/structure diagnostics.
+
+## 2026-07-09 v10 run audit tooling and watcher
+- Added read-only auditor `scripts/audit_semantic_pushforward_run.py`.
+  - It classifies each run into reference-field, semantic statistic/sample support, posterior projection/parameterization, endpoint FM fit, rollout/readout, objective-version mismatch, or missing-eval-evidence bottlenecks.
+  - It does not change training targets or losses.
+  - Static validation passed: `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile scripts/audit_semantic_pushforward_run.py`.
+- Generated current historical audit tables under the v10 acceptance gate:
+  - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_pushforward_run_audit_v10_gate.json`
+  - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_pushforward_run_audit_v10_gate.md`
+- Historical audit summary: 77 pushforward-related runs; current v10 gate classifies them mainly as `reference_field` (39), `objective_version_mismatch` (28), and `no_semantic_endpoint_stage` (10). Therefore old results cannot be used as evidence that v10 passes.
+- Added a lightweight audit watcher for the active v10 smoke controller:
+  - watcher PID `3168271`, PPID `1`, SID/PGID `3168271`.
+  - watcher log `logs/complete_expression_semantic_fm/semantic_pushforward_v10_dual_smoke_20260709_r1.audit_watcher.nohup.log`.
+  - after controller PID `3023882` exits, it will write:
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_pushforward_v10_dual_smoke_20260709_r1_run_audit.json`
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_pushforward_v10_dual_smoke_20260709_r1_run_audit.md`
+- Current controller status remains waiting, not training: latest checked status still had GPU0/GPU1 utilization above `GPU_MAX_UTIL=20`; no v10 smoke result directory exists yet.
+
+## 2026-07-09 v11 endpoint semantic pushforward implementation
+- Re-read `task_plan.md`, `findings.md`, `progress.md`, and the latest endpoint theory note `/home/ywj/.codex/attachments/88813ee2-2089-41c1-ab12-04453168bdbe/pasted-text.txt`.
+- Stopped the pending v10 waiting controller and audit watcher before code edits:
+  - controller process group `3023882`;
+  - audit watcher process group `3168271`.
+  They were waiting on busy GPUs and had not launched branch training.
+- Confirmed no remaining matching SemanticFlowSR background process after stopping; subsequent process scans matched only the scan command itself.
+- Implemented objective version `endpoint_semantic_signature_pushforward_projection_v11` in both graph and token endpoint-correction scripts.
+- Added hard semantic-pushforward posterior fields in `semflow_sr/semantic_mass.py`:
+  - `target_top_tail_mass_contrast_prior_mean`;
+  - `target_top_tail_mass_contrast_posterior_mean`;
+  - `target_top_tail_mass_contrast_mean_improvement`;
+  - projected counterparts after resampling from `theta1_plus`.
+- Propagated the v11 field family through:
+  - graph endpoint correction and online semantic-mass diagnostics;
+  - token endpoint correction and weighted complete-trace FM diagnostics;
+  - endpoint collection progress rows;
+  - train curve summaries;
+  - markdown result summaries;
+  - `scripts/collect_semantic_mass_branch_metrics.py`;
+  - `scripts/audit_semantic_pushforward_run.py`.
+- Updated `configs/eval/semantic_pushforward_gates.json` and audit defaults to expect `endpoint_semantic_signature_pushforward_projection_v11`.
+- Updated `docs/ALGORITHM_COMPLETE_EXPRESSION_SEMANTIC_FM.md` so `target_top_tail_mass_contrast_mean_improvement` is documented as the primary non-centroid complete-expression posterior mean statistic. The smooth `target_top_far_tail_utility_mean_improvement` remains an auxiliary robustness diagnostic.
+- Added `scripts/run_semantic_pushforward_v11_dual_smoke_wait_20260709.sh` and changed the old v10 smoke script into a compatibility wrapper whose default tag/label now use v11.
+- Static and unit verification passed:
+  `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py scripts/audit_semantic_pushforward_run.py tests/test_semantic_mass_ng.py`
+  plus `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`16 passed`).
+- Shell checks passed:
+  `bash -n scripts/run_semantic_pushforward_v11_dual_smoke_wait_20260709.sh scripts/run_semantic_pushforward_v10_dual_smoke_wait_20260709.sh`.
+- No new GPU run was launched in this turn. Full v11 validation still depends on the Stage1/reference-field gate and should not be inferred from static/unit checks.
+
+## 2026-07-09 v11 dual-branch smoke controller launch
+- Rechecked current code state before launching:
+  - no active SemanticFlowSR training/eval/audit process was running;
+  - `endpoint_semantic_signature_pushforward_projection_v11` and `target_top_tail_mass_contrast` fields are wired through graph/token training, branch metrics, audit, docs, config, and tests;
+  - GPU0/GPU1 had enough free memory but high utilization, so the run must wait instead of stealing compute.
+- Re-ran validation:
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile semflow_sr/semantic_mass.py scripts/train_complete_expression_semantic_fm.py scripts/train_token_policy_semantic_fm.py scripts/collect_semantic_mass_branch_metrics.py scripts/audit_semantic_pushforward_run.py tests/test_semantic_mass_ng.py`
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`16 passed`).
+  - `bash -n scripts/run_semantic_pushforward_v9_dual_probe_medium_20260709.sh scripts/run_semantic_pushforward_v11_dual_smoke_wait_20260709.sh scripts/run_semantic_pushforward_v10_dual_smoke_wait_20260709.sh`.
+- Launched the v11 dual-branch GPU waiting controller with `setsid`:
+  - controller PID `3582367`;
+  - PID file `logs/complete_expression_semantic_fm/semantic_pushforward_v11_dual_smoke_20260709_r1.controller.pid`;
+  - controller log `logs/complete_expression_semantic_fm/semantic_pushforward_v11_dual_smoke_20260709_r1.controller.nohup.log`;
+  - status stream `logs/complete_expression_semantic_fm/semantic_pushforward_v11_dual_smoke_20260709_r1.status.jsonl`;
+  - graph log `logs/complete_expression_semantic_fm/graph_endpoint_semantic_pushforward_v11_dual_smoke_20260709_r1.log`;
+  - token log `logs/complete_expression_semantic_fm/token_endpoint_semantic_pushforward_v11_dual_smoke_20260709_r1.log`.
+- Initial controller state at launch:
+  - graph branch waiting on GPU0 because utilization was above `GPU_MAX_UTIL=20`;
+  - token branch waiting on GPU1 because utilization was above `GPU_MAX_UTIL=20`;
+  - no branch had started training yet.
+- Added a detached audit watcher:
+  - watcher PID `3589075`;
+  - PID file `logs/complete_expression_semantic_fm/semantic_pushforward_v11_dual_smoke_20260709_r1.audit_watcher.pid`;
+  - watcher log `logs/complete_expression_semantic_fm/semantic_pushforward_v11_dual_smoke_20260709_r1.audit_watcher.nohup.log`;
+  - after controller exit it writes:
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_pushforward_v11_dual_smoke_20260709_r1_run_audit.json`;
+    - `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/semantic_pushforward_v11_dual_smoke_20260709_r1_run_audit.md`.
+- Expected first checks after completion:
+  - objective version must equal `endpoint_semantic_signature_pushforward_projection_v11`;
+  - ideal and projected `semantic_endpoint_*target_top_tail_mass_contrast_mean_improvement_mean` should be positive;
+  - inspect endpoint FM loss/cosine/norm ratio and eval R2/structure fields separately, because semantic-posterior success alone is not full SR success.
+
+## 2026-07-09 Graph Target-Conditioned Stage1 Rebuild
+- Implemented graph Stage1 mainline changes in `scripts/train_complete_expression_semantic_fm.py`:
+  - default `target_conditioned_reference`, `task_conditioning=xy`, sampled GT trace endpoint, `theta0` active-choice coupling bias `5.0`, bridge-path reference field/state sampler, ODE64, eval samples 8, no semantic action features;
+  - eval `theta0` GT-trace coupling via `--eval-theta0-use-gt-trace`;
+  - summary/report fields for raw R2, raw NMSE, nontrivial/constant/identity expression rates, eval theta0 mode, and multi-variable GT collapse diagnostics.
+- Added `scripts/run_graph_target_conditioned_stage1_gpu.sh` as the single recommended active runner. It supports `SCALE=smoke|medium|full`, uses one GPU, writes diagnostics JSON, and reports sample previews with GT/raw variable sets.
+- Updated `README.md` and `docs/README.md` so the active path is graph target-conditioned Stage1; token construction and Stage2 endpoint pushforward are described as legacy/ablation until Stage1 recovers.
+- Archived legacy scripts under `scripts/archive_legacy_semantic_pushforward_20260709/`, logs under `logs/complete_expression_semantic_fm/archive_legacy_token_stage2_20260709/`, and results under `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/archive_legacy_token_stage2_20260709/`.
+- Validation passed:
+  - `bash -n scripts/run_graph_target_conditioned_stage1_gpu.sh`
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile scripts/train_complete_expression_semantic_fm.py semflow_sr/semantic_mass.py tests/test_semantic_mass_ng.py`
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m pytest tests/test_semantic_mass_ng.py -q` (`16 passed`)
+- First smoke `graph_target_conditioned_stage1_smoke_codex_20260709` was archived because it evaluated only the first four one-variable benchmark tasks and therefore could not diagnose multi-variable collapse.
+- Representative smoke `graph_target_conditioned_stage1_smoke_multivar_codex_20260709` completed on GPU2:
+  - output dir `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_target_conditioned_stage1_smoke_multivar_codex_20260709`;
+  - diagnostics `logs/complete_expression_semantic_fm/graph_target_conditioned_stage1_smoke_multivar_codex_20260709.diagnostics.json`;
+  - loss `0.2961 -> 0.1552 -> 0.1431`, zero-pred loss `0.6169`;
+  - `r2_mean=0.9218`, `solution_rate=0.625`, `skeleton_accuracy=0.75`, `operator_dependency_accuracy=0.75`;
+  - samples are not all constants or identities, but multi-variable recovery is partial: `Jin-2` recovers `x0**2 + x1**3`; `Jin-1` still collapses to a one-variable approximation.
+- `docs/reference/prom.md` was not modified.
+
+## 2026-07-09 Clean Stage1 rerun after graph construction fix
+- Checked for active SemanticFlowSR graph/token/stage2 processes before cleanup; none were running.
+- Archived old top-level run directories under:
+  `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/archive_old_chart_stage1_20260709/`.
+- Archived old top-level logs/pid/controller files under:
+  `logs/complete_expression_semantic_fm/archive_old_chart_stage1_20260709/`.
+- Added archive manifests in both archive directories. Evidence was moved, not deleted.
+- Static checks passed before launch:
+  - `bash -n scripts/run_graph_target_conditioned_stage1_gpu.sh`
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile scripts/train_fixed_symbol_node_stage1.py scripts/train_complete_expression_semantic_fm.py`
+- Launched clean full-data Stage1 e8 with medium/light eval on GPU1:
+  - tag `graph_stage1_zero_gate_clean_full_e8_medium_eval_20260709`;
+  - controller PID `1381652`;
+  - train process PID `1381931` at launch verification;
+  - log `logs/complete_expression_semantic_fm/graph_stage1_zero_gate_clean_full_e8_medium_eval_20260709.log`;
+  - controller log `logs/complete_expression_semantic_fm/graph_stage1_zero_gate_clean_full_e8_medium_eval_20260709.controller.nohup.log`;
+  - output dir target `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/graph_stage1_zero_gate_clean_full_e8_medium_eval_20260709`.
+- Verified clean command-line properties:
+  - `--theta0-endpoint-coupling none`;
+  - `--no-eval-theta0-use-gt-trace`;
+  - full train task limit `0`;
+  - eval task limit `80`;
+  - SymbolicGPT eval limit `80`;
+  - `--inactive-block-target-mode zero`;
+  - `--inactive-block-loss-weight 0.02`.
+- At roughly 6-7 minutes after launch, the process was still active and CPU/GPU1 had activity, but the main Python log had not yet flushed epoch lines. This is consistent with full data/trace initialization in this code path; continue monitoring the log and output directory.
+
+## 2026-07-09 Stage2.1 multi-p0 corrected bridge implementation and watcher
+- Updated graph Stage2 endpoint correction to objective version `iterative_semantic_endpoint_corrected_bridge_fm_v2`.
+- Stage2 cache signatures now include:
+  - projection mode;
+  - elite fraction/min elite samples;
+  - `semantic_endpoint_p0_per_task`;
+  - MAP fallback improvement threshold.
+- Added projection modes:
+  - `weighted_marginal` for legacy ablation;
+  - `elite_marginal`;
+  - `elite_map`;
+  - `elite_map_fallback` as the new default.
+- The default Stage2.1 corrected endpoint now uses an elite semantic posterior subset for block marginals. If projected resampling does not preserve target-distance improvement, `elite_map_fallback` replaces the endpoint with the best trace sharp endpoint and records fallback diagnostics.
+- Stage2 collection now samples multiple `theta0` seeds per selected task via `--semantic-endpoint-p0-per-task`; each seed independently rolls out to `theta1`, tilts/projects to its own `theta1_plus`, and becomes a separate corrected bridge pair.
+- Added diagnostics for:
+  - selected sample count/weight mass;
+  - valid sample count;
+  - projection mode;
+  - projection fallback rate/reason;
+  - best sample invalid/collapse flags;
+  - p0 seed index and p0-per-task setting.
+- Fixed `scripts/run_graph_semantic_endpoint_corrected_bridge_stage2_gpu.sh` to pass `num_layers`, `output_terms`, `op_copies`, and `hidden`, so medium Stage2 can load the full clean Stage1 checkpoint architecture.
+- Added `scripts/analyze_graph_flow_run.py` to summarize run-level and per-sample structural diagnostics:
+  - R2/raw R2;
+  - no-variable/single-variable/nested/affine-zeroed/severe issue rates;
+  - endpoint GT-trace active probability and logprob-derived sample probability estimates;
+  - valid/unique candidate fractions for multi-p0 stability probes;
+  - Stage2 tilt/projection fields when present.
+- Added `scripts/watch_clean_stage1_then_stage2_medium_20260709.sh`.
+  It waits for the clean Stage1 controller to finish, analyzes Stage1, runs a light multi-p0 eval probe, then runs medium Stage2 corrected-bridge iter1 and iter2 sequentially and analyzes each run.
+- Validation passed:
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile scripts/train_complete_expression_semantic_fm.py scripts/analyze_graph_flow_run.py`
+  - `bash -n scripts/run_graph_semantic_endpoint_corrected_bridge_stage2_gpu.sh scripts/watch_clean_stage1_then_stage2_medium_20260709.sh`
+- A tiny CPU Stage2 smoke was interrupted after it reached the new projection-check path because it was slow on CPU; it did not expose a code exception before interruption.
+- Launched the watcher:
+  - controller PID `1671548`;
+  - controller log `logs/complete_expression_semantic_fm/graph_stage1_to_stage2_medium_watch_20260709.controller.nohup.log`;
+  - main watcher log `logs/complete_expression_semantic_fm/graph_stage1_to_stage2_medium_watch_20260709.log`.
+- At watcher launch, clean Stage1 was still running. Latest observed Stage1 progress:
+  - epoch 7/8;
+  - `stage1_fm_loss=0.1214117685`;
+  - `pred_target_cosine_mean=0.9987898577`;
+  - no eval summary had been written yet.
+
+## 2026-07-09 ZERO-collapse pause, reduced graph target-field ablation
+- Stopped the failed clean Stage1 eval and watcher before Stage2 could launch:
+  - Stage1 python PID `1381931`;
+  - Stage1 tee PID `1381932`;
+  - watcher PID `1671548`.
+- Archived the failed run and watcher logs:
+  - results archive `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/archive_failed_zero_collapse_stage1_20260709/`;
+  - log archive `logs/complete_expression_semantic_fm/archive_failed_zero_collapse_stage1_20260709/`.
+- Root-cause audit from partial failed eval:
+  - 31 partial samples;
+  - 28/31 raw expressions had no variables;
+  - 28/31 affine coefficients were zero;
+  - `terminal_max_prob_mean≈0.7824`, so the field became sharp on constants rather than remaining uncertain.
+- Implemented safer Stage1 defaults:
+  - `inactive_block_target_mode=start`;
+  - `inactive_block_loss_weight=0.0`;
+  - recommended runner defaults now use `output_terms=1`;
+  - reduced graph defaults: smoke 8 layers, medium 10 layers, full 12 layers.
+- Added `scripts/audit_graph_stage1_target_field.py`.
+  It reports per-trace active structural weight, active ZERO readout weight,
+  inactive default weight, term0 source kind, and target-logprob estimates.
+- Target-field audit confirmed the old failed configuration was ZERO-dominated:
+  - old `num_layers=24`, `output_terms=3`, `inactive=zero/0.02`:
+    - `zero_default_weight_fraction_mean=0.6552`;
+    - `zero_to_structural_weight_ratio_mean=2.6615`;
+    - active extra-readout ZERO weight mean `2.0`.
+  - new reduced `num_layers=12`, `output_terms=1`, `inactive=start/0`:
+    - `zero_default_weight_fraction_mean=0.0`;
+    - `zero_to_structural_weight_ratio_mean=0.0`;
+    - term0 nonzero source rate `1.0`.
+- Ran three smoke ablations on GPU1:
+  - A `num_layers=8`, `output_terms=1`, `inactive=start/0`:
+    - `r2_mean=0.7821`;
+    - `no_variable_rate=0.0`;
+    - `affine_zeroed_rate=0.0`;
+    - `single_variable_rate=0.75`;
+    - `severe_structure_issue_rate=0.25`;
+    - `terminal_max_prob_mean=0.2077`.
+  - B `num_layers=8`, `output_terms=3`, `inactive=start/0`:
+    - `r2_mean=0.4772`;
+    - `no_variable_rate=0.125`;
+    - `severe_structure_issue_rate=0.625`;
+    - much worse raw R2, so extra readout ZERO remains harmful.
+  - C `num_layers=8`, `output_terms=1`, `inactive=zero/0.002`:
+    - `r2_mean=0.6113`;
+    - `no_variable_rate=0.0`;
+    - `single_variable_rate=0.875`;
+    - `severe_structure_issue_rate=0.375`;
+    - weaker than A.
+- Selected A-style reduced active-only as the next mainline.
+- Launched reduced medium Stage1 on GPU1:
+  - tag `graph_stage1_reduced_active_only_medium_20260709`;
+  - controller PID `1954364`;
+  - python PID `1954644` at launch check;
+  - command verified: `num_layers=12`, `output_terms=1`, `inactive=start/0`, `--no-eval-theta0-use-gt-trace`;
+  - diagnostics will be written to `logs/complete_expression_semantic_fm/graph_stage1_reduced_active_only_medium_20260709.diagnostics.json` after completion.
+
+## 2026-07-09 Layer 5/6 graph reduction and GT trace recovery probe
+- Stopped the superseded 12-layer reduced medium run after the graph-size target changed to 5/6 layers:
+  - controller PID `1954364`;
+  - runner bash PID `1954639`;
+  - python PID `1954644`;
+  - tee PID `1954645`.
+- Archived the stopped 12-layer medium artifacts:
+  - results archive `results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/archive_superseded_12layer_reduced_medium_20260709/`;
+  - log archive `logs/complete_expression_semantic_fm/archive_superseded_12layer_reduced_medium_20260709/`.
+- Tightened default graph sizes:
+  - Stage1 smoke `num_layers=5`;
+  - Stage1 medium/full `num_layers=6`;
+  - Stage2 runner default `num_layers=6`;
+  - watcher default `num_layers=6`.
+- Added `scripts/probe_gt_trace_recovery_over_theta0.py`.
+  This evaluates a checkpoint by sampling multiple random `theta0` per eval task, rolling out the reference velocity field to `theta1`, and reporting the GT trace family recovery probability distribution:
+  - best GT trace active mean/min probability;
+  - active logprob sum;
+  - exact trace probability estimate `exp(logprob_sum)`;
+  - argmax match;
+  - per-task stability rates for probability thresholds `1e-3` and `1e-6`.
+- Static checks passed:
+  - `/home/ywj/miniconda3/envs/semflow/bin/python -m py_compile scripts/probe_gt_trace_recovery_over_theta0.py scripts/train_complete_expression_semantic_fm.py`;
+  - `bash -n scripts/run_graph_target_conditioned_stage1_gpu.sh scripts/run_graph_semantic_endpoint_corrected_bridge_stage2_gpu.sh scripts/watch_clean_stage1_then_stage2_medium_20260709.sh`.
+- Launched 6-layer active-only medium Stage1 on GPU1:
+  - tag `graph_stage1_active_only_l6_medium_20260709`;
+  - controller PID `2050292`;
+  - python PID `2050604` at launch check;
+  - command verified: `num_layers=6`, `output_terms=1`, `inactive=start/0`, no theta0 GT bias, and `--no-eval-theta0-use-gt-trace`;
+  - after training/eval it runs `analyze_graph_flow_run.py` and the new `probe_gt_trace_recovery_over_theta0.py` automatically.
+
+## 2026-07-10 register/graph Stage1 implementation pass
+- Continued implementation of two Stage1 construction graphs: fixed graph DAG and register operator simplex.
+- Main script now creates templates through make_construction_template and no longer rejects register_categorical_blocks.
+- Added active-node semantic conditioning and num_registers to CLI/checkpoint metadata; runner can switch construction graph by env var.
+
+## 2026-07-10 runtime blocker
+- Static checks passed for train_complete_expression_semantic_fm.py, probe_gt_trace_recovery_over_theta0.py, and run_graph_target_conditioned_stage1_gpu.sh.
+- Attempted tiny graph smoke, but Python hung before first epoch; minimal `import torch` in semflow env also timed out at 30s, 120s, and 300s.
+- The blocked torch import process was in kernel wchan `folio_wait_bit_common`/buffer wait while importing torch._C, so full train-val cannot be reliably launched until the semflow torch import/environment I/O issue clears.
+
+## 2026-07-10 full e8 two-graph controller
+- Added scripts/run_stage1_full_e8_trainval_two_graphs_20260710.sh.
+- Controller preflights semflow torch import before training, then runs graph_dag_edge_simplex and register_categorical_blocks full e8 train-val sequentially on RUN_GPU.
+- Each run uses clean Stage1 settings: theta0_endpoint_coupling=none, eval_theta0_use_gt_trace=0, num_layers=6, output_terms=1, inactive=start/0, active-node semantic conditioning enabled, semantic action features disabled.
+- Each completed run launches probe_gt_trace_recovery_over_theta0.py to record multi-theta0 GT trace recovery and sampled endpoint expression statistics.
+
+## 2026-07-10 controller launched
+- Launched full e8 two-graph train-val controller: PID 3372831, log logs/complete_expression_semantic_fm/stage1_full_e8_two_graphs_trainval_20260710.controller.log.
+- Current state at launch: waiting in torch preflight attempt 1 because semflow torch import is still blocked; training will start automatically once preflight succeeds.
+- Planned output dirs: graph_stage1_graphdag_active_sem_full_e8_trainval_20260710 and graph_stage1_register_active_sem_full_e8_trainval_20260710.
+## 2026-07-10 Stage1 严重误差审查
+
+- 梳理理论文档、README、运行脚本和 semflow 环境步骤。
+- 确认当前没有 SemanticFlowSR 训练进程；full e8 双图实验未产出结果。
+- 直接审查 medium run 的 `typed_op_node_flow_samples.jsonl` 与 GT。
+- 定位主要矛盾：正式脚本关闭 theta0-endpoint coupling，重新运行已知低 t 不可辨识消融。
+- 对照训练时间分桶、GT trace recovery probe、raw/affine R2，确认平均指标掩盖 rollout 起点失败。
+- 运行核心测试时发现缺失 `pullback_chart.py`，pytest 在 collection 阶段失败。
+- 将严重误差和受控下一步实验顺序写入 `docs/STRUCTURAL_CLOSURE.md`；未修改训练代码。
+
+## 2026-07-10 Semantic Latent-Endpoint FM
+- Added `semflow_sr/latent_endpoint.py` with K-component set-attention endpoints, exact family assignment, analytic Fisher transport, stratified tangent loss, and component sampling.
+- Switched `train_complete_expression_semantic_fm.py` default flow to `semantic_latent_endpoint` with six layers and new latent CLI/checkpoint/output contracts while retaining legacy flow loading.
+- Added ignored local oracle tests in `tests/test_latent_endpoint_flow.py`; 8 focused tests pass.
+- Added `scripts/run_semantic_latent_endpoint_gpu.sh` without launching a long experiment.
+- Updated the ignored local complete-expression algorithm, architecture, and math documents to make latent endpoints the mainline and defer semantic refinement.
+- Verified CPU end-to-end smoke, automatic tangent-weight calibration, latent checkpoint eval-only reload, Python compilation, shell syntax, and `git diff --check`.
+
+## 2026-07-10 latent endpoint cleanup and small validation
+- Removed all historical artifacts under the complete-expression runs/logs directories, freeing about 139 MB.
+- Fixed latent training diagnostics to avoid repeated five-bin recomputation during each optimizer step.
+- Fixed train family summary denominators to include only tasks with compiled GT families.
+- Fixed sampled latent records to include the selected decoded expression before structural metrics are computed.
+- Ran `semantic_latent_endpoint_l6_k4_overfit10_20260710_validated` on GPU 1.
+- On 8 compilable train tasks: family mass 0.9996136576, top-1/top-4 recall 1.0, matched active argmax 1.0.
+- On 4 held-out tasks: family mass/top-4 recall 0.0 and matched active argmax 0.3923786181; supervised memorization passes but structural generalization fails.
+- Removed the earlier v1/v2 intermediate outputs and retained only the final validated result and log.

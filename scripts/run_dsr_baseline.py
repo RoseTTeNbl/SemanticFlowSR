@@ -25,6 +25,7 @@ def main():
     ap.add_argument("--n_samples", type=int, default=100000)
     ap.add_argument("--max_tasks", "--max-tasks", type=int, default=None,
                     help="optional task cap for smoke runs")
+    ap.add_argument("--per_task_timeout_sec", type=float, default=300.0)
     ap.add_argument("--no_resume", action="store_true", help="overwrite existing result file instead of skipping completed tasks")
     ap.add_argument("--out", default="results/dso")
     ap.add_argument("--tag", default="dso")
@@ -41,6 +42,7 @@ def main():
         budget={"n_samples": a.n_samples},
         kwargs={"n_samples": a.n_samples},
         resume=not a.no_resume,
+        timeout_sec=float(a.per_task_timeout_sec),
     )
     for name, item in results.items():
         print(f"{name:32s} r2={item['r2']}")

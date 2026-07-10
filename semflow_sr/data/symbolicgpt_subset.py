@@ -41,6 +41,7 @@ class SymbolicGPTSubsetConfig:
         "cos",
         "square",
         "cube",
+        "exp",
         "protected_log",
         "protected_sqrt",
     )
@@ -92,7 +93,9 @@ def load_symbolicgpt_subset_tasks(
         paths = paths[: max(int(limit), 0)]
     tasks = []
     for path in paths:
-        tasks.append(_load_task(path, root=root, rng=rng, train_fraction=train_fraction))
+        task = _load_task(path, root=root, rng=rng, train_fraction=train_fraction)
+        if _is_valid_formula(task.expression):
+            tasks.append(task)
     return tasks
 
 
@@ -149,8 +152,9 @@ def _load_task(path: Path, *, root: Path, rng: random.Random, train_fraction: fl
     variable_names = [f"x{i}" for i in range(num_vars)]
     split = path.parent.name
     rel = path.relative_to(root)
+    suite = "symbolicgpt_large" if "symbolicgpt_large" in str(root.name) else "symbolicgpt_subset"
     return SRTask(
-        f"symbolicgpt_subset/{split}/{path.stem}",
+        f"{suite}/{split}/{path.stem}",
         x[tr],
         y[tr],
         x[te],
@@ -158,10 +162,16 @@ def _load_task(path: Path, *, root: Path, rng: random.Random, train_fraction: fl
         str(raw.get("formula", "")),
         variable_names,
         {
-            "suite": "symbolicgpt_subset",
+            "suite": suite,
             "split": split,
             "source": "local_symbolicgpt_subset",
             "path": str(rel),
             **props,
         },
     )
+
+
+def _is_valid_formula(formula: str | None) -> bool:
+    text = str(formula or "")
+    bad_tokens = ("zoo", "nan", "inf", "oo")
+    return not any(token in text for token in bad_tokens)

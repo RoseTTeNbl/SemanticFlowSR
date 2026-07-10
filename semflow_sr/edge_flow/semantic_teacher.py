@@ -1,4 +1,4 @@
-"""Local probability-shape teacher velocity for CSEF.
+"""Legacy local probability-shape teacher velocity.
 
 Flow matching happens on explicit categorical probability shapes. The default
 teacher path is Fisher-Rao via square-root sphere geodesics. Semantic

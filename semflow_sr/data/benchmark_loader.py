@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
+import json
 import numpy as np
 
 from .benchmark_manifest import BenchmarkTaskSpec
@@ -89,12 +90,15 @@ class FeynmanCSVLoader:
     def load(self, name: str, seed: int = 0) -> SRTask:
         import pandas as pd
         d = self.root / name
+        meta = {}
+        if (d / "metadata.json").exists():
+            meta = json.loads((d / "metadata.json").read_text())
         tr = pd.read_csv(d / f"seed_{seed}_train.csv")
         te = pd.read_csv(d / f"seed_{seed}_test.csv")
         cols = [c for c in tr.columns if c != "target"]
         return SRTask(name, tr[cols].to_numpy(float), tr["target"].to_numpy(float),
                       te[cols].to_numpy(float), te["target"].to_numpy(float),
-                      None, cols, {"suite": "feynman", "seed": seed})
+                      meta.get("expression"), cols, {"suite": "feynman", "seed": seed, **meta})
 
 
 def load_materialized_task(spec: BenchmarkTaskSpec, root: str | Path = ".") -> SRTask:
