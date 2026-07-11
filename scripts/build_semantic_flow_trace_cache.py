@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the strict equivalent-GT trace cache used by v5.1 bootstrap."""
+"""Build the strict equivalent-GT trace cache used by bootstrap."""
 from __future__ import annotations
 
 import argparse
@@ -24,7 +24,7 @@ from scripts.train_complete_expression_semantic_fm import (
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="data/cache/semantic_flow_v5")
+    parser.add_argument("--out", default="data/cache/semantic_flow")
     parser.add_argument("--manifest", default="data/benchmark_suites/benchmark_manifest.json")
     parser.add_argument("--manifest-root", default="data/benchmark_suites")
     parser.add_argument("--suites", nargs="+", default=["nguyen", "constant", "livermore", "jin"])

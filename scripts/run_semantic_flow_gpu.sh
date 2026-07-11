@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-trap 'code=$?; echo "[one-step fisher cycle exit] $(date -Is) code=${code}"; exit ${code}' EXIT
+trap 'code=$?; echo "[semantic flow exit] $(date -Is) code=${code}"; exit ${code}' EXIT
 
 cd /home/ywj/wyh/SFSR/SemanticFlowSR
 PY="${PY:-/home/ywj/miniconda3/envs/semflow/bin/python}"
@@ -8,16 +8,16 @@ RUN_GPU="${RUN_GPU:-1}"
 export CUDA_VISIBLE_DEVICES="$RUN_GPU"
 
 SCALE="${SCALE:-smoke}"
-TAG="${TAG:-semantic_poisson_residual_fisher_v5_1_l12_20260711_${SCALE}}"
-BASE="${RESULT_BASE:-results/clean_benchmark/semantic_poisson_residual_fisher_v5_1}"
+TAG="${TAG:-semantic_flow_l12_${SCALE}}"
+BASE="${RESULT_BASE:-results/clean_benchmark/semantic_flow}"
 LOG_DIR="${LOG_DIR:-logs/complete_expression_semantic_fm}"
 OUT="${OUT:-$BASE/$TAG}"
 LOG="$LOG_DIR/$TAG.log"
 mkdir -p "$LOG_DIR"
 if [ -e "$OUT" ]; then echo "Refusing existing OUT=$OUT" >&2; exit 3; fi
-TRACE_CACHE_ROOT="${TRACE_CACHE_ROOT:-data/cache/semantic_flow_v5}"
+TRACE_CACHE_ROOT="${TRACE_CACHE_ROOT:-data/cache/semantic_flow}"
 if [ ! -f "$TRACE_CACHE_ROOT/compiled_trace_families_v1.jsonl" ] || [ ! -f "$TRACE_CACHE_ROOT/compiled_trace_families_v1.manifest.json" ]; then
-  echo "Missing v5.1 trace cache under $TRACE_CACHE_ROOT" >&2
+  echo "Missing semantic-flow trace cache under $TRACE_CACHE_ROOT" >&2
   echo "Build it first with scripts/build_semantic_flow_trace_cache.py" >&2
   exit 4
 fi
@@ -78,7 +78,7 @@ ARGS=(
   --inactive-block-target-mode start --inactive-block-loss-weight 0.0
   --cycle-iterations "$OUTER_ITERATIONS"
   --cycle-particles-per-task "$PARTICLES" --cycle-expression-samples 0
-  --cycle-proposer-source learned_flow --cycle-proposer-rollout-steps "${PROPOSER_ROLLOUT_STEPS:-8}"
+  --cycle-proposer-rollout-steps "${PROPOSER_ROLLOUT_STEPS:-8}"
   --cycle-poisson-steps "${POISSON_STEPS:-64}" --cycle-poisson-lr "${POISSON_LR:-1e-3}"
   --cycle-correction-step "${CORRECTION_STEP:-0.1}" --cycle-support-variance-eps "${SUPPORT_VARIANCE_EPS:-1e-6}"
   --cycle-collection-timeout-sec "${COLLECTION_TIMEOUT_SEC:-300}"
@@ -87,11 +87,9 @@ ARGS=(
   --cycle-landscape-sources "${LANDSCAPE_SOURCES:-4}"
   --cycle-landscape-task-limit "${LANDSCAPE_TASK_LIMIT:-1}"
   --cycle-landscape-time-points "${LANDSCAPE_TIME_POINTS:-5}"
-  --cycle-projection-sharpness 1.0 --cycle-mutation-samples 0 --cycle-elite-modes 0 --cycle-archive-size 0
-  --no-cycle-soft-endpoint-samples
-  --cycle-flow-epochs "$FLOW_EPOCHS" --cycle-proposer-epochs 0
+  --cycle-flow-epochs "$FLOW_EPOCHS"
   --cycle-steps-per-epoch "$CYCLE_STEPS"
-  --cycle-flow-lr "${FLOW_LR:-5e-4}" --cycle-proposer-lr 0
+  --cycle-flow-lr "${FLOW_LR:-5e-4}"
   --cycle-time-sampling stratified_fisher
   --time-sampling low_t_mixture --low-t-sampling-prob 0.4 --low-t-max 0.1
   --ode-steps "${ODE_STEPS:-32}" --ode-sweep-steps "${ODE_SWEEP_STEPS:-}"
@@ -101,7 +99,7 @@ ARGS=(
   --eval-endpoint-decode-mode hard_argmax
   --eval-oracle-free-selection-mode "$EVAL_SELECTION_MODE"
   --no-eval-terminal-retraction
-  --no-eval-theta0-use-gt-trace --rollout-guidance-mode off
+  --no-eval-theta0-use-gt-trace
   --temporal-visualization-steps 16
   --seed "${SEED:-20260711}" --log-epochs
 )
@@ -111,6 +109,6 @@ case "$CYCLE_EVAL_EACH_ITERATION" in
   *) ARGS+=(--no-cycle-eval-each-iteration) ;;
 esac
 
-echo "[one-step fisher cycle] $(date -Is) scale=$SCALE gpu=$RUN_GPU out=$OUT" | tee "$LOG"
+echo "[semantic flow] $(date -Is) scale=$SCALE gpu=$RUN_GPU out=$OUT" | tee "$LOG"
 echo "[budget] classic_tasks=${TRAIN_LIMIT}/${EVAL_LIMIT} symbolicgpt_tasks=${SYMBOLICGPT_TRAIN_LIMIT}/${SYMBOLICGPT_EVAL_LIMIT} particles=$PARTICLES outer_iterations=$OUTER_ITERATIONS poisson_steps=${POISSON_STEPS:-64} correction_step=${CORRECTION_STEP:-0.1} residual_epochs=$FLOW_EPOCHS eval_selection=$EVAL_SELECTION_MODE eval_each_iter=$CYCLE_EVAL_EACH_ITERATION" | tee -a "$LOG"
 "$PY" scripts/train_complete_expression_semantic_fm.py "${ARGS[@]}" 2>&1 | tee -a "$LOG"

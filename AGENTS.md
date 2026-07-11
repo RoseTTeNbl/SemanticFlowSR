@@ -44,7 +44,8 @@ semantic FM、structural-closure 或其他长 GPU 任务。
 
 ```text
 scripts/train_complete_expression_semantic_fm.py
-scripts/run_one_step_semantic_fisher_cycle_gpu.sh
+scripts/run_semantic_flow_gpu.sh
+scripts/run_bootstrap_gates_gpu.sh
 ```
 
 `target_conditioned_reference`、semantic latent endpoint、semantic endpoint correction

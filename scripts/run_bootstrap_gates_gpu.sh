@@ -3,11 +3,11 @@ set -euo pipefail
 cd /home/ywj/wyh/SFSR/SemanticFlowSR
 PY="${PY:-/home/ywj/miniconda3/envs/semflow/bin/python}"
 export CUDA_VISIBLE_DEVICES="${RUN_GPU:-1}"
-CACHE="${TRACE_CACHE_ROOT:-data/cache/semantic_flow_v5}"
-BASE="${RESULT_BASE:-results/clean_benchmark/semantic_poisson_residual_fisher_v5_1_bootstrap}"
+CACHE="${TRACE_CACHE_ROOT:-data/cache/semantic_flow}"
+BASE="${RESULT_BASE:-results/clean_benchmark/semantic_flow/bootstrap}"
 mkdir -p "$BASE"
 if [ ! -f "$CACHE/compiled_trace_families_v1.jsonl" ] || [ ! -f "$CACHE/compiled_trace_families_v1.manifest.json" ]; then
-  echo "Missing v5.1 trace cache under $CACHE" >&2
+  echo "Missing semantic-flow trace cache under $CACHE" >&2
   exit 4
 fi
 

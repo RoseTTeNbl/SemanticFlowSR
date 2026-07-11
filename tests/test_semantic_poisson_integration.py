@@ -10,11 +10,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.train_complete_expression_semantic_fm import (  # noqa: E402
     DEFAULT_OPS,
-    ConditionalSemanticPotentialV5,
-    PoissonResidualVelocityV5,
+    ConditionalSemanticPotential,
+    PoissonResidualVelocity,
     RegisterOperatorSimplexTemplate,
-    ResidualVelocityHeadV5,
-    TaskConditionedVelocityNetV5,
+    ResidualVelocityHead,
+    TaskConditionedVelocityNet,
     graph_action_mask,
     masked_block_softmax,
     random_theta,
@@ -31,14 +31,14 @@ def _template():
     )
 
 
-def test_v5_velocity_interface_has_no_route_or_theta0_argument():
-    parameters = inspect.signature(TaskConditionedVelocityNetV5.forward).parameters
+def test_semantic_velocity_interface_has_no_route_or_theta0_argument():
+    parameters = inspect.signature(TaskConditionedVelocityNet.forward).parameters
     assert list(parameters) == ["self", "x", "y", "theta", "t"]
 
 
-def test_v5_base_and_residual_field_are_finite_and_route_free():
+def test_semantic_base_and_residual_field_are_finite_and_route_free():
     template = _template()
-    base = TaskConditionedVelocityNetV5(
+    base = TaskConditionedVelocityNet(
         template,
         32,
         global_state_mode="full",
@@ -46,8 +46,8 @@ def test_v5_base_and_residual_field_are_finite_and_route_free():
         task_encoder_mode="stats",
         task_conditioning="xy",
     )
-    flow = PoissonResidualVelocityV5(base)
-    flow.add_residual(ResidualVelocityHeadV5(template, 32), 0.1)
+    flow = PoissonResidualVelocity(base)
+    flow.add_residual(ResidualVelocityHead(template, 32), 0.1)
     theta = random_theta(template, scale=0.5, device=torch.device("cpu"))
     x = torch.linspace(-1.0, 1.0, 12).unsqueeze(1)
     y = x[:, 0].square()
@@ -59,9 +59,9 @@ def test_v5_base_and_residual_field_are_finite_and_route_free():
     assert flow.velocity_parameterization == "direct_velocity"
 
 
-def test_v5_residual_stages_share_one_feature_trunk_call():
+def test_semantic_residual_stages_share_one_feature_trunk_call():
     template = _template()
-    base = TaskConditionedVelocityNetV5(
+    base = TaskConditionedVelocityNet(
         template,
         32,
         global_state_mode="full",
@@ -69,9 +69,9 @@ def test_v5_residual_stages_share_one_feature_trunk_call():
         task_encoder_mode="stats",
         task_conditioning="xy",
     )
-    flow = PoissonResidualVelocityV5(base)
-    flow.add_residual(ResidualVelocityHeadV5(template, 32), 0.1)
-    flow.add_residual(ResidualVelocityHeadV5(template, 32), 0.1)
+    flow = PoissonResidualVelocity(base)
+    flow.add_residual(ResidualVelocityHead(template, 32), 0.1)
+    flow.add_residual(ResidualVelocityHead(template, 32), 0.1)
     calls = []
     hook = flow.residual_trunk.register_forward_hook(lambda *_args: calls.append(1))
     theta = random_theta(template, scale=0.5, device=torch.device("cpu"))
@@ -84,7 +84,7 @@ def test_v5_residual_stages_share_one_feature_trunk_call():
     assert len(calls) == 1
 
 
-def test_v5_potential_depends_on_task_and_endpoint_probabilities():
+def test_semantic_potential_depends_on_task_and_endpoint_probabilities():
     template = _template()
     theta = torch.stack([
         random_theta(template, scale=0.2, device=torch.device("cpu")),
@@ -94,7 +94,7 @@ def test_v5_potential_depends_on_task_and_endpoint_probabilities():
         masked_block_softmax(row.view(len(template.blocks), template.source_count), template)
         for row in theta
     ]).requires_grad_(True)
-    potential = ConditionalSemanticPotentialV5(template, 32)
+    potential = ConditionalSemanticPotential(template, 32)
     x = torch.linspace(-1.0, 1.0, 10).unsqueeze(1)
     y = x[:, 0]
 
@@ -107,9 +107,9 @@ def test_v5_potential_depends_on_task_and_endpoint_probabilities():
     assert graph_action_mask(template).shape == probabilities.shape[1:]
 
 
-def test_v51_batched_velocity_matches_scalar_calls():
+def test_batched_velocity_matches_scalar_calls():
     template = _template()
-    base = TaskConditionedVelocityNetV5(
+    base = TaskConditionedVelocityNet(
         template,
         32,
         global_state_mode="full",

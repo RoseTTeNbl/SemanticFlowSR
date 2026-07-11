@@ -21,19 +21,19 @@ docs/DIAGNOSTIC_EXPERIMENTS_COMPLETE_EXPRESSION_FLOW.md
 
 ```text
 1. theta 是 register categorical block 阵列，不是裸欧氏向量。
-2. 当前速度场 `v_psi` rollout 生成 reference endpoint proposal；`G_phi` 只是可选 one-step student。
-3. tilt 在具体 trace 上做：argmax / temperature sampling / graph mutation / archive，按 held-out raw+affine 指标选 elite atoms。
-4. elite trace 投影为 `P_epsilon(z;theta0)`：active blocks 尖锐，inactive blocks 保持 source identity。
-5. capacity resampling + active-only Fisher Hungarian assignment 保持 tracked source marginal。
-6. flow `v_psi(theta_t, theta0, D, t)` 匹配稳定 Fisher-Rao bridge tangent；student 未过 gate 时 eval 回退 flow。
-7. token construction、target-conditioned Stage1、semantic latent endpoint、semantic endpoint correction、online semantic mass guidance 只保留为 legacy/failed-probe evidence；当前不要作为默认实验入口。
+2. 条件速度场接口固定为 `v(theta, D, t)`；`theta0` 仅作为 ODE 初值，不作为网络条件。
+3. 每个 source rollout 一个 endpoint，并只解码一个完整表达式；GT 等价 trace 仅用于 bootstrap 缓存和诊断。
+4. active blocks 使用 source-mass endpoint，inactive blocks 严格保持 source identity，速度由 soft reachability gate 抑制。
+5. outer loop 使用 weighted-Poisson 语义势修正同一粒子的 endpoint，不使用 matching、mutation、elite selection 或 archive。
+6. 新桥相对当前场的差异由轻量 residual velocity head 学习；Gate A/B/C 未通过时禁止进入 Poisson outer loop。
+7. token construction、target-conditioned Stage1、semantic latent endpoint 和旧 semantic endpoint correction 只保留为失败探针证据，不作为默认入口。
 ```
 
 当前推荐入口：
 
 ```bash
-SCALE=smoke RUN_GPU=0 scripts/run_one_step_semantic_fisher_cycle_gpu.sh
-SCALE=overfit RUN_GPU=0 scripts/run_one_step_semantic_fisher_cycle_gpu.sh
+SCALE=smoke RUN_GPU=0 scripts/run_semantic_flow_gpu.sh
+SCALE=overfit RUN_GPU=0 scripts/run_semantic_flow_gpu.sh
 ```
 
 ## Environment

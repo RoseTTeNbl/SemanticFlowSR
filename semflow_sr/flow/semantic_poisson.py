@@ -1,6 +1,6 @@
 """Weighted-Poisson semantic transport on categorical Fisher manifolds.
 
-The helpers in this module implement the v5 reaction-to-transport lift.  They
+The helpers in this module implement the reaction-to-transport lift.  They
 operate on complete endpoint particles and never resample, assign, or match
 particles.  A semantic density tilt is represented by the minimum-kinetic
 Fisher natural-gradient field of a scalar potential.

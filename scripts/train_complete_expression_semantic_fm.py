@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import json
 import math
@@ -35,19 +34,10 @@ from semflow_sr.flow.semantic_poisson import (
 )
 from semflow_sr.flow.trace_cache import load_trace_cache, validate_task_record
 from semflow_sr.one_step_fisher import (
-    CorrectionBudgetError,
     FISHER_TIME_BINS,
-    ONE_STEP_FISHER_OBJECTIVE_VERSION,
     block_fisher_squared_distance,
-    capacity_resample_indices,
-    fisher_endpoint_map_loss,
     fisher_rao_probability_path_and_logit_velocity,
-    kl_constrained_semantic_weights,
-    source_conditioned_entropic_trace_coupling,
-    semantic_log_quality_weights,
-    source_conditioned_trace_fisher_coupling,
     source_conditioned_trace_target_probabilities,
-    source_preserving_fisher_coupling,
 )
 from semflow_sr.semantic_mass import semantic_signature_distance, semantic_signature_vector
 from semflow_sr.sr.ast import Expr, eval_expr
@@ -62,7 +52,6 @@ from scripts.train_fixed_symbol_node_stage1 import (
     apply_op,
     block_index,
     center_theta,
-    decode_argmax,
     execute_choices as fixed_symbol_execute_choices,
     integrate,
     op_arity,
@@ -72,7 +61,6 @@ from scripts.train_fixed_symbol_node_stage1 import (
     sanitize_values,
     simplex_path,
     split_blocks,
-    target_theta,
     terminal_summary,
     theta_dim,
     velocity_loss,
@@ -94,7 +82,7 @@ DEFAULT_OPS = (
     "exp",
 )
 
-V5_OBJECTIVE_VERSION = "semantic_poisson_residual_fisher_v5_1_bootstrap_first"
+OBJECTIVE_NAME = "semantic_poisson_residual_fisher_bootstrap"
 
 
 @dataclass(frozen=True)
@@ -440,7 +428,7 @@ class CycleCoupledExample:
 
 
 @dataclass
-class V5ResidualExample:
+class ResidualFlowExample:
     task: TaskBundle
     theta0: torch.Tensor
     reference_theta1: torch.Tensor
@@ -880,7 +868,7 @@ def stage1_velocity_block_losses(
 ) -> torch.Tensor:
     """Return un-reduced per-block Fisher probability-tangent errors."""
     if not _uniform_chart(template):
-        raise ValueError("v3 block diagnostics require a uniform register chart")
+        raise ValueError("block diagnostics require a uniform register chart")
     block_count = len(template.blocks)
     source_count = int(template.source_count)
     logits = theta_t.float().flatten().view(block_count, source_count)
@@ -1891,8 +1879,8 @@ class FixedSymbolConditionedVelocityNet(nn.Module):
         return center_theta(20.0 * torch.tanh(out / 20.0), self.template)
 
 
-class TaskConditionedVelocityNetV5(FixedSymbolConditionedVelocityNet):
-    """Route-free direct field used by the v5 Poisson residual cycle."""
+class TaskConditionedVelocityNet(FixedSymbolConditionedVelocityNet):
+    """Route-free direct field used by the current Poisson residual cycle."""
 
     route_free = True
 
@@ -1900,7 +1888,7 @@ class TaskConditionedVelocityNetV5(FixedSymbolConditionedVelocityNet):
         kwargs.pop("velocity_parameterization", None)
         kwargs.pop("active_node_semantic_features", None)
         # The old online register semantic path contains hard-prefix and signed
-        # pair work.  V5 evaluates complete semantics once at the endpoint.
+        # pair work.  Complete semantics are evaluated by the current flow at complete semantics once at the endpoint.
         kwargs["semantic_features"] = True
         kwargs["semantic_feature_mode"] = "soft_register_low_cost"
         super().__init__(
@@ -1952,7 +1940,7 @@ class TaskConditionedVelocityNetV5(FixedSymbolConditionedVelocityNet):
         )(theta)
 
 
-class ResidualFeatureTrunkV5(nn.Module):
+class ResidualFeatureTrunk(nn.Module):
     """Shared task/state feature map evaluated once for all residual stages."""
 
     def __init__(self, template: Any, hidden: int):
@@ -1975,7 +1963,7 @@ class ResidualFeatureTrunkV5(nn.Module):
         return self.net(torch.cat([state / 8.0, stats, time_feature], dim=0))
 
 
-class ResidualVelocityHeadV5(nn.Module):
+class ResidualVelocityHead(nn.Module):
     """One inexpensive output head on the shared residual feature trunk."""
 
     def __init__(self, template: Any, hidden: int):
@@ -1992,7 +1980,7 @@ class ResidualVelocityHeadV5(nn.Module):
         return center_theta(20.0 * torch.tanh(raw / 20.0), self.template)
 
 
-class ConditionalSemanticPotentialV5(nn.Module):
+class ConditionalSemanticPotential(nn.Module):
     """Scalar endpoint potential conditioned only on the task and endpoint."""
 
     def __init__(self, template: Any, hidden: int):
@@ -2017,24 +2005,24 @@ class ConditionalSemanticPotentialV5(nn.Module):
         return self.net(features).squeeze(-1)
 
 
-class PoissonResidualVelocityV5(nn.Module):
+class PoissonResidualVelocity(nn.Module):
     """One route-free base field plus inexpensive frozen residual stages."""
 
     route_free = True
     velocity_parameterization = "direct_velocity"
 
-    def __init__(self, base: TaskConditionedVelocityNetV5):
+    def __init__(self, base: TaskConditionedVelocityNet):
         super().__init__()
         self.base = base
         self.template = base.template
         self.hidden = base.hidden
         self.semantic_features = False
         self.active_node_semantic_features = False
-        self.residual_trunk = ResidualFeatureTrunkV5(self.template, int(self.hidden))
+        self.residual_trunk = ResidualFeatureTrunk(self.template, int(self.hidden))
         self.residual_heads = nn.ModuleList()
         self.register_buffer("residual_step_sizes", torch.zeros(0, dtype=torch.float32))
 
-    def add_residual(self, head: ResidualVelocityHeadV5, step_size: float) -> None:
+    def add_residual(self, head: ResidualVelocityHead, step_size: float) -> None:
         self.residual_heads.append(head)
         steps = torch.cat([
             self.residual_step_sizes.detach().cpu(),
@@ -2068,13 +2056,8 @@ def _call_velocity_field(
     y: torch.Tensor,
     theta: torch.Tensor,
     t: float,
-    theta0: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    if bool(getattr(model, "route_free", False)):
-        return model(x, y, theta, float(t))
-    if theta0 is None:
-        raise ValueError("legacy route-conditioned field requires theta0")
-    return model(x, y, theta, float(t), theta0)
+    return model(x, y, theta, float(t))
 
 
 def _meta_rows(template: FixedSymbolTemplate) -> tuple[torch.Tensor, torch.Tensor]:
@@ -2892,7 +2875,7 @@ def rollout(
             model.template,
         )
         with torch.no_grad():
-            velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, min(t, 1.0), theta0)
+            velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, min(t, 1.0))
             mid_theta = integrate(theta, velocity, model.template, dt=0.5 * dt)
             mid_velocity = _call_velocity_field(
                 model,
@@ -2900,7 +2883,6 @@ def rollout(
                 task.y_train,
                 mid_theta,
                 min(t + 0.5 * dt, 1.0),
-                theta0,
             )
             theta = integrate(theta, mid_velocity, model.template, dt=dt)
             after_probability = masked_block_softmax(
@@ -2939,8 +2921,8 @@ def integrate_batch(theta: torch.Tensor, velocity: torch.Tensor, template: Fixed
 
 
 @torch.no_grad()
-def rollout_batch_v51(
-    flow: PoissonResidualVelocityV5,
+def rollout_batch(
+    flow: PoissonResidualVelocity,
     task: TaskBundle,
     theta0: torch.Tensor,
     *,
@@ -2998,7 +2980,7 @@ def rollout_with_snapshots(
             model.template,
         )
         with torch.no_grad():
-            velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, t, theta0)
+            velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, t)
             midpoint = integrate(theta, velocity, model.template, dt=0.5 * dt)
             midpoint_velocity = _call_velocity_field(
                 model,
@@ -3006,7 +2988,6 @@ def rollout_with_snapshots(
                 task.y_train,
                 midpoint,
                 min(t + 0.5 * dt, 1.0),
-                theta0,
             )
             theta = integrate(theta, midpoint_velocity, model.template, dt=dt)
             after_probability = masked_block_softmax(
@@ -3140,7 +3121,7 @@ def temporal_action_weight_rows(
         if step < total_steps and endpoint is None:
             mid_t = (float(step) + 0.5) / float(total_steps)
             with torch.no_grad():
-                velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, mid_t, theta0)
+                velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, mid_t)
                 theta = integrate(theta, velocity, model.template, dt=1.0 / float(total_steps))
     return rows
 
@@ -3672,7 +3653,7 @@ def select_best_rollout(
                     term_fit_max_abs=float(getattr(args, "term_fit_max_abs", 1.0e6)),
                 )
                 # Candidate selection must use inference-available train fit.
-                # Affine/term fits remain diagnostic only in v3.
+                # Affine/term fits remain diagnostic only.
                 diagnostic_fit_score = _candidate_train_selection_score(metrics, expr)
                 raw_train_prediction = sanitize_values(eval_expr(expr, task.x_train))
                 semantic_vector = semantic_signature_vector(raw_train_prediction, task.x_train).detach().cpu()
@@ -4520,19 +4501,9 @@ def _inherit_graph_architecture_from_checkpoint(
 ) -> dict[str, Any]:
     if loaded_ckpt is None:
         return {"checkpoint_architecture_inherited_count": 0, "checkpoint_architecture_inherited_fields": ""}
-    objective_version = str(loaded_ckpt.get("objective_version", ""))
-    legacy_objective = (
-        objective_version.startswith("one_step_semantic_fisher_cycle_v2_")
-        or objective_version == "one_step_semantic_fisher_cycle_v3_constrained_single_expression"
-    )
-    legacy_allowed = bool(getattr(args, "legacy_v2_eval", False)) and bool(args.eval_only) and legacy_objective
-    current_objective = objective_version in {ONE_STEP_FISHER_OBJECTIVE_VERSION, V5_OBJECTIVE_VERSION}
-    if not current_objective and not legacy_allowed:
-        raise ValueError(
-            "checkpoint objective is incompatible with semantic Fisher training; legacy cycles require "
-            "--eval-only --legacy-cycle-eval"
-        )
-    setattr(args, "_legacy_v2_checkpoint", bool(legacy_allowed))
+    objective_name = str(loaded_ckpt.get("objective_name", ""))
+    if objective_name != OBJECTIVE_NAME:
+        raise ValueError("checkpoint objective is incompatible with the current semantic-flow trainer")
     template_cfg = loaded_ckpt.get("template", {})
     model_cfg = loaded_ckpt.get("model_cfg", {})
     if not isinstance(template_cfg, dict) or not isinstance(model_cfg, dict):
@@ -4561,2304 +4532,17 @@ def _inherit_graph_architecture_from_checkpoint(
     }
 
 
-def _v3_hard_register_trajectory(
-    template: RegisterOperatorSimplexTemplate,
-    choices: list[int],
-    x: torch.Tensor,
-) -> list[torch.Tensor]:
-    """Execute a hard trace and return the readable register bank after each layer."""
-    x = _pad_x(x.float(), int(template.num_vars))
-    regs = [x[:, index] for index in range(int(template.num_vars))]
-    regs.append(torch.zeros(int(x.shape[0]), dtype=x.dtype, device=x.device))
-    regs.append(torch.ones(int(x.shape[0]), dtype=x.dtype, device=x.device))
-    while len(regs) < int(template.register_count):
-        regs.append(torch.zeros(int(x.shape[0]), dtype=x.dtype, device=x.device))
-    trajectory = [torch.stack(regs[: int(template.base_count)], dim=1)]
-    for layer in range(int(template.num_layers)):
-        op_choice = int(choices[register_op_block_index(template, layer)])
-        if 0 <= op_choice < len(template.ops):
-            op = str(template.ops[op_choice])
-            readable = max(register_readable_count(template, layer), 1)
-            arg0 = max(0, min(int(choices[register_arg_block_index(template, layer, 0)]), readable - 1))
-            arg1 = max(0, min(int(choices[register_arg_block_index(template, layer, 1)]), readable - 1))
-            args = [regs[arg0]] if op_arity(op) == 1 else [regs[arg0], regs[arg1]]
-            regs[int(template.write_register_for_layer(layer))] = sanitize_values(
-                _safe_apply_semantic(op, args)
-            )
-        readable_after = register_readable_count(template, layer + 1)
-        trajectory.append(torch.stack(regs[:readable_after], dim=1))
-    return trajectory
 
-
-def _v3_signed_pair_reachability(
-    bank: torch.Tensor,
-    x: torch.Tensor,
-    y: torch.Tensor,
-    *,
-    signature_shortlist: int = 2,
-) -> tuple[float, dict[str, float]]:
-    """Return min semantic cost over registers and graph-native signed pairs."""
-    registers = sanitize_values(bank.float()).transpose(0, 1)
-    if registers.ndim != 2 or int(registers.shape[0]) == 0:
-        return 0.0, {"candidate_count": 0.0, "signature_evaluated_count": 0.0}
-    sums = registers[:, None, :] + registers[None, :, :]
-    differences = registers[:, None, :] - registers[None, :, :]
-    candidates = sanitize_values(torch.cat([
-        registers,
-        sums.reshape(-1, int(registers.shape[1])),
-        differences.reshape(-1, int(registers.shape[1])),
-    ], dim=0))
-    target = sanitize_values(y.float()).to(candidates.device)
-    target_variance = (target - target.mean()).square().mean().clamp_min(1.0e-8)
-    raw_nmse = (candidates - target[None, :]).square().mean(dim=1) / target_variance
-    shortlist_count = min(max(int(signature_shortlist), 1), int(candidates.shape[0]))
-    shortlist = torch.topk(raw_nmse, k=shortlist_count, largest=False).indices
-    scores: list[torch.Tensor] = []
-    signature_values: list[float] = []
-    for index in shortlist.tolist():
-        signature_distance = semantic_signature_distance(candidates[index], target, x)
-        signature_values.append(float(signature_distance.detach().cpu()))
-        scores.append(0.6 * raw_nmse[index] + 0.4 * signature_distance)
-    score = torch.stack(scores).min() if scores else raw_nmse.min()
-    return float(score.detach().cpu()), {
-        "candidate_count": float(candidates.shape[0]),
-        "signature_evaluated_count": float(shortlist_count),
-        "best_shortlist_nmse": float(raw_nmse.index_select(0, shortlist).min().detach().cpu()),
-        "best_shortlist_signature": float(min(signature_values)) if signature_values else 0.0,
-    }
-
-
-def _v3_trace_particle(
-    template: RegisterOperatorSimplexTemplate,
-    choices: list[int],
-    task: TaskBundle,
-    args: argparse.Namespace,
-    *,
-    source_kind: str,
-    source_index: int,
-    sample_index: int,
-    score_semantics: bool = True,
-) -> dict[str, Any]:
-    """Canonicalize and score one complete trace without fitting coefficients."""
-    decoded, _terms, _layers = execute_choices(template, choices)
-    try:
-        canonical_trace = compile_expr_to_register_trace(
-            template,
-            decoded,
-            random.Random(0),
-            copy_assignment="canonical",
-        )
-        canonical_choices = [int(value) for value in canonical_trace["choices"]]
-    except Exception:
-        canonical_choices = [int(value) for value in choices]
-    expr, readout_terms, _layers = execute_choices(template, canonical_choices)
-    active_indices = active_block_indices_for_choices(template, canonical_choices)
-    expression_key = _expr_simplified_key(expr)
-    identity = {
-        "task_id": task.task_id,
-        "ground_truth": task.ground_truth,
-        "choices": canonical_choices,
-        "active_block_indices": active_indices,
-        "active_choice_key": ",".join(str(int(canonical_choices[index])) for index in active_indices),
-        "choice_key": ",".join(str(int(value)) for value in canonical_choices),
-        "expression": to_string(expr, int(template.num_vars), simplify=False),
-        "expression_collapse_key": expression_key,
-        "candidate_source": str(source_kind),
-        "v3_source_index": int(source_index),
-        "v3_sample_index": int(sample_index),
-        "v3_gt_anchor": float(str(source_kind) == "gt_anchor"),
-        "readout_slot_count": int(len(readout_terms)),
-    }
-    if not bool(score_semantics):
-        return identity
-    row = _cycle_expression_from_choices(canonical_choices, task, template, args)
-    raw_prediction = sanitize_values(eval_expr(expr, task.x_train))
-    target = sanitize_values(task.y_train.float()).to(raw_prediction.device)
-    target_variance = (target - target.mean()).square().mean().clamp_min(1.0e-8)
-    raw_nmse = (raw_prediction - target).square().mean() / target_variance
-    raw_signature_distance = semantic_signature_distance(raw_prediction, target, task.x_train)
-    trajectory = _v3_hard_register_trajectory(template, canonical_choices, task.x_train)
-    reachability: list[float] = []
-    reachability_candidate_counts: list[float] = []
-    reachability_signature_counts: list[float] = []
-    for bank in trajectory:
-        value, diagnostics = _v3_signed_pair_reachability(bank, task.x_train, target)
-        reachability.append(float(value))
-        reachability_candidate_counts.append(float(diagnostics["candidate_count"]))
-        reachability_signature_counts.append(float(diagnostics["signature_evaluated_count"]))
-    reachability_mean = float(np.mean(reachability)) if reachability else 0.0
-    row.update(identity)
-    row.update({
-        "v3_raw_nmse": float(raw_nmse.detach().cpu()),
-        "v3_raw_signature_distance": float(raw_signature_distance.detach().cpu()),
-        "v3_register_reachability": reachability,
-        "v3_register_reachability_mean": reachability_mean,
-        "v3_register_reachability_candidate_count": float(sum(reachability_candidate_counts)),
-        "v3_register_reachability_signature_count": float(sum(reachability_signature_counts)),
-        "v3_reachability_signature_mode": "raw_nmse_shortlist_exact_signature",
-        "v3_complexity_over_layers": float(expr.complexity) / float(max(int(template.num_layers), 1)),
-    })
-    return row
-
-
-def _v3_robust_unit_scale(values: torch.Tensor) -> torch.Tensor:
-    values = torch.as_tensor(values).float().clamp_min(0.0)
-    finite = torch.isfinite(values)
-    if not bool(finite.any().detach().cpu()):
-        return torch.ones_like(values)
-    finite_values = values[finite]
-    scale = torch.quantile(finite_values, 0.9).clamp_min(1.0e-8)
-    fallback = finite_values.max().clamp_min(scale)
-    safe = torch.where(finite, values, fallback)
-    return (safe / scale).clamp(0.0, 1.0)
-
-
-def _v3_aggregate_trace_particles(
-    flow_particles: list[dict[str, Any]],
-    gt_particles: list[dict[str, Any]],
-    *,
-    gt_anchor_alpha: float,
-    semantic_energy_mode: str = "fit_r2_first",
-    semantic_scorer: Any | None = None,
-) -> list[dict[str, Any]]:
-    if not flow_particles:
-        raise ValueError("v3 semantic update requires learned-flow trace particles")
-    alpha = min(max(float(gt_anchor_alpha), 0.0), 1.0) if gt_particles else 0.0
-    weighted_rows: list[tuple[dict[str, Any], float, str]] = []
-    flow_mass = (1.0 - alpha) / float(len(flow_particles))
-    gt_mass = alpha / float(len(gt_particles)) if gt_particles else 0.0
-    weighted_rows.extend((row, flow_mass, "flow") for row in flow_particles)
-    weighted_rows.extend((row, gt_mass, "gt") for row in gt_particles)
-    grouped: dict[str, dict[str, Any]] = {}
-    for row, mass, origin in weighted_rows:
-        key = str(row.get("expression_collapse_key", row.get("expression", "__invalid__")))
-        if key not in grouped:
-            grouped[key] = {
-                "representative": dict(row),
-                "prior_weight": 0.0,
-                "flow_mass": 0.0,
-                "gt_anchor_mass": 0.0,
-                "flow_sample_count": 0,
-                "gt_anchor_count": 0,
-                "source_indices": set(),
-            }
-        item = grouped[key]
-        item["prior_weight"] += float(mass)
-        item[f"{origin}_mass" if origin == "flow" else "gt_anchor_mass"] += float(mass)
-        item["flow_sample_count" if origin == "flow" else "gt_anchor_count"] += 1
-        if origin == "flow":
-            item["source_indices"].add(int(row.get("v3_source_index", -1)))
-        if str(row.get("choice_key", "")) < str(item["representative"].get("choice_key", "")):
-            item["representative"] = dict(row)
-    atoms: list[dict[str, Any]] = []
-    for item in grouped.values():
-        atom = dict(item["representative"])
-        atom.update({
-            "prior_weight": float(item["prior_weight"]),
-            "flow_prior_mass": float(item["flow_mass"]),
-            "gt_anchor_prior_mass": float(item["gt_anchor_mass"]),
-            "flow_sample_count": int(item["flow_sample_count"]),
-            "gt_anchor_count": int(item["gt_anchor_count"]),
-            "flow_source_count": int(len(item["source_indices"])),
-            "v3_gt_anchor": float(int(item["gt_anchor_count"]) > 0),
-        })
-        if semantic_scorer is not None:
-            aggregate_fields = {
-                key: atom[key]
-                for key in (
-                    "prior_weight",
-                    "flow_prior_mass",
-                    "gt_anchor_prior_mass",
-                    "flow_sample_count",
-                    "gt_anchor_count",
-                    "flow_source_count",
-                    "v3_gt_anchor",
-                )
-            }
-            atom = dict(semantic_scorer(atom))
-            atom.update(aggregate_fields)
-        atoms.append(atom)
-    atoms.sort(key=lambda row: str(row.get("expression_collapse_key", row.get("expression", ""))))
-    prior = torch.tensor([float(row["prior_weight"]) for row in atoms], dtype=torch.float32)
-    prior = prior / prior.sum().clamp_min(1.0e-12)
-    raw_nmse = torch.tensor([float(row["v3_raw_nmse"]) for row in atoms], dtype=torch.float32)
-    raw_signature = torch.tensor([float(row["v3_raw_signature_distance"]) for row in atoms], dtype=torch.float32)
-    reachability = torch.tensor([float(row["v3_register_reachability_mean"]) for row in atoms], dtype=torch.float32)
-    complexity = torch.tensor([float(row["v3_complexity_over_layers"]) for row in atoms], dtype=torch.float32)
-    mode = str(semantic_energy_mode)
-    if mode == "raw_semantic":
-        energy = (
-            0.55 * _v3_robust_unit_scale(raw_nmse)
-            + 0.30 * _v3_robust_unit_scale(raw_signature)
-            + 0.10 * reachability
-            + 0.05 * complexity
-        )
-    elif mode == "fit_r2_first":
-        term_nmse = torch.tensor(
-            [
-                float(row.get("heldout_term_linear_fit_nmse", row.get("heldout_fitted_nmse", row["v3_raw_nmse"])))
-                for row in atoms
-            ],
-            dtype=torch.float32,
-        )
-        affine_nmse = torch.tensor(
-            [float(row.get("heldout_fitted_nmse", row["v3_raw_nmse"])) for row in atoms],
-            dtype=torch.float32,
-        )
-        best_fit_nmse = torch.minimum(term_nmse, affine_nmse)
-        fit_gap = torch.tensor([float(row.get("fitted_only_gap_penalty", 0.0)) for row in atoms], dtype=torch.float32)
-        coeff_penalty = torch.tensor([float(row.get("coefficient_stability_penalty", 0.0)) for row in atoms], dtype=torch.float32)
-        energy = (
-            0.70 * _v3_robust_unit_scale(best_fit_nmse)
-            + 0.10 * _v3_robust_unit_scale(raw_nmse)
-            + 0.08 * reachability
-            + 0.05 * complexity
-            + 0.04 * _v3_robust_unit_scale(fit_gap)
-            + 0.03 * _v3_robust_unit_scale(coeff_penalty)
-        )
-    else:
-        raise ValueError(f"unknown cycle semantic energy mode: {mode}")
-    for index, atom in enumerate(atoms):
-        atom["prior_weight"] = float(prior[index])
-        atom["v3_raw_nmse_normalized"] = float(_v3_robust_unit_scale(raw_nmse)[index])
-        atom["v3_raw_signature_normalized"] = float(_v3_robust_unit_scale(raw_signature)[index])
-        atom["v3_semantic_energy_mode"] = mode
-        atom["v3_semantic_energy"] = float(energy[index])
-    return atoms
-
-
-def _cycle_expression_sample(
-    endpoint: torch.Tensor,
-    task: TaskBundle,
-    template: Any,
-    args: argparse.Namespace,
-    generator: torch.Generator,
-) -> dict[str, Any]:
-    choices = sample_choices(endpoint, template, generator)
-    return _cycle_expression_from_choices(choices, task, template, args)
-
-
-def _cycle_expression_from_choices(
-    choices: list[int],
-    task: TaskBundle,
-    template: Any,
-    args: argparse.Namespace,
-    ) -> dict[str, Any]:
-    active_indices = active_block_indices_for_choices(template, choices)
-    try:
-        expr, readout_terms, _layers = execute_choices(template, choices)
-        terms, duplicate_terms = _unique_nonzero_terms(readout_terms)
-        expression = to_string(expr, int(template.num_vars), simplify=False)
-        _energy, diagnostics = expression_semantic_energy(
-            expr,
-            task.x_train,
-            task.y_train,
-            complexity_weight=0.0,
-            invalid_penalty=float(args.semantic_mass_invalid_penalty),
-            collapse_penalty=0.0,
-        )
-        split = expression_split_score(expr, task, args, terms=readout_terms)
-        row = {
-            "task_id": task.task_id,
-            "ground_truth": task.ground_truth,
-            "expression": expression,
-            "term_expressions": [to_string(term, int(template.num_vars), simplify=False) for term in terms],
-            "term_complexities": [int(term.complexity) for term in terms],
-            "readout_slot_count": int(len(readout_terms)),
-            "duplicate_term_count": int(duplicate_terms),
-            "choices": choices,
-            "active_block_indices": active_indices,
-            "active_choice_key": ",".join(str(int(choices[index])) for index in active_indices),
-            "choice_key": ",".join(str(int(value)) for value in choices),
-            **diagnostics,
-            **split,
-        }
-        return with_structural_metrics(row)
-    except Exception as exc:
-        choices_key = ",".join(str(int(value)) for value in choices)
-        return {
-            "task_id": task.task_id,
-            "ground_truth": task.ground_truth,
-            "expression": "__invalid__",
-            "choices": choices,
-            "active_block_indices": active_indices,
-            "active_choice_key": ",".join(str(int(choices[index])) for index in active_indices),
-            "choice_key": choices_key,
-            "semantic_energy": float(args.semantic_mass_invalid_penalty),
-            "semantic_mse": float(args.semantic_mass_invalid_penalty),
-            "semantic_output_mse": float(args.semantic_mass_invalid_penalty),
-            "semantic_raw_mse": float(args.semantic_mass_invalid_penalty),
-            "semantic_unfitted_raw_mse": float(args.semantic_mass_invalid_penalty),
-            "semantic_fitted_train_r2": -1.0e9,
-            "semantic_unfitted_train_r2": -1.0e9,
-            "semantic_corr": 0.0,
-            "semantic_complexity": 0.0,
-            "semantic_collapsed": 1.0,
-            "semantic_invalid": 1.0,
-            "semantic_coefficient_fit_mode": "not_evaluated",
-            "semantic_fitted_scale": 0.0,
-            "semantic_fitted_intercept": 0.0,
-            "selection_score": float(args.semantic_mass_invalid_penalty),
-            "heldout_fitted_r2": -1.0e9,
-            "heldout_raw_r2": -1.0e9,
-            "heldout_term_linear_fit_r2": -1.0e9,
-            "heldout_fitted_nmse": float(args.semantic_mass_invalid_penalty),
-            "heldout_raw_nmse": float(args.semantic_mass_invalid_penalty),
-            "heldout_term_linear_fit_nmse": float(args.semantic_mass_invalid_penalty),
-            "coefficient_stability_penalty": float(args.semantic_mass_invalid_penalty),
-            "fitted_only_gap_penalty": float(args.semantic_mass_invalid_penalty),
-            "term_count": 0,
-            "unique_nonzero_term_count": 0,
-            "duplicate_term_count": 0,
-            "term_expressions": [],
-            "term_complexities": [],
-            "error": f"{type(exc).__name__}: {str(exc)[:160]}",
-        }
-
-
-def expression_split_score(
-    expr: Expr,
-    task: TaskBundle,
-    args: argparse.Namespace,
-    *,
-    terms: list[Expr] | None = None,
-) -> dict[str, float | str | list[float]]:
-    mode = str(getattr(args, "cycle_score_split", "deterministic_half"))
-    x = task.x_train
-    y = task.y_train
-    count = int(x.shape[0])
-    if mode != "deterministic_half" or count < 4:
-        fit_indices = torch.arange(count, device=x.device)
-        score_indices = torch.arange(count, device=x.device)
-    else:
-        fit_indices = torch.arange(0, count, 2, device=x.device)
-        score_indices = torch.arange(1, count, 2, device=x.device)
-        if int(score_indices.numel()) == 0:
-            score_indices = fit_indices
-    fit_x = x.index_select(0, fit_indices)
-    fit_y = y.index_select(0, fit_indices)
-    score_x = x.index_select(0, score_indices)
-    score_y = y.index_select(0, score_indices)
-    raw_fit = sanitize_values(eval_expr(expr, fit_x))
-    raw_score = sanitize_values(eval_expr(expr, score_x))
-    fitted_score, coeffs = fit_affine(raw_fit, fit_y, raw_score)
-    readout_terms = list(terms) if terms is not None else [expr]
-    raw_terms = [term for term in readout_terms if not _expr_is_zero(term)]
-    unique_terms, duplicate_terms = _unique_nonzero_terms(raw_terms)
-    if not unique_terms:
-        unique_terms = [Expr.const(0.0)]
-    fit_term_values = [
-        sanitize_values(eval_expr(term, fit_x), clip=float(getattr(args, "term_fit_max_abs", 1.0e6)))
-        for term in unique_terms
-    ]
-    score_term_values = [
-        sanitize_values(eval_expr(term, score_x), clip=float(getattr(args, "term_fit_max_abs", 1.0e6)))
-        for term in unique_terms
-    ]
-    term_fitted_fit, term_fitted_score, term_coeffs, term_intercept = fit_linear_terms(
-        fit_term_values,
-        fit_y,
-        score_term_values,
-        ridge=float(getattr(args, "term_fit_ridge", 1.0e-8)),
-        max_abs=float(getattr(args, "term_fit_max_abs", 1.0e6)),
-    )
-    fitted_np = fitted_score.detach().cpu().numpy()
-    raw_np = raw_score.detach().cpu().numpy()
-    term_fitted_np = term_fitted_score.detach().cpu().numpy()
-    score_np = score_y.detach().cpu().numpy()
-    fitted_r2 = float(r2_score(score_np, fitted_np))
-    raw_r2 = float(r2_score(score_np, raw_np))
-    term_r2 = float(r2_score(score_np, term_fitted_np))
-    fitted_nmse = float(nmse(score_np, fitted_np))
-    raw_nmse = float(nmse(score_np, raw_np))
-    term_nmse = float(nmse(score_np, term_fitted_np))
-    invalid_penalty = float(args.semantic_mass_invalid_penalty)
-
-    def finite_or(value: float, fallback: float) -> float:
-        return float(value) if math.isfinite(float(value)) else float(fallback)
-
-    fitted_r2 = finite_or(fitted_r2, -1.0e9)
-    raw_r2 = finite_or(raw_r2, -1.0e9)
-    term_r2 = finite_or(term_r2, -1.0e9)
-    fitted_nmse = finite_or(fitted_nmse, invalid_penalty)
-    raw_nmse = finite_or(raw_nmse, invalid_penalty)
-    term_nmse = finite_or(term_nmse, invalid_penalty)
-    coeff_penalty = float(np.log1p(
-        abs(float(coeffs[0]))
-        + abs(float(coeffs[1]))
-        + sum(abs(float(value)) for value in term_coeffs)
-        + abs(float(term_intercept))
-    ))
-    raw_penalty = max(0.0, -raw_r2)
-    fitted_penalty = max(0.0, -fitted_r2)
-    fitted_only_gap = max(0.0, max(term_r2, fitted_r2) - raw_r2 - 0.25)
-    complexity_penalty = 1.0e-3 * float(sum(term.complexity for term in unique_terms))
-    score = (
-        0.45 * min(raw_nmse, invalid_penalty)
-        + 0.30 * min(term_nmse, invalid_penalty)
-        + 0.15 * min(fitted_nmse, invalid_penalty)
-        + 0.25 * fitted_only_gap
-        + 0.05 * raw_penalty
-        + 0.02 * fitted_penalty
-        + 0.02 * coeff_penalty
-        + complexity_penalty
-    )
-    return {
-        "cycle_score_split": mode,
-        "selection_score": float(score),
-        "heldout_fitted_r2": fitted_r2,
-        "heldout_raw_r2": raw_r2,
-        "heldout_term_linear_fit_r2": term_r2,
-        "heldout_fitted_nmse": fitted_nmse,
-        "heldout_raw_nmse": raw_nmse,
-        "heldout_term_linear_fit_nmse": term_nmse,
-        "coefficient_stability_penalty": coeff_penalty,
-        "fitted_only_gap_penalty": float(fitted_only_gap),
-        "readout_slot_count": int(len(readout_terms)),
-        "term_count": int(len(raw_terms)),
-        "unique_nonzero_term_count": int(0 if all(_expr_is_zero(term) for term in unique_terms) else len(unique_terms)),
-        "duplicate_term_count": int(duplicate_terms),
-        "term_linear_fit_coefficients": term_coeffs,
-        "term_linear_fit_intercept": float(term_intercept),
-    }
-
-
-def _parse_cycle_explore_temperatures(args: argparse.Namespace) -> list[float]:
-    raw = str(getattr(args, "cycle_explore_temperatures", "0.7,1.0,1.5"))
-    values = [float(part.strip()) for part in raw.split(",") if part.strip()]
-    return [value for value in values if np.isfinite(value) and value > 0.0] or [1.0]
-
-
-def _sample_choices_from_probabilities(
-    probabilities: torch.Tensor,
-    template: Any,
-    generator: torch.Generator,
-    *,
-    temperature: float,
-) -> list[int]:
-    choices: list[int] = []
-    tau = max(float(temperature), 1.0e-6)
-    for block_index, probability in enumerate(probabilities):
-        support = graph_block_mask(template, int(block_index), device=probability.device)
-        logits = torch.where(support, probability.clamp_min(1.0e-12).log() / tau, torch.full_like(probability, -1.0e9))
-        p = torch.softmax(logits, dim=-1)
-        p = torch.where(support, p, torch.zeros_like(p))
-        p = p / p.sum().clamp_min(1.0e-12)
-        choices.append(int(torch.multinomial(p, 1, generator=generator).detach().cpu().item()))
-    return choices
-
-
-def _mutate_choices_from_endpoint(
-    choices: list[int],
-    probabilities: torch.Tensor,
-    template: Any,
-    generator: torch.Generator,
-    *,
-    temperature: float,
-) -> list[int]:
-    mutated = list(int(value) for value in choices)
-    active = active_block_indices_for_choices(template, mutated)
-    if not active:
-        active = list(range(len(mutated)))
-    position = int(torch.randint(len(active), (1,), generator=generator, device=probabilities.device).detach().cpu().item())
-    block_index = int(active[position])
-    support = graph_block_mask(template, block_index, device=probabilities.device)
-    p = probabilities[block_index].clamp_min(1.0e-12)
-    p = torch.where(support, p.pow(1.0 / max(float(temperature), 1.0e-6)), torch.zeros_like(p))
-    uniform = support.float() / support.float().sum().clamp_min(1.0)
-    p = 0.75 * (p / p.sum().clamp_min(1.0e-12)) + 0.25 * uniform
-    mutated[block_index] = int(torch.multinomial(p, 1, generator=generator).detach().cpu().item())
-    return mutated
-
-
-def _mutate_readout_choices_from_endpoint(
-    choices: list[int],
-    probabilities: torch.Tensor,
-    template: Any,
-    generator: torch.Generator,
-    *,
-    temperature: float,
-) -> list[int]:
-    if not _is_register_template(template) or int(getattr(template, "output_terms", 1)) <= 1:
-        return _mutate_choices_from_endpoint(
-            choices,
-            probabilities,
-            template,
-            generator,
-            temperature=float(temperature),
-        )
-    mutated = list(int(value) for value in choices)
-    readout_blocks = [register_readout_block_index(template, term) for term in range(int(template.output_terms))]
-    position = int(torch.randint(len(readout_blocks), (1,), generator=generator, device=probabilities.device).detach().cpu().item())
-    block_index = int(readout_blocks[position])
-    support = graph_block_mask(template, block_index, device=probabilities.device)
-    p = probabilities[block_index].clamp_min(1.0e-12)
-    p = torch.where(support, p.pow(1.0 / max(float(temperature), 1.0e-6)), torch.zeros_like(p))
-    uniform = support.float() / support.float().sum().clamp_min(1.0)
-    p = 0.65 * (p / p.sum().clamp_min(1.0e-12)) + 0.35 * uniform
-    mutated[block_index] = int(torch.multinomial(p, 1, generator=generator).detach().cpu().item())
-    return mutated
-
-
-def _elite_order_key(row: dict[str, Any]) -> tuple[float, float, float, float, float, float, float]:
-    source = str(row.get("reference_bridge_atom_source", ""))
-    if source == "previous_elite_archive":
-        source_priority = 0.0
-    elif source == "compiled_trace_seed":
-        source_priority = 1.0
-    else:
-        source_priority = 2.0
-    return (
-        float(row.get("semantic_invalid", 1.0)),
-        float(row.get("selection_score", 1.0e12)),
-        -float(row.get("heldout_raw_r2", -1.0e9)),
-        -float(row.get("heldout_fitted_r2", -1.0e9)),
-        float(row.get("semantic_complexity", row.get("complexity", 1.0e6))),
-        float(row.get("_archive_replay", 0.0)),
-        source_priority,
-    )
-
-
-def _expression_collapse_key(row: dict[str, Any]) -> str:
-    expression = str(row.get("expression", "") or "")
-    if expression and expression != "__invalid__":
-        return expression
-    return "__invalid__|" + str(row.get("choice_key", row.get("active_choice_key", "")))
-
-
-def _collapse_graph_fibers_by_expression(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Collapse multiple graph fibers for the same decoded expression.
-
-    The simplex has many construction paths that decode to the same expression.
-    Selection should happen at expression level; only one representative graph is
-    projected back to the simplex target to avoid spreading mass across duplicate
-    fibers.
-    """
-    by_active_graph: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        active_key = str(row.get("active_choice_key", row.get("choice_key", "")))
-        graph_key = _expression_collapse_key(row) + "|" + active_key
-        current = by_active_graph.get(graph_key)
-        if current is None or _elite_order_key(row) < _elite_order_key(current):
-            by_active_graph[graph_key] = dict(row)
-    by_expression: dict[str, list[dict[str, Any]]] = {}
-    for row in by_active_graph.values():
-        by_expression.setdefault(_expression_collapse_key(row), []).append(row)
-    collapsed: list[dict[str, Any]] = []
-    for expression_key, fiber_rows in by_expression.items():
-        ordered_fibers = sorted(fiber_rows, key=_elite_order_key)
-        representative = dict(ordered_fibers[0])
-        representative["expression_collapse_key"] = expression_key
-        representative["graph_fiber_duplicate_count"] = int(len(ordered_fibers))
-        representative["graph_fiber_duplicate_excess"] = int(max(len(ordered_fibers) - 1, 0))
-        representative["graph_fiber_choice_keys"] = [
-            str(row.get("active_choice_key", row.get("choice_key", ""))) for row in ordered_fibers[:16]
-        ]
-        representative["graph_fiber_selection_score_min"] = float(
-            min(float(row.get("selection_score", 1.0e12)) for row in ordered_fibers)
-        )
-        collapsed.append(representative)
-    return sorted(collapsed, key=_elite_order_key)
-
-
-def _select_trace_elites(
-    candidates: list[dict[str, Any]],
-    archive: list[dict[str, Any]],
-    args: argparse.Namespace,
-) -> tuple[list[dict[str, Any]], torch.Tensor]:
-    archive_rows = [dict(row, _archive_replay=1.0) for row in archive]
-    candidate_rows = [dict(row, _archive_replay=0.0) for row in candidates]
-    ordered = _collapse_graph_fibers_by_expression([*archive_rows, *candidate_rows])
-    elite_count = max(1, int(getattr(args, "cycle_elite_modes", 4)))
-    selected: list[dict[str, Any]] = []
-    seen_skeletons: set[str] = set()
-    seen_expressions: set[str] = set()
-    for row in ordered:
-        skeleton = str(row.get("pred_skeleton", ""))
-        expression_key = str(row.get("expression_collapse_key", _expression_collapse_key(row)))
-        if len(selected) < elite_count and (skeleton not in seen_skeletons or expression_key not in seen_expressions):
-            selected.append(row)
-            seen_skeletons.add(skeleton)
-            seen_expressions.add(expression_key)
-    for row in ordered:
-        if len(selected) >= elite_count:
-            break
-        if row not in selected:
-            selected.append(row)
-    scores = torch.tensor([float(row.get("selection_score", 1.0e6)) for row in selected], dtype=torch.float32)
-    tau = max(float(getattr(args, "cycle_semantic_temperature", 0.25)), 1.0e-6)
-    weights = torch.softmax(-scores / tau, dim=0)
-    return selected, weights
-
-
-def _cycle_argmax_expression(probabilities: torch.Tensor, template: Any) -> str:
-    choices = probabilities.argmax(dim=-1).tolist()
-    try:
-        expr, _terms, _layers = execute_choices(template, choices)
-        return to_string(expr, int(template.num_vars), simplify=False)
-    except Exception as exc:
-        return f"__invalid__:{type(exc).__name__}"
-
-
-def _reference_seed_rows_from_task_traces(
-    task: TaskBundle,
-    template: Any,
-    args: argparse.Namespace,
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for trace_index, trace in enumerate(task.traces):
-        choices = [int(value) for value in trace.get("choices", [])]
-        if not choices:
-            continue
-        row = _cycle_expression_from_choices(choices, task, template, args)
-        row.update({
-            "candidate_source": "compiled_trace_seed",
-            "reference_trace_seed": 1.0,
-            "reference_trace_index": int(trace_index),
-        })
-        rows.append(row)
-    return rows
-
-
-def _reference_bridge_rows_for_task(
-    task: TaskBundle,
-    template: Any,
-    args: argparse.Namespace,
-    archive_rows: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], torch.Tensor, str]:
-    source = "previous_elite_archive"
-    rows = [dict(row) for row in archive_rows if float(row.get("semantic_invalid", 1.0)) < 0.5]
-    if not rows:
-        source = "compiled_trace_seed"
-        rows = _reference_seed_rows_from_task_traces(task, template, args)
-    if not rows:
-        raise RuntimeError(f"task {task.task_id} has no reference bridge atoms")
-    selected, weights = _select_trace_elites(rows, [], args)
-    for row in selected:
-        row["reference_bridge_atom_source"] = source
-    return selected, weights, source
-
-
-def _trace_atom_tensors(
-    rows: list[dict[str, Any]],
-    template: Any,
-    device: torch.device,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    choices_tensor = torch.tensor([row["choices"] for row in rows], dtype=torch.long, device=device)
-    active_tensor = torch.zeros((len(rows), len(template.blocks)), dtype=torch.bool, device=device)
-    for atom_index, row in enumerate(rows):
-        active_indices = [int(value) for value in row.get("active_block_indices", [])]
-        if active_indices:
-            active_tensor[atom_index, torch.tensor(active_indices, dtype=torch.long, device=device)] = True
-    return choices_tensor, active_tensor
-
-
-def _cycle_graph_flow_rows(
-    template: Any,
-    task: TaskBundle,
-    theta0: torch.Tensor,
-    theta1: torch.Tensor,
-    target_choices: list[int],
-    active_mask: torch.Tensor,
-    *,
-    iteration: int,
-    source_index: int,
-    atom_index: int,
-    steps: int,
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    total_steps = max(int(steps), 1)
-    active_set = {int(index) for index in active_mask.nonzero(as_tuple=False).flatten().detach().cpu().tolist()}
-    support = graph_action_mask(template, device=theta0.device)
-    for step in range(total_steps + 1):
-        t = float(step) / float(total_steps)
-        theta_t, _velocity = stage1_simplex_path(theta0, theta1, template, t)
-        probabilities = masked_block_softmax(
-            theta_t.view(len(template.blocks), int(template.source_count)),
-            template,
-        )
-        for block_index, block in enumerate(template.blocks):
-            probability = probabilities[block_index]
-            valid = support[block_index]
-            valid_indices = valid.nonzero(as_tuple=False).flatten()
-            valid_prob = probability.index_select(0, valid_indices)
-            top_count = min(4, int(valid_indices.numel()))
-            top_values, top_positions = valid_prob.topk(top_count)
-            target_action = int(target_choices[block_index]) if block_index < len(target_choices) else -1
-            target_probability = float(probability[target_action].detach().cpu()) if 0 <= target_action < int(probability.numel()) else 0.0
-            rows.append({
-                "iteration": int(iteration),
-                "task_id": task.task_id,
-                "source_index": int(source_index),
-                "atom_index": int(atom_index),
-                "step": int(step),
-                "t": float(t),
-                "block": int(block_index),
-                "kind": str(block.kind),
-                "layer": int(block.layer),
-                "node": int(block.node),
-                "slot": int(block.slot),
-                "term": int(block.term),
-                "is_active_target_block": bool(block_index in active_set),
-                "target_action": int(target_action),
-                "target_action_probability": target_probability,
-                "top_action": int(probability.argmax().detach().cpu()),
-                "top_probability": float(probability.max().detach().cpu()),
-                "entropy": float((-(probability * probability.clamp_min(1.0e-8).log()).sum()).detach().cpu()),
-                "top_actions": [
-                    {
-                        "index": int(valid_indices[position].detach().cpu()),
-                        "probability": float(value.detach().cpu()),
-                    }
-                    for value, position in zip(top_values, top_positions)
-                ],
-                "probabilities": probability.detach().cpu().tolist(),
-            })
-    return rows
-
-
-def collect_one_step_cycle_couplings(
-    flow: FixedSymbolConditionedVelocityNet,
-    train_tasks: list[TaskBundle],
-    args: argparse.Namespace,
-    device: torch.device,
-    *,
-    iteration: int,
-    elite_archive: dict[str, list[dict[str, Any]]] | None = None,
-) -> tuple[
-    list[CycleCoupledExample],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    dict[str, float],
-]:
-    tasks = [task for task in train_tasks if task.traces]
-    task_limit = max(int(args.cycle_collection_task_limit), 0)
-    if task_limit > 0:
-        tasks = tasks[:task_limit]
-    if not tasks:
-        raise RuntimeError("one-step cycle requires at least one strictly compiled training task")
-    particle_count = max(int(args.cycle_particles_per_task), 2)
-    expression_samples = max(int(args.cycle_expression_samples), 1)
-    mutation_samples = max(int(getattr(args, "cycle_mutation_samples", 2)), 0)
-    soft_endpoint_samples_enabled = bool(getattr(args, "cycle_soft_endpoint_samples", False))
-    projection_eps = float(getattr(args, "cycle_projection_eps", 0.02))
-    projection_sharpness = float(getattr(args, "cycle_projection_sharpness", 0.7))
-    archive_size = max(int(getattr(args, "cycle_archive_size", 32)), 0)
-    proposer_source = str(getattr(args, "cycle_proposer_source", "reference_bridge"))
-    if proposer_source == "flow_rollout":
-        raise ValueError("cycle_proposer_source=flow_rollout was removed; use reference_bridge")
-    temperatures = _parse_cycle_explore_temperatures(args)
-    generator = torch.Generator(device=device).manual_seed(int(args.seed) + 70_001 + 997 * int(iteration))
-    examples: list[CycleCoupledExample] = []
-    proposal_rows: list[dict[str, Any]] = []
-    coupling_rows: list[dict[str, Any]] = []
-    elite_rows: list[dict[str, Any]] = []
-    graph_rows: list[dict[str, Any]] = []
-    task_summaries: list[dict[str, float]] = []
-    archive = elite_archive if elite_archive is not None else {}
-    flow.eval()
-    collection_started = time.perf_counter()
-    with torch.no_grad():
-        for task_index, task in enumerate(tasks):
-            task_started = time.perf_counter()
-            tracked_theta0 = torch.stack([
-                random_theta(flow.template, scale=float(args.theta0_noise_scale), device=device)
-                for _ in range(particle_count)
-            ], dim=0)
-            source_probabilities = torch.stack([
-                masked_block_softmax(
-                    theta.view(len(flow.template.blocks), int(flow.template.source_count)),
-                    flow.template,
-                )
-                for theta in tracked_theta0
-            ], dim=0)
-            reference_bridge_rows: list[dict[str, Any]] = []
-            reference_bridge_source = ""
-            reference_bridge_coupling = None
-            if proposer_source == "reference_bridge":
-                reference_bridge_rows, reference_bridge_weights, reference_bridge_source = _reference_bridge_rows_for_task(
-                    task,
-                    flow.template,
-                    args,
-                    archive.get(task.task_id, []),
-                )
-                reference_choices_tensor, reference_active_tensor = _trace_atom_tensors(
-                    reference_bridge_rows,
-                    flow.template,
-                    device,
-                )
-                reference_bridge_coupling = source_conditioned_trace_fisher_coupling(
-                    source_probabilities,
-                    reference_choices_tensor,
-                    reference_active_tensor,
-                    reference_bridge_weights.to(device),
-                    projection_eps=projection_eps,
-                    projection_sharpness=projection_sharpness,
-                    min_one_capacity=True,
-                )
-            candidates: list[dict[str, Any]] = []
-            reference_choice_keys: list[str] = []
-            rollout_step_distances: list[float] = []
-            reference_endpoint_costs: list[float] = []
-            for proposal_index in range(particle_count):
-                theta0 = tracked_theta0[proposal_index]
-                if proposer_source == "reference_bridge":
-                    if reference_bridge_coupling is None:
-                        raise RuntimeError("reference bridge coupling was not initialized")
-                    atom_index = int(reference_bridge_coupling.assigned_atom_indices[proposal_index].detach().cpu())
-                    reference_row = reference_bridge_rows[atom_index]
-                    reference_choices = [int(value) for value in reference_row["choices"]]
-                    active_reference = reference_bridge_coupling.active_masks[proposal_index]
-                    probabilities = reference_bridge_coupling.target_probabilities[proposal_index]
-                    rollout_diag = {
-                        "integration_step_count": 0.0,
-                        "max_block_fisher_step": 0.0,
-                        "rollout_finite_rate": 1.0,
-                        "reference_endpoint_fisher_cost": float(reference_bridge_coupling.pair_costs[proposal_index].detach().cpu()),
-                        "reference_bridge_atom_index": float(atom_index),
-                        "reference_bridge_source_is_seed": float(reference_bridge_source == "compiled_trace_seed"),
-                    }
-                elif proposer_source == "gt_reference":
-                    reference_trace = select_trace_for_theta0(flow.template, theta0, task, args)
-                    reference_choices = [int(value) for value in reference_trace["choices"]]
-                    active_reference = torch.zeros(len(flow.template.blocks), dtype=torch.bool, device=device)
-                    active_indices = [int(value) for value in reference_trace.get("active_block_indices", [])]
-                    if active_indices:
-                        active_reference[torch.tensor(active_indices, dtype=torch.long, device=device)] = True
-                    probabilities = source_conditioned_trace_target_probabilities(
-                        source_probabilities[proposal_index],
-                        torch.tensor(reference_choices, dtype=torch.long, device=device),
-                        active_reference,
-                        projection_eps=projection_eps,
-                        projection_sharpness=projection_sharpness,
-                    )
-                    reference_cost = (
-                        block_fisher_squared_distance(
-                            source_probabilities[proposal_index],
-                            probabilities,
-                            active_reference,
-                        )
-                        if bool(active_reference.any().detach().cpu())
-                        else torch.tensor(0.0, device=device)
-                    )
-                    rollout_diag = {
-                        "integration_step_count": 0.0,
-                        "max_block_fisher_step": 0.0,
-                        "rollout_finite_rate": 1.0,
-                        "reference_endpoint_fisher_cost": float(reference_cost.detach().cpu()),
-                    }
-                else:
-                    raise ValueError(f"unknown cycle_proposer_source: {proposer_source}")
-                reference_choice_key = ",".join(str(int(value)) for value in reference_choices)
-                reference_choice_keys.append(reference_choice_key)
-                proposal_candidates: list[dict[str, Any]] = []
-                specs: list[tuple[str, float | None, list[int]]] = [("hard_argmax", None, reference_choices)]
-                if soft_endpoint_samples_enabled:
-                    for sample_index in range(expression_samples):
-                        temp = float(temperatures[sample_index % len(temperatures)])
-                        specs.append(("soft_endpoint_sample", temp, _sample_choices_from_probabilities(
-                            probabilities,
-                            flow.template,
-                            generator,
-                            temperature=temp,
-                        )))
-                    active_mutation_count = mutation_samples
-                else:
-                    active_mutation_count = mutation_samples + max(expression_samples - 1, 0)
-                for mutation_index in range(active_mutation_count):
-                    temp = float(temperatures[mutation_index % len(temperatures)])
-                    specs.append(("active_subgraph_mutation", temp, _mutate_choices_from_endpoint(
-                        reference_choices,
-                        probabilities,
-                        flow.template,
-                        generator,
-                        temperature=temp,
-                    )))
-                if _is_register_template(flow.template) and int(flow.template.output_terms) > 1:
-                    for mutation_index in range(mutation_samples):
-                        temp = float(temperatures[mutation_index % len(temperatures)])
-                        specs.append(("term_readout_mutation", temp, _mutate_readout_choices_from_endpoint(
-                            reference_choices,
-                            probabilities,
-                            flow.template,
-                            generator,
-                            temperature=temp,
-                        )))
-                for sample_index, (source, temp, choices) in enumerate(specs):
-                    row = _cycle_expression_from_choices(choices, task, flow.template, args)
-                    row.update({
-                        "iteration": int(iteration),
-                        "task_index": int(task_index),
-                        "proposal_index": int(proposal_index),
-                        "sample_index": int(sample_index),
-                        "proposal_source": proposer_source,
-                        "reference_bridge_atom_source": reference_bridge_source if proposer_source == "reference_bridge" else proposer_source,
-                        "reference_bridge_atom_index": int(rollout_diag.get("reference_bridge_atom_index", -1.0)),
-                        "candidate_source": source,
-                        "candidate_generation_mode": source,
-                        "explore_temperature": float(temp) if temp is not None else None,
-                        "reference_choice_key": reference_choice_key,
-                    })
-                    proposal_candidates.append(row)
-                    candidates.append(row)
-                valid_samples = [sample for sample in proposal_candidates if float(sample.get("semantic_invalid", 1.0)) < 0.5]
-                rollout_step_distances.append(float(rollout_diag.get("max_block_fisher_step", 0.0)))
-                reference_endpoint_costs.append(float(rollout_diag.get("reference_endpoint_fisher_cost", 0.0)))
-                proposal_rows.append({
-                    "iteration": int(iteration),
-                    "task_id": task.task_id,
-                    "task_index": int(task_index),
-                    "proposal_index": int(proposal_index),
-                    "proposal_source": proposer_source,
-                    "reference_bridge_atom_source": reference_bridge_source if proposer_source == "reference_bridge" else proposer_source,
-                    "reference_bridge_atom_index": int(rollout_diag.get("reference_bridge_atom_index", -1.0)),
-                    "reference_argmax_expression": _cycle_argmax_expression(probabilities, flow.template),
-                    "reference_choice_key": reference_choice_key,
-                    "valid_expression_sample_count": int(len(valid_samples)),
-                    "expression_sample_count": int(len(proposal_candidates)),
-                    "hard_endpoint_population": 1,
-                    "soft_endpoint_sample_count": int(expression_samples if soft_endpoint_samples_enabled else 0),
-                    "active_subgraph_mutation_count": int(active_mutation_count),
-                    "term_readout_mutation_count": int(mutation_samples if (_is_register_template(flow.template) and int(flow.template.output_terms) > 1) else 0),
-                    "best_selection_score": float(min((sample.get("selection_score", float(args.semantic_mass_invalid_penalty)) for sample in proposal_candidates), default=float(args.semantic_mass_invalid_penalty))),
-                    "best_heldout_fitted_r2": float(max((sample.get("heldout_fitted_r2", -1.0e9) for sample in valid_samples), default=-1.0e9)),
-                    "best_heldout_raw_r2": float(max((sample.get("heldout_raw_r2", -1.0e9) for sample in valid_samples), default=-1.0e9)),
-                    "best_heldout_term_linear_fit_r2": float(max((sample.get("heldout_term_linear_fit_r2", -1.0e9) for sample in valid_samples), default=-1.0e9)),
-                    "reference_rollout_steps": float(rollout_diag.get("integration_step_count", 0.0)),
-                    "reference_rollout_max_block_fisher_step": float(rollout_diag.get("max_block_fisher_step", 0.0)),
-                    "reference_rollout_finite_rate": float(rollout_diag.get("rollout_finite_rate", 1.0)),
-                    "reference_endpoint_fisher_cost": float(rollout_diag.get("reference_endpoint_fisher_cost", 0.0)),
-                    "expression_samples": proposal_candidates,
-                })
-
-            selected, semantic_weights = _select_trace_elites(candidates, archive.get(task.task_id, []), args)
-            semantic_weights_device = semantic_weights.to(device)
-            if archive_size > 0:
-                archive_selected, _archive_weights = _select_trace_elites(candidates, archive.get(task.task_id, []), argparse.Namespace(**{
-                    **vars(args),
-                    "cycle_elite_modes": archive_size,
-                }))
-                archive[task.task_id] = archive_selected[:archive_size]
-            choices_tensor = torch.tensor([row["choices"] for row in selected], dtype=torch.long, device=device)
-            active_tensor = torch.zeros((len(selected), len(flow.template.blocks)), dtype=torch.bool, device=device)
-            for atom_index, row in enumerate(selected):
-                active_tensor[atom_index, torch.tensor(row["active_block_indices"], dtype=torch.long, device=device)] = True
-            coupling = source_conditioned_trace_fisher_coupling(
-                source_probabilities,
-                choices_tensor,
-                active_tensor,
-                semantic_weights_device,
-                projection_eps=projection_eps,
-                projection_sharpness=projection_sharpness,
-                min_one_capacity=True,
-            )
-            for atom_index, row in enumerate(selected):
-                elite_row = dict(row)
-                elite_row.update({
-                    "iteration": int(iteration),
-                    "task_id": task.task_id,
-                    "task_index": int(task_index),
-                    "atom_index": int(atom_index),
-                    "elite_weight": float(semantic_weights[atom_index].detach().cpu()),
-                    "capacity_count": int(coupling.capacity_counts[atom_index].detach().cpu()),
-                    "projection_eps": float(projection_eps),
-                    "projection_sharpness": float(projection_sharpness),
-                })
-                elite_rows.append(elite_row)
-
-            for source_index in range(particle_count):
-                atom_index = int(coupling.assigned_atom_indices[source_index].detach().cpu())
-                active_mask = coupling.active_masks[source_index].detach().clone()
-                target_probabilities = coupling.target_probabilities[source_index]
-                theta1 = logits_from_block_probabilities(
-                    [target_probabilities[block_index] for block_index in range(int(target_probabilities.shape[0]))],
-                    flow.template,
-                    eps=float(args.fisher_eps),
-                )
-                diagnostics = {
-                    "iteration": int(iteration),
-                    "source_index": int(source_index),
-                    "proposal_index": int(atom_index),
-                    "proposal_source": str(selected[atom_index].get("proposal_source", proposer_source)),
-                    "reference_bridge_atom_source": str(selected[atom_index].get("reference_bridge_atom_source", "")),
-                    "reference_bridge_atom_index": int(selected[atom_index].get("reference_bridge_atom_index", -1)),
-                    "proposal_weight": float(semantic_weights[atom_index].detach().cpu()),
-                    "pair_fisher_cost": float(coupling.pair_costs[source_index].detach().cpu()),
-                    "active_block_count": int(active_mask.sum().detach().cpu()),
-                    "target_expression": selected[atom_index].get("expression", ""),
-                    "target_heldout_fitted_r2": float(selected[atom_index].get("heldout_fitted_r2", -1.0e9)),
-                    "target_heldout_raw_r2": float(selected[atom_index].get("heldout_raw_r2", -1.0e9)),
-                    "target_expression_collapse_key": str(selected[atom_index].get("expression_collapse_key", "")),
-                    "target_graph_fiber_duplicate_count": int(selected[atom_index].get("graph_fiber_duplicate_count", 1)),
-                    "target_graph_fiber_duplicate_excess": int(selected[atom_index].get("graph_fiber_duplicate_excess", 0)),
-                }
-                examples.append(CycleCoupledExample(
-                    task=task,
-                    theta0=tracked_theta0[source_index].detach().clone(),
-                    theta1=theta1.detach().clone(),
-                    active_mask=active_mask,
-                    proposal_index=atom_index,
-                    diagnostics=diagnostics,
-                ))
-                coupling_rows.append({
-                    "iteration": int(iteration),
-                    "task_id": task.task_id,
-                    "source_index": int(source_index),
-                    "assigned_resampled_slot": int(coupling.assigned_slot_for_source[source_index].detach().cpu()),
-                    "assigned_proposal_index": int(atom_index),
-                    "proposal_source": str(selected[atom_index].get("proposal_source", proposer_source)),
-                    "reference_bridge_atom_source": str(selected[atom_index].get("reference_bridge_atom_source", "")),
-                    "reference_bridge_atom_index": int(selected[atom_index].get("reference_bridge_atom_index", -1)),
-                    "proposal_weight": float(semantic_weights[atom_index].detach().cpu()),
-                    "pair_fisher_cost": float(coupling.pair_costs[source_index].detach().cpu()),
-                    "active_block_count": int(active_mask.sum().detach().cpu()),
-                    "target_argmax_expression": selected[atom_index].get("expression", ""),
-                    "target_heldout_fitted_r2": float(selected[atom_index].get("heldout_fitted_r2", -1.0e9)),
-                    "target_heldout_raw_r2": float(selected[atom_index].get("heldout_raw_r2", -1.0e9)),
-                    "target_expression_collapse_key": str(selected[atom_index].get("expression_collapse_key", "")),
-                    "target_graph_fiber_duplicate_count": int(selected[atom_index].get("graph_fiber_duplicate_count", 1)),
-                    "target_graph_fiber_duplicate_excess": int(selected[atom_index].get("graph_fiber_duplicate_excess", 0)),
-                })
-                if int(source_index) < max(int(getattr(args, "cycle_graph_visualization_sources", 4)), 0):
-                    graph_rows.extend(_cycle_graph_flow_rows(
-                        flow.template,
-                        task,
-                        tracked_theta0[source_index].detach(),
-                        theta1.detach(),
-                        list(int(value) for value in selected[atom_index]["choices"]),
-                        active_mask.detach(),
-                        iteration=iteration,
-                        source_index=source_index,
-                        atom_index=atom_index,
-                        steps=int(args.temporal_visualization_steps),
-                    ))
-
-            weight_entropy = float((-(semantic_weights_device * semantic_weights_device.clamp_min(1.0e-12).log()).sum() / math.log(max(particle_count, 2))).detach().cpu())
-            occupancy = coupling.capacity_counts.float() / float(particle_count)
-            occupancy_positive = occupancy[occupancy > 0]
-            valid_candidates = [row for row in candidates if float(row.get("semantic_invalid", 1.0)) < 0.5]
-            candidate_expression_keys = {_expression_collapse_key(row) for row in valid_candidates}
-            candidate_active_keys = {str(row.get("active_choice_key", row.get("choice_key", ""))) for row in valid_candidates}
-            selected_expression_keys = {_expression_collapse_key(row) for row in selected}
-            candidate_scores = torch.tensor([float(row.get("selection_score", float(args.semantic_mass_invalid_penalty))) for row in candidates], dtype=torch.float32, device=device)
-            candidate_raw_r2 = torch.tensor([float(row.get("heldout_raw_r2", -1.0e9)) for row in candidates], dtype=torch.float32, device=device)
-            selected_scores = torch.tensor([float(row.get("selection_score", float(args.semantic_mass_invalid_penalty))) for row in selected], dtype=torch.float32, device=device)
-            selected_raw_r2 = torch.tensor([float(row.get("heldout_raw_r2", -1.0e9)) for row in selected], dtype=torch.float32, device=device)
-            selected_fitted_r2 = torch.tensor([float(row.get("heldout_fitted_r2", -1.0e9)) for row in selected], dtype=torch.float32, device=device)
-            selected_term_r2 = torch.tensor([float(row.get("heldout_term_linear_fit_r2", -1.0e9)) for row in selected], dtype=torch.float32, device=device)
-            candidate_term_counts = [float(row.get("unique_nonzero_term_count", row.get("term_count", 0))) for row in valid_candidates]
-            selected_term_counts = [float(row.get("unique_nonzero_term_count", row.get("term_count", 0))) for row in selected]
-            assignment_cost_mean = float(coupling.pair_costs.mean().detach().cpu())
-            naive_cost_mean = float(coupling.cost_matrix.diagonal().mean().detach().cpu())
-            resampled_unique = int((coupling.capacity_counts > 0).sum().detach().cpu())
-            task_summaries.append({
-                "hard_endpoint_population": 1.0,
-                "soft_endpoint_samples_enabled": float(soft_endpoint_samples_enabled),
-                "candidate_endpoint_count": float(particle_count),
-                "complete_expression_sample_count": float(len(candidates)),
-                "valid_expression_sample_rate": float(len(valid_candidates) / max(len(candidates), 1)),
-                "coefficient_fit_success_rate": float(np.mean([str(sample.get("semantic_coefficient_fit_mode", "")).startswith("global_affine") for sample in candidates])) if candidates else 0.0,
-                "candidate_unique_expression_count": float(len(candidate_expression_keys)),
-                "candidate_unique_active_graph_count": float(len(candidate_active_keys)),
-                "candidate_graph_fiber_duplicate_excess": float(max(len(candidate_active_keys) - len(candidate_expression_keys), 0)),
-                "candidate_unique_nonzero_term_count_mean": float(np.mean(candidate_term_counts)) if candidate_term_counts else 0.0,
-                "candidate_multi_term_rate": float(np.mean([count > 1.0 for count in candidate_term_counts])) if candidate_term_counts else 0.0,
-                "selected_unique_nonzero_term_count_mean": float(np.mean(selected_term_counts)) if selected_term_counts else 0.0,
-                "selected_multi_term_rate": float(np.mean([count > 1.0 for count in selected_term_counts])) if selected_term_counts else 0.0,
-                "selection_score_prior_mean": float(candidate_scores.mean().detach().cpu()) if int(candidate_scores.numel()) else 0.0,
-                "selection_score_prior_median": float(candidate_scores.median().detach().cpu()) if int(candidate_scores.numel()) else 0.0,
-                "selection_score_prior_p90": float(torch.quantile(candidate_scores, 0.9).detach().cpu()) if int(candidate_scores.numel()) else 0.0,
-                "selection_score_prior_max": float(candidate_scores.max().detach().cpu()) if int(candidate_scores.numel()) else 0.0,
-                "selection_score_tilted_mean": float((semantic_weights_device * selected_scores).sum().detach().cpu()),
-                "selection_score_improvement": float((candidate_scores.mean() - (semantic_weights_device * selected_scores).sum()).detach().cpu()) if int(candidate_scores.numel()) else 0.0,
-                "heldout_raw_r2_prior_best": float(candidate_raw_r2.max().detach().cpu()) if int(candidate_raw_r2.numel()) else -1.0e9,
-                "heldout_raw_r2_tilted_mean": float((semantic_weights_device * selected_raw_r2).sum().detach().cpu()),
-                "heldout_fitted_r2_tilted_mean": float((semantic_weights_device * selected_fitted_r2).sum().detach().cpu()),
-                "heldout_term_linear_fit_r2_tilted_mean": float((semantic_weights_device * selected_term_r2).sum().detach().cpu()),
-                "raw_metric_regression_under_fitted_tilt": float(((semantic_weights_device * selected_raw_r2).sum() < candidate_raw_r2.mean()).detach().cpu()) if int(candidate_raw_r2.numel()) else 0.0,
-                "unique_elite_active_graph_count": float(len({str(row.get("active_choice_key", "")) for row in selected})),
-                "unique_elite_expression_count": float(len(selected_expression_keys)),
-                "selected_graph_fiber_duplicate_excess": float(sum(int(row.get("graph_fiber_duplicate_excess", 0)) for row in selected)),
-                "proposal_weight_entropy": weight_entropy,
-                "proposal_weight_ess": float((1.0 / semantic_weights_device.square().sum().clamp_min(1.0e-12)).detach().cpu()),
-                "proposal_top_weight": float(semantic_weights_device.max().detach().cpu()),
-                "unique_argmax_endpoint_count": float(len(set(reference_choice_keys))),
-                "resampled_unique_proposal_count": float(resampled_unique),
-                "resampled_duplicate_rate": float(1.0 - resampled_unique / float(particle_count)),
-                "resampled_occupancy_entropy": float((-(occupancy_positive * occupancy_positive.log()).sum() / math.log(max(particle_count, 2))).detach().cpu()),
-                "source_marginal_occupancy_min": 1.0,
-                "source_marginal_occupancy_max": 1.0,
-                "pair_fisher_cost_mean": assignment_cost_mean,
-                "pair_fisher_cost_max": float(coupling.pair_costs.max().detach().cpu()),
-                "naive_pair_fisher_cost_mean": naive_cost_mean,
-                "pairing_cost_reduction": float(naive_cost_mean - assignment_cost_mean),
-                "tracked_theta0_reuse_rate": 1.0,
-                "reference_bridge_seed_rate": float(reference_bridge_source == "compiled_trace_seed") if proposer_source == "reference_bridge" else 0.0,
-                "reference_rollout_max_block_fisher_step_mean": float(np.mean(rollout_step_distances)) if rollout_step_distances else 0.0,
-                "reference_endpoint_fisher_cost_mean": float(np.mean(reference_endpoint_costs)) if reference_endpoint_costs else 0.0,
-                "projection_sharpness": float(projection_sharpness),
-                "collection_runtime_sec": float(time.perf_counter() - task_started),
-            })
-    summary = {key: float(np.mean([row[key] for row in task_summaries])) for key in task_summaries[0]}
-    summary.update({
-        "cycle_iteration": float(iteration),
-        "cycle_task_count": float(len(tasks)),
-        "cycle_coupled_example_count": float(len(examples)),
-        "cycle_collection_runtime_sec": float(time.perf_counter() - collection_started),
-    })
-    return examples, proposal_rows, coupling_rows, elite_rows, graph_rows, summary
-
-
-def collect_v3_semantic_fisher_couplings(
-    flow: FixedSymbolConditionedVelocityNet,
-    train_tasks: list[TaskBundle],
-    args: argparse.Namespace,
-    device: torch.device,
-    *,
-    iteration: int,
-) -> tuple[
-    list[CycleCoupledExample],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    dict[str, float],
-]:
-    """Collect the v3 learned-rollout semantic posterior and soft coupling."""
-    tasks = [task for task in train_tasks if task.traces]
-    task_limit = max(int(args.cycle_collection_task_limit), 0)
-    if task_limit > 0:
-        tasks = tasks[:task_limit]
-    if not tasks:
-        raise RuntimeError("v3 cycle requires at least one strictly compiled training task")
-    particle_count = max(int(args.cycle_particles_per_task), 1)
-    trace_samples = max(int(args.cycle_expression_samples), 1)
-    rollout_steps = int(getattr(args, "cycle_proposer_rollout_steps", 0))
-    if rollout_steps <= 0:
-        rollout_steps = max(int(args.ode_steps), 1)
-    projection_eps = float(getattr(args, "cycle_projection_eps", 0.02))
-    kl_budget = float(getattr(args, "cycle_semantic_kl_budget", 0.10))
-    correction_limit = float(getattr(args, "cycle_correction_ratio_limit", 0.25))
-    entropy_scale = float(getattr(args, "cycle_ot_entropy_scale", 0.05))
-    configured_alpha = float(getattr(args, "cycle_gt_anchor_alpha", -1.0))
-    automatic_alpha = max(0.10, 0.25 * (2.0 ** -max(int(iteration) - 1, 0)))
-    gt_anchor_alpha = automatic_alpha if configured_alpha < 0.0 else configured_alpha
-    generator = torch.Generator(device=device).manual_seed(int(args.seed) + 91_003 + 997 * int(iteration))
-    examples: list[CycleCoupledExample] = []
-    proposal_rows: list[dict[str, Any]] = []
-    coupling_rows: list[dict[str, Any]] = []
-    posterior_rows: list[dict[str, Any]] = []
-    graph_rows: list[dict[str, Any]] = []
-    task_summaries: list[dict[str, float]] = []
-    collection_started = time.perf_counter()
-    flow.eval()
-    with torch.no_grad():
-        for task_index, task in enumerate(tasks):
-            task_started = time.perf_counter()
-            tracked_theta0 = torch.stack([
-                random_theta(
-                    flow.template,
-                    scale=float(args.theta0_noise_scale),
-                    device=device,
-                    generator=generator,
-                )
-                for _ in range(particle_count)
-            ], dim=0)
-            source_probabilities = torch.stack([
-                masked_block_softmax(
-                    theta.view(len(flow.template.blocks), int(flow.template.source_count)),
-                    flow.template,
-                )
-                for theta in tracked_theta0
-            ], dim=0)
-            reference_endpoints: list[torch.Tensor] = []
-            reference_probabilities: list[torch.Tensor] = []
-            flow_particles: list[dict[str, Any]] = []
-            rollout_costs: list[float] = []
-            rollout_max_steps: list[float] = []
-            rollout_finite_rates: list[float] = []
-            for source_index in range(particle_count):
-                endpoint, rollout_diagnostics = rollout(
-                    flow,
-                    None,
-                    task,
-                    tracked_theta0[source_index],
-                    steps=rollout_steps,
-                    mode="off",
-                    args=args,
-                    generator=generator,
-                )
-                endpoint = endpoint.detach()
-                reference_endpoints.append(endpoint)
-                probabilities = masked_block_softmax(
-                    endpoint.view(len(flow.template.blocks), int(flow.template.source_count)),
-                    flow.template,
-                )
-                reference_probabilities.append(probabilities)
-                rollout_cost = block_fisher_squared_distance(
-                    source_probabilities[source_index],
-                    probabilities,
-                    torch.ones(len(flow.template.blocks), dtype=torch.bool, device=device),
-                )
-                rollout_costs.append(float(rollout_cost.detach().cpu()))
-                rollout_max_steps.append(float(rollout_diagnostics.get("max_block_fisher_step", 0.0)))
-                rollout_finite_rates.append(float(rollout_diagnostics.get("rollout_finite_rate", 1.0)))
-                sampled_rows: list[dict[str, Any]] = []
-                for sample_index in range(trace_samples):
-                    sampled_choices = sample_choices(endpoint, flow.template, generator)
-                    particle = _v3_trace_particle(
-                        flow.template,
-                        sampled_choices,
-                        task,
-                        args,
-                        source_kind="learned_flow_sample",
-                        source_index=source_index,
-                        sample_index=sample_index,
-                        score_semantics=False,
-                    )
-                    sampled_rows.append(particle)
-                    flow_particles.append(particle)
-                mode_counts: dict[str, int] = {}
-                for row in sampled_rows:
-                    key = str(row.get("expression_collapse_key", row.get("expression", "__invalid__")))
-                    mode_counts[key] = mode_counts.get(key, 0) + 1
-                proposal_rows.append({
-                    "iteration": int(iteration),
-                    "task_id": task.task_id,
-                    "task_index": int(task_index),
-                    "source_index": int(source_index),
-                    "proposal_source": "learned_flow_rollout",
-                    "reference_argmax_expression": _cycle_argmax_expression(probabilities, flow.template),
-                    "reference_rollout_steps": int(rollout_steps),
-                    "reference_rollout_max_block_fisher_step": float(rollout_diagnostics.get("max_block_fisher_step", 0.0)),
-                    "reference_rollout_finite_rate": float(rollout_diagnostics.get("rollout_finite_rate", 1.0)),
-                    "reference_endpoint_fisher_cost": float(rollout_cost.detach().cpu()),
-                    "complete_trace_sample_count": int(len(sampled_rows)),
-                    "unique_expression_count": int(len(mode_counts)),
-                    "expression_mode_counts": [
-                        {"expression_collapse_key": key, "count": int(count)}
-                        for key, count in sorted(mode_counts.items(), key=lambda item: (-item[1], item[0]))
-                    ],
-                    "mutation_count": 0,
-                    "elite_selection_count": 0,
-                    "archive_replay_count": 0,
-                })
-
-            gt_particles: list[dict[str, Any]] = []
-            for trace_index, trace in enumerate(task.traces):
-                trace_choices = [int(value) for value in trace.get("choices", [])]
-                if not trace_choices:
-                    continue
-                gt_particles.append(_v3_trace_particle(
-                    flow.template,
-                    trace_choices,
-                    task,
-                    args,
-                    source_kind="gt_anchor",
-                    source_index=-1,
-                    sample_index=trace_index,
-                    score_semantics=False,
-                ))
-            atoms = _v3_aggregate_trace_particles(
-                flow_particles,
-                gt_particles,
-                gt_anchor_alpha=gt_anchor_alpha,
-                semantic_energy_mode=str(getattr(args, "cycle_semantic_energy_mode", "fit_r2_first")),
-                semantic_scorer=lambda atom: _v3_trace_particle(
-                    flow.template,
-                    [int(value) for value in atom["choices"]],
-                    task,
-                    args,
-                    source_kind=str(atom.get("candidate_source", "aggregated_expression")),
-                    source_index=int(atom.get("v3_source_index", -1)),
-                    sample_index=int(atom.get("v3_sample_index", -1)),
-                    score_semantics=True,
-                ),
-            )
-            prior_weights = torch.tensor(
-                [float(row["prior_weight"]) for row in atoms],
-                dtype=torch.float32,
-                device=device,
-            )
-            semantic_energies = torch.tensor(
-                [float(row["v3_semantic_energy"]) for row in atoms],
-                dtype=torch.float32,
-                device=device,
-            )
-            proximal = kl_constrained_semantic_weights(
-                semantic_energies,
-                prior_weights,
-                kl_budget=kl_budget,
-            )
-            posterior_weights = proximal.posterior_weights.to(device)
-            choices_tensor, active_tensor = _trace_atom_tensors(atoms, flow.template, device)
-            reference_probability_tensor = torch.stack(reference_probabilities, dim=0)
-            coupling_error = ""
-            rejected_correction_ratio = float("nan")
-            try:
-                coupling = source_conditioned_entropic_trace_coupling(
-                    source_probabilities,
-                    reference_probability_tensor,
-                    choices_tensor,
-                    active_tensor,
-                    posterior_weights,
-                    prior_atom_weights=prior_weights,
-                    projection_eps=projection_eps,
-                    projection_sharpness=1.0,
-                    correction_ratio_limit=correction_limit,
-                    entropy_scale=entropy_scale,
-                )
-            except CorrectionBudgetError as exc:
-                coupling = None
-                coupling_error = f"{type(exc).__name__}: {str(exc)[:240]}"
-                rejected_correction_ratio = float(exc.best_ratio)
-            except ValueError as exc:
-                coupling = None
-                coupling_error = f"{type(exc).__name__}: {str(exc)[:240]}"
-
-            for atom_index, atom in enumerate(atoms):
-                posterior_row = dict(atom)
-                posterior_row.update({
-                    "iteration": int(iteration),
-                    "task_id": task.task_id,
-                    "task_index": int(task_index),
-                    "atom_index": int(atom_index),
-                    "posterior_weight_requested": float(posterior_weights[atom_index].detach().cpu()),
-                    "posterior_weight_coupled": (
-                        float(coupling.target_marginal[atom_index].detach().cpu()) if coupling is not None else 0.0
-                    ),
-                    "semantic_kl_budget": float(kl_budget),
-                    "semantic_kl_realized": float(proximal.kl_divergence),
-                    "semantic_temperature": float(proximal.temperature),
-                    "semantic_expected_energy_prior": float(proximal.prior_expected_energy),
-                    "semantic_expected_energy_posterior": float(proximal.posterior_expected_energy),
-                    "semantic_effective_sample_size": float(proximal.effective_sample_size),
-                    "coupling_rejected": float(coupling is None),
-                    "coupling_error": coupling_error,
-                    "mutation_participation": 0.0,
-                    "elite_selection_participation": 0.0,
-                    "archive_participation": 0.0,
-                })
-                posterior_rows.append(posterior_row)
-
-            prior_raw_nmse = float(sum(
-                float(prior_weights[index].detach().cpu()) * float(atom["v3_raw_nmse"])
-                for index, atom in enumerate(atoms)
-            ))
-            posterior_raw_nmse = float(sum(
-                float(posterior_weights[index].detach().cpu()) * float(atom["v3_raw_nmse"])
-                for index, atom in enumerate(atoms)
-            ))
-            common_summary = {
-                "learned_flow_rollout_rate": 1.0,
-                "mutation_participation_rate": 0.0,
-                "elite_selection_participation_rate": 0.0,
-                "archive_participation_rate": 0.0,
-                "source_particle_count": float(particle_count),
-                "flow_trace_sample_count": float(len(flow_particles)),
-                "gt_anchor_trace_count": float(len(gt_particles)),
-                "expression_atom_count": float(len(atoms)),
-                "gt_anchor_alpha": float(gt_anchor_alpha if gt_particles else 0.0),
-                "semantic_kl_budget": float(kl_budget),
-                "semantic_kl_realized": float(proximal.kl_divergence),
-                "semantic_temperature": float(proximal.temperature),
-                "semantic_expected_energy_prior": float(proximal.prior_expected_energy),
-                "semantic_expected_energy_posterior": float(proximal.posterior_expected_energy),
-                "semantic_expected_energy_improvement": float(
-                    proximal.prior_expected_energy - proximal.posterior_expected_energy
-                ),
-                "semantic_effective_sample_size": float(proximal.effective_sample_size),
-                "semantic_top_weight": float(posterior_weights.max().detach().cpu()),
-                "raw_nmse_prior_mean": prior_raw_nmse,
-                "raw_nmse_posterior_mean": posterior_raw_nmse,
-                "reference_endpoint_fisher_cost_mean": float(np.mean(rollout_costs)) if rollout_costs else 0.0,
-                "reference_rollout_max_block_fisher_step_mean": float(np.mean(rollout_max_steps)) if rollout_max_steps else 0.0,
-                "reference_rollout_finite_rate": float(np.mean(rollout_finite_rates)) if rollout_finite_rates else 0.0,
-                "coupling_rejected_rate": float(coupling is None),
-                "collection_runtime_sec": float(time.perf_counter() - task_started),
-            }
-            if coupling is None:
-                common_summary.update({
-                    "coupled_example_count": 0.0,
-                    "correction_ratio": (
-                        float(rejected_correction_ratio)
-                        if math.isfinite(rejected_correction_ratio)
-                        else float(correction_limit + 1.0)
-                    ),
-                    "correction_budget_satisfied": 0.0,
-                    "correction_lambda": 0.0,
-                    "posterior_strength": 0.0,
-                    "sinkhorn_entropy": 0.0,
-                    "source_marginal_error": 0.0,
-                    "target_marginal_error": 0.0,
-                    "expected_source_cost": 0.0,
-                    "expected_correction_cost": 0.0,
-                })
-                task_summaries.append(common_summary)
-                continue
-
-            coupled_example_count = 0
-            for source_index in range(particle_count):
-                for atom_index, atom in enumerate(atoms):
-                    edge_mass = float(coupling.plan[source_index, atom_index].detach().cpu())
-                    if edge_mass <= 0.0:
-                        continue
-                    target_probabilities = coupling.target_probabilities[source_index, atom_index]
-                    theta1 = logits_from_block_probabilities(
-                        [target_probabilities[block_index] for block_index in range(int(target_probabilities.shape[0]))],
-                        flow.template,
-                        eps=float(args.fisher_eps),
-                    )
-                    active_mask = active_tensor[atom_index].detach().clone()
-                    diagnostics = {
-                        "iteration": int(iteration),
-                        "source_index": int(source_index),
-                        "proposal_index": int(atom_index),
-                        "proposal_source": "v3_semantic_trace_posterior",
-                        "proposal_weight": float(coupling.target_marginal[atom_index].detach().cpu()),
-                        "coupling_edge_mass": edge_mass,
-                        "pair_source_fisher_cost": float(coupling.source_cost_matrix[source_index, atom_index].detach().cpu()),
-                        "pair_correction_fisher_cost": float(coupling.correction_cost_matrix[source_index, atom_index].detach().cpu()),
-                        "active_block_count": int(active_mask.sum().detach().cpu()),
-                        "target_expression": str(atom.get("expression", "")),
-                        "target_raw_nmse": float(atom.get("v3_raw_nmse", 0.0)),
-                        "target_semantic_energy": float(atom.get("v3_semantic_energy", 0.0)),
-                        "target_gt_anchor": float(atom.get("v3_gt_anchor", 0.0)),
-                    }
-                    examples.append(CycleCoupledExample(
-                        task=task,
-                        theta0=tracked_theta0[source_index].detach().clone(),
-                        theta1=theta1.detach().clone(),
-                        active_mask=active_mask,
-                        proposal_index=atom_index,
-                        diagnostics=diagnostics,
-                        sample_weight=edge_mass,
-                        target_choices=tuple(int(value) for value in atom["choices"]),
-                        is_gt_anchor=bool(float(atom.get("v3_gt_anchor", 0.0)) > 0.5),
-                    ))
-                    coupled_example_count += 1
-                    coupling_rows.append({
-                        "iteration": int(iteration),
-                        "task_id": task.task_id,
-                        "source_index": int(source_index),
-                        "atom_index": int(atom_index),
-                        "coupling_edge_mass": edge_mass,
-                        "source_marginal": float(coupling.row_marginal[source_index].detach().cpu()),
-                        "target_marginal": float(coupling.target_marginal[atom_index].detach().cpu()),
-                        "requested_target_marginal": float(coupling.requested_target_marginal[atom_index].detach().cpu()),
-                        "target_expression": str(atom.get("expression", "")),
-                        "target_gt_anchor": float(atom.get("v3_gt_anchor", 0.0)),
-                        "pair_source_fisher_cost": float(coupling.source_cost_matrix[source_index, atom_index].detach().cpu()),
-                        "pair_correction_fisher_cost": float(coupling.correction_cost_matrix[source_index, atom_index].detach().cpu()),
-                        "correction_ratio": float(coupling.correction_ratio),
-                        "correction_lambda": float(coupling.lambda_correction),
-                        "posterior_strength": float(coupling.posterior_strength),
-                    })
-
-                if source_index < max(int(getattr(args, "cycle_graph_visualization_sources", 4)), 0):
-                    visual_atom = int(coupling.plan[source_index].argmax().detach().cpu())
-                    visual_target = coupling.target_probabilities[source_index, visual_atom]
-                    visual_theta1 = logits_from_block_probabilities(
-                        [visual_target[block_index] for block_index in range(int(visual_target.shape[0]))],
-                        flow.template,
-                        eps=float(args.fisher_eps),
-                    )
-                    graph_rows.extend(_cycle_graph_flow_rows(
-                        flow.template,
-                        task,
-                        tracked_theta0[source_index].detach(),
-                        visual_theta1.detach(),
-                        [int(value) for value in atoms[visual_atom]["choices"]],
-                        active_tensor[visual_atom].detach(),
-                        iteration=iteration,
-                        source_index=source_index,
-                        atom_index=visual_atom,
-                        steps=int(args.temporal_visualization_steps),
-                    ))
-
-            common_summary.update({
-                "coupled_example_count": float(coupled_example_count),
-                "correction_ratio": float(coupling.correction_ratio),
-                "correction_budget_satisfied": 1.0,
-                "correction_lambda": float(coupling.lambda_correction),
-                "posterior_strength": float(coupling.posterior_strength),
-                "sinkhorn_entropy": float(coupling.entropy),
-                "source_marginal_error": float(coupling.row_marginal_error),
-                "target_marginal_error": float(coupling.column_marginal_error),
-                "expected_source_cost": float(coupling.expected_source_cost),
-                "expected_correction_cost": float(coupling.expected_correction_cost),
-            })
-            task_summaries.append(common_summary)
-
-    if not task_summaries:
-        raise RuntimeError("v3 collector did not process any task")
-    summary: dict[str, float] = {}
-    for key in task_summaries[0]:
-        values = [float(row[key]) for row in task_summaries if math.isfinite(float(row[key]))]
-        summary[key] = float(np.mean(values)) if values else float("inf")
-    summary.update({
-        "cycle_iteration": float(iteration),
-        "cycle_task_count": float(len(task_summaries)),
-        "cycle_coupled_example_count": float(len(examples)),
-        "cycle_collection_runtime_sec": float(time.perf_counter() - collection_started),
-    })
-    return examples, proposal_rows, coupling_rows, posterior_rows, graph_rows, summary
-
-
-def _lineage_block_fisher_distances(
-    source_probabilities: torch.Tensor,
-    target_probabilities: torch.Tensor,
-) -> torch.Tensor:
-    source = source_probabilities.float()
-    target = target_probabilities.float().to(source.device)
-    root_source = source.clamp_min(1.0e-12).sqrt()
-    root_target = target.clamp_min(1.0e-12).sqrt()
-    half_angle = torch.atan2(
-        (root_source - root_target).norm(dim=-1),
-        (root_source + root_target).norm(dim=-1).clamp_min(1.0e-12),
-    )
-    return 4.0 * half_angle
-
-
-def _lineage_cell_projection(
-    template: RegisterOperatorSimplexTemplate,
-    reference_probabilities: torch.Tensor,
-    choices: list[int],
-    *,
-    projection_eps: float,
-) -> tuple[torch.Tensor, torch.Tensor, dict[str, float]]:
-    active_indices = active_block_indices_for_choices(template, choices)
-    active_mask = torch.zeros(len(template.blocks), dtype=torch.bool, device=reference_probabilities.device)
-    if active_indices:
-        active_mask[torch.tensor(active_indices, dtype=torch.long, device=reference_probabilities.device)] = True
-    choice_tensor = torch.tensor(choices, dtype=torch.long, device=reference_probabilities.device)
-    selected_probability = reference_probabilities[
-        torch.arange(len(template.blocks), device=reference_probabilities.device),
-        choice_tensor,
-    ]
-    already_in_cell = bool(
-        (selected_probability[active_mask] >= (1.0 - float(projection_eps) - 1.0e-7)).all().detach().cpu()
-    ) if bool(active_mask.any().detach().cpu()) else True
-    if already_in_cell:
-        target = reference_probabilities.detach().clone()
-    else:
-        target = source_conditioned_trace_target_probabilities(
-            reference_probabilities,
-            choice_tensor,
-            active_mask,
-            projection_eps=float(projection_eps),
-            projection_sharpness=1.0,
-        )
-    block_distance = _lineage_block_fisher_distances(reference_probabilities, target)
-    active_distance = block_distance[active_mask] if bool(active_mask.any().detach().cpu()) else block_distance
-    return target, active_mask, {
-        "fr_rms": float(torch.sqrt(active_distance.square().mean()).detach().cpu()),
-        "fr_mean": float(active_distance.mean().detach().cpu()),
-        "fr_p95": float(torch.quantile(active_distance, 0.95).detach().cpu()),
-        "fr_max": float(active_distance.max().detach().cpu()),
-        "already_in_cell": float(already_in_cell),
-        "block_distances": block_distance.detach(),
-        "active_block_distances": active_distance.detach(),
-    }
-
-
-def _lineage_raw_semantic_metrics(
-    template: RegisterOperatorSimplexTemplate,
-    choices: list[int],
-    task: TaskBundle,
-) -> dict[str, Any]:
-    expr, terms, _layers = execute_choices(template, choices)
-    prediction = sanitize_values(eval_expr(expr, task.x_train))
-    target = sanitize_values(task.y_train.float()).to(prediction.device)
-    target_variance = (target - target.mean()).square().mean().clamp_min(1.0e-8)
-    raw_nmse = (prediction - target).square().mean() / target_variance
-    signature_distance = semantic_signature_distance(prediction, target, task.x_train)
-    raw_nmse_unit = raw_nmse / (1.0 + raw_nmse)
-    signature_unit = signature_distance / (1.0 + signature_distance)
-    semantic_loss = 0.7 * raw_nmse_unit + 0.3 * signature_unit
-    expression = to_string(expr, int(template.num_vars), simplify=False)
-    return with_structural_metrics({
-        "task_id": task.task_id,
-        "ground_truth": task.ground_truth,
-        "expression": expression,
-        "expression_collapse_key": _expr_simplified_key(expr),
-        "lineage_raw_nmse": float(raw_nmse.detach().cpu()),
-        "lineage_raw_signature_distance": float(signature_distance.detach().cpu()),
-        "lineage_semantic_loss": float(semantic_loss.detach().cpu()),
-        "semantic_complexity": float(expr.complexity),
-        "term_count": int(len(terms)),
-    })
-
-
-def _lineage_gt_rollout_diagnostics(
-    template: RegisterOperatorSimplexTemplate,
-    reference_theta: torch.Tensor,
-    reference_probabilities: torch.Tensor,
-    current_choices: list[int],
-    task: TaskBundle,
-    generator: torch.Generator,
-    *,
-    projection_eps: float,
-    sample_count: int,
-) -> dict[str, Any]:
-    current_expr, _terms, _layers = execute_choices(template, current_choices)
-    current_expression = to_string(current_expr, int(template.num_vars), simplify=False)
-    sampled_hits = 0
-    sampled_expressions: list[str] = []
-    for _ in range(max(int(sample_count), 0)):
-        sampled_choices = sample_choices(reference_theta, template, generator)
-        sampled_expr, _sampled_terms, _sampled_layers = execute_choices(template, sampled_choices)
-        sampled_expression = to_string(sampled_expr, int(template.num_vars), simplify=False)
-        sampled_expressions.append(sampled_expression)
-        sampled_hits += int(_symbolic_equiv(task.ground_truth, sampled_expression))
-    trace_rows: list[dict[str, float]] = []
-    for trace in task.traces:
-        choices = [int(value) for value in trace.get("choices", [])]
-        if not choices:
-            continue
-        active_indices = [int(value) for value in trace.get("active_block_indices", [])]
-        if not active_indices:
-            active_indices = active_block_indices_for_choices(template, choices)
-        active = torch.tensor(active_indices, dtype=torch.long, device=reference_probabilities.device)
-        selected = torch.tensor([choices[index] for index in active_indices], dtype=torch.long, device=reference_probabilities.device)
-        selected_probability = reference_probabilities[active, selected].clamp_min(1.0e-12)
-        gt_target, _gt_active, gt_distance = _lineage_cell_projection(
-            template,
-            reference_probabilities,
-            choices,
-            projection_eps=float(projection_eps),
-        )
-        del gt_target
-        trace_rows.append({
-            "log_probability_sum": float(selected_probability.log().sum().detach().cpu()),
-            "probability_geometric_mean": float(selected_probability.log().mean().exp().detach().cpu()),
-            "active_argmax_match": float(
-                (reference_probabilities.argmax(dim=-1)[active] == selected).float().mean().detach().cpu()
-            ),
-            "cell_fr_rms": float(gt_distance["fr_rms"]),
-            "cell_fr_mean": float(gt_distance["fr_mean"]),
-        })
-    if trace_rows:
-        best_trace = min(trace_rows, key=lambda row: (row["cell_fr_rms"], -row["log_probability_sum"]))
-        max_log_probability = max(row["log_probability_sum"] for row in trace_rows)
-        max_geometric_mean = max(row["probability_geometric_mean"] for row in trace_rows)
-        max_argmax_match = max(row["active_argmax_match"] for row in trace_rows)
-    else:
-        best_trace = {"cell_fr_rms": float("inf"), "cell_fr_mean": float("inf")}
-        max_log_probability = -float("inf")
-        max_geometric_mean = 0.0
-        max_argmax_match = 0.0
-    return {
-        "flow_hard_expression": current_expression,
-        "flow_hard_gt_symbolic_hit": float(_symbolic_equiv(task.ground_truth, current_expression)),
-        "flow_sample_gt_hit_count": int(sampled_hits),
-        "flow_sample_gt_hit_rate": float(sampled_hits / max(int(sample_count), 1)) if int(sample_count) > 0 else 0.0,
-        "flow_sample_probe_count": int(max(int(sample_count), 0)),
-        "flow_sample_unique_expression_count": int(len(set(sampled_expressions))),
-        "flow_gt_trace_log_probability_max": float(max_log_probability),
-        "flow_gt_trace_probability_geometric_mean_max": float(max_geometric_mean),
-        "flow_gt_trace_active_argmax_match_max": float(max_argmax_match),
-        "flow_nearest_gt_cell_fr_rms": float(best_trace["cell_fr_rms"]),
-        "flow_nearest_gt_cell_fr_mean": float(best_trace["cell_fr_mean"]),
-    }
-
-
-def _lineage_nearest_gt_cell(
-    template: RegisterOperatorSimplexTemplate,
-    reference_probabilities: torch.Tensor,
-    task: TaskBundle,
-    *,
-    projection_eps: float,
-    fisher_eps: float,
-) -> tuple[torch.Tensor, list[int], dict[str, float]] | None:
-    """Return the closest compiled GT cell for diagnostics and visualization only."""
-    best: tuple[torch.Tensor, list[int], dict[str, float]] | None = None
-    for trace in task.traces:
-        choices = [int(value) for value in trace.get("choices", [])]
-        if not choices:
-            continue
-        target_probability, _active, distance = _lineage_cell_projection(
-            template,
-            reference_probabilities,
-            choices,
-            projection_eps=float(projection_eps),
-        )
-        target_theta = logits_from_block_probabilities(
-            [target_probability[index] for index in range(int(target_probability.shape[0]))],
-            template,
-            eps=float(fisher_eps),
-        )
-        candidate = (target_theta.detach(), choices, distance)
-        if best is None or (
-            float(distance["fr_rms"]), float(distance["fr_mean"])
-        ) < (
-            float(best[2]["fr_rms"]), float(best[2]["fr_mean"])
-        ):
-            best = candidate
-    return best
-
-
-def _lineage_local_candidates(
-    flow: FixedSymbolConditionedVelocityNet,
-    task: TaskBundle,
-    reference_theta: torch.Tensor,
-    reference_probabilities: torch.Tensor,
-    current_identity: dict[str, Any],
-    args: argparse.Namespace,
-) -> list[dict[str, Any]]:
-    current_choices = [int(value) for value in current_identity["choices"]]
-    current_key = str(current_identity["expression_collapse_key"])
-    projection_eps = float(getattr(args, "cycle_projection_eps", 0.02))
-    radius = float(getattr(args, "cycle_proximal_radius", 0.35))
-    candidate_budget = max(int(getattr(args, "cycle_proximal_candidate_budget", 6)), 1)
-    alternatives_per_block = max(int(getattr(args, "cycle_proximal_alt_actions", 1)), 1)
-    hard_features = register_hard_prefix_semantic_features(
-        flow.template,
-        reference_theta,
-        task.x_train.to(reference_theta.device),
-        task.y_train.to(reference_theta.device),
-    ).view(len(flow.template.blocks), int(flow.template.source_count), -1)
-    reachability = hard_features[:, :, 8].detach()
-    identities: dict[str, dict[str, Any]] = {current_key: dict(current_identity)}
-    proposal_meta: dict[str, dict[str, float]] = {current_key: {"proposal_reachability": 0.0}}
-    active_indices = active_block_indices_for_choices(flow.template, current_choices)
-    for block_index in active_indices:
-        support = graph_block_mask(flow.template, block_index, device=reference_theta.device)
-        action_score = (
-            -reference_probabilities[block_index].clamp_min(1.0e-12).log()
-            + 0.5 * reachability[block_index]
-        )
-        action_score = action_score.masked_fill(~support, float("inf"))
-        action_score[int(current_choices[block_index])] = float("inf")
-        valid_count = int(torch.isfinite(action_score).sum().detach().cpu())
-        for action in torch.topk(
-            action_score,
-            k=min(alternatives_per_block, valid_count),
-            largest=False,
-        ).indices.tolist() if valid_count > 0 else []:
-            neighbor_choices = list(current_choices)
-            neighbor_choices[block_index] = int(action)
-            identity = _v3_trace_particle(
-                flow.template,
-                neighbor_choices,
-                task,
-                args,
-                source_kind="local_fisher_cell_neighbor",
-                source_index=-1,
-                sample_index=block_index,
-                score_semantics=False,
-            )
-            key = str(identity["expression_collapse_key"])
-            if key not in identities:
-                identities[key] = identity
-                proposal_meta[key] = {
-                    "proposal_reachability": float(reachability[block_index, int(action)].detach().cpu()),
-                    "changed_block": float(block_index),
-                    "changed_action": float(action),
-                }
-    candidates: list[dict[str, Any]] = []
-    for key, identity in identities.items():
-        choices = [int(value) for value in identity["choices"]]
-        target_probability, active_mask, distance = _lineage_cell_projection(
-            flow.template,
-            reference_probabilities,
-            choices,
-            projection_eps=projection_eps,
-        )
-        if key != current_key and float(distance["fr_rms"]) > radius:
-            continue
-        candidate = dict(identity)
-        candidate.update(proposal_meta.get(key, {}))
-        candidate.update({
-            "target_probabilities": target_probability,
-            "active_mask": active_mask,
-            "cell_fr_rms": float(distance["fr_rms"]),
-            "cell_fr_mean": float(distance["fr_mean"]),
-            "cell_fr_p95": float(distance["fr_p95"]),
-        })
-        candidate["proposal_priority"] = float(candidate["cell_fr_rms"]) + 0.25 * float(
-            candidate.get("proposal_reachability", 0.0)
-        )
-        candidates.append(candidate)
-    current = [row for row in candidates if str(row["expression_collapse_key"]) == current_key]
-    neighbors = sorted(
-        [row for row in candidates if str(row["expression_collapse_key"]) != current_key],
-        key=lambda row: (float(row["proposal_priority"]), str(row["expression_collapse_key"])),
-    )
-    return [*current[:1], *neighbors[: max(candidate_budget - 1, 0)]]
-
-
-def collect_lineage_proximal_couplings(
-    flow: FixedSymbolConditionedVelocityNet,
-    train_tasks: list[TaskBundle],
-    args: argparse.Namespace,
-    device: torch.device,
-    *,
-    iteration: int,
-) -> tuple[
-    list[CycleCoupledExample],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    list[dict[str, Any]],
-    dict[str, float],
-]:
-    tasks = [task for task in train_tasks if task.traces]
-    task_limit = max(int(args.cycle_collection_task_limit), 0)
-    if task_limit > 0:
-        tasks = tasks[:task_limit]
-    if not tasks:
-        raise RuntimeError("lineage proximal cycle requires strictly compiled training tasks")
-    source_count = max(int(args.cycle_particles_per_task), 1)
-    rollout_steps = max(int(getattr(args, "cycle_proposer_rollout_steps", 8)), 1)
-    projection_eps = float(getattr(args, "cycle_projection_eps", 0.02))
-    manifold_mean_gate = float(getattr(args, "cycle_manifold_fr_mean_gate", 0.15))
-    manifold_p95_gate = float(getattr(args, "cycle_manifold_fr_p95_gate", 0.35))
-    gt_probe_samples = max(int(getattr(args, "cycle_flow_gt_probe_samples", 4)), 0)
-    landscape_sources = max(int(getattr(args, "cycle_landscape_sources", 4)), 0)
-    landscape_task_limit = max(int(getattr(args, "cycle_landscape_task_limit", 1)), 0)
-    landscape_time_points = max(int(getattr(args, "cycle_landscape_time_points", 5)), 2)
-    examples: list[CycleCoupledExample] = []
-    proposal_rows: list[dict[str, Any]] = []
-    coupling_rows: list[dict[str, Any]] = []
-    proximal_rows: list[dict[str, Any]] = []
-    trajectory_rows: list[dict[str, Any]] = []
-    task_summaries: list[dict[str, float]] = []
-    semantic_cache: dict[tuple[str, str], dict[str, Any]] = {}
-    collection_started = time.perf_counter()
-    flow.eval()
-    with torch.no_grad():
-        for task_index, task in enumerate(tasks):
-            task_started = time.perf_counter()
-            source_records: list[dict[str, Any]] = []
-            all_gap_distances: list[torch.Tensor] = []
-            for source_index in range(source_count):
-                source_generator = torch.Generator(device=device).manual_seed(
-                    int(args.seed) + _stable_task_seed(task.task_id) + 1009 * int(source_index)
-                )
-                theta0 = random_theta(
-                    flow.template,
-                    scale=float(args.theta0_noise_scale),
-                    device=device,
-                    generator=source_generator,
-                )
-                landscape_enabled = bool(
-                    task_index < landscape_task_limit and source_index < landscape_sources
-                )
-                if landscape_enabled:
-                    reference_theta, rollout_diagnostics, snapshots = rollout_with_snapshots(
-                        flow,
-                        task,
-                        theta0,
-                        steps=rollout_steps,
-                        snapshot_count=landscape_time_points,
-                    )
-                    trajectory_rows.extend(
-                        _lineage_landscape_row(
-                            flow.template,
-                            task,
-                            snapshot_theta,
-                            iteration=iteration,
-                            source_index=source_index,
-                            t=snapshot_t,
-                            point_kind="flow",
-                        )
-                        for snapshot_t, snapshot_theta in snapshots
-                    )
-                else:
-                    reference_theta, rollout_diagnostics = rollout(
-                        flow,
-                        None,
-                        task,
-                        theta0,
-                        steps=rollout_steps,
-                        mode="off",
-                        args=args,
-                        generator=source_generator,
-                    )
-                reference_probabilities = masked_block_softmax(
-                    reference_theta.view(len(flow.template.blocks), int(flow.template.source_count)),
-                    flow.template,
-                )
-                current_choices = hard_decode_choices(reference_theta, flow.template)
-                current_identity = _v3_trace_particle(
-                    flow.template,
-                    current_choices,
-                    task,
-                    args,
-                    source_kind="learned_flow_argmax",
-                    source_index=source_index,
-                    sample_index=0,
-                    score_semantics=False,
-                )
-                current_target, current_active, manifold_gap = _lineage_cell_projection(
-                    flow.template,
-                    reference_probabilities,
-                    [int(value) for value in current_identity["choices"]],
-                    projection_eps=projection_eps,
-                )
-                all_gap_distances.append(manifold_gap["active_block_distances"].detach().cpu())
-                gt_diagnostics = _lineage_gt_rollout_diagnostics(
-                    flow.template,
-                    reference_theta,
-                    reference_probabilities,
-                    [int(value) for value in current_identity["choices"]],
-                    task,
-                    source_generator,
-                    projection_eps=projection_eps,
-                    sample_count=gt_probe_samples,
-                )
-                nearest_gt_cell = (
-                    _lineage_nearest_gt_cell(
-                        flow.template,
-                        reference_probabilities,
-                        task,
-                        projection_eps=projection_eps,
-                        fisher_eps=float(getattr(args, "fisher_eps", 1.0e-4)),
-                    )
-                    if landscape_enabled
-                    else None
-                )
-                if nearest_gt_cell is not None:
-                    gt_theta, _gt_choices, gt_distance = nearest_gt_cell
-                    gt_row = _lineage_landscape_row(
-                        flow.template,
-                        task,
-                        gt_theta,
-                        iteration=iteration,
-                        source_index=source_index,
-                        t=1.0,
-                        point_kind="gt_cell",
-                    )
-                    gt_row.update({
-                        "reference_to_gt_cell_fr_rms": float(gt_distance["fr_rms"]),
-                        "reference_to_gt_cell_fr_mean": float(gt_distance["fr_mean"]),
-                        "diagnostic_only": 1.0,
-                    })
-                    trajectory_rows.append(gt_row)
-                source_record = {
-                    "theta0": theta0.detach(),
-                    "reference_theta": reference_theta.detach(),
-                    "reference_probabilities": reference_probabilities.detach(),
-                    "current_identity": current_identity,
-                    "current_target": current_target.detach(),
-                    "current_active": current_active.detach(),
-                    "manifold_gap": manifold_gap,
-                    "rollout_diagnostics": rollout_diagnostics,
-                    "gt_diagnostics": gt_diagnostics,
-                    "landscape_enabled": landscape_enabled,
-                }
-                source_records.append(source_record)
-                proposal_rows.append({
-                    "iteration": int(iteration),
-                    "task_id": task.task_id,
-                    "task_index": int(task_index),
-                    "source_index": int(source_index),
-                    "proposal_source": "learned_flow_lineage",
-                    "reference_rollout_steps": int(rollout_steps),
-                    "reference_rollout_max_block_fisher_step": float(rollout_diagnostics.get("max_block_fisher_step", 0.0)),
-                    "reference_rollout_finite_rate": float(rollout_diagnostics.get("rollout_finite_rate", 1.0)),
-                    "reference_decoded_expression": str(current_identity["expression"]),
-                    "reference_manifold_fr_rms": float(manifold_gap["fr_rms"]),
-                    "reference_manifold_fr_mean": float(manifold_gap["fr_mean"]),
-                    "reference_manifold_fr_p95": float(manifold_gap["fr_p95"]),
-                    **gt_diagnostics,
-                    "mutation_count": 0,
-                    "elite_selection_count": 0,
-                    "archive_replay_count": 0,
-                    "global_recoupling_count": 0,
-                })
-            gap_vector = torch.cat(all_gap_distances) if all_gap_distances else torch.zeros(1)
-            manifold_mean = float(gap_vector.mean())
-            manifold_p95 = float(torch.quantile(gap_vector, 0.95))
-            manifold_ready = manifold_mean <= manifold_mean_gate and manifold_p95 <= manifold_p95_gate
-            hard_gt_hit_rate = float(np.mean([
-                float(record["gt_diagnostics"]["flow_hard_gt_symbolic_hit"]) for record in source_records
-            ]))
-            sampled_gt_hit_rate = float(np.mean([
-                float(record["gt_diagnostics"]["flow_sample_gt_hit_rate"]) for record in source_records
-            ]))
-            task_summary: dict[str, float] = {
-                "learned_flow_rollout_rate": 1.0,
-                "source_lineage_preserved_rate": 1.0,
-                "mutation_participation_rate": 0.0,
-                "elite_selection_participation_rate": 0.0,
-                "archive_participation_rate": 0.0,
-                "global_recoupling_rate": 0.0,
-                "source_particle_count": float(source_count),
-                "reference_manifold_fr_mean": manifold_mean,
-                "reference_manifold_fr_p95": manifold_p95,
-                "reference_manifold_gate_passed": float(manifold_ready),
-                "flow_hard_gt_hit_rate": hard_gt_hit_rate,
-                "flow_sample_gt_hit_rate": sampled_gt_hit_rate,
-                "flow_gt_trace_probability_geometric_mean": float(np.mean([
-                    float(record["gt_diagnostics"]["flow_gt_trace_probability_geometric_mean_max"])
-                    for record in source_records
-                ])),
-                "flow_nearest_gt_cell_fr_rms": float(np.mean([
-                    float(record["gt_diagnostics"]["flow_nearest_gt_cell_fr_rms"])
-                    for record in source_records
-                ])),
-                "proximal_candidate_evaluated_count": 0.0,
-                "proximal_semantic_improvement": 0.0,
-                "proximal_target_fr_rms": 0.0,
-                "coupled_example_count": 0.0,
-                "collection_runtime_sec": 0.0,
-            }
-            for row in proposal_rows[-source_count:]:
-                row["reference_manifold_gate_passed"] = float(manifold_ready)
-                row["reference_manifold_task_fr_mean"] = manifold_mean
-                row["reference_manifold_task_fr_p95"] = manifold_p95
-            if not manifold_ready:
-                task_summary["collection_runtime_sec"] = float(time.perf_counter() - task_started)
-                task_summaries.append(task_summary)
-                continue
-
-            semantic_improvements: list[float] = []
-            target_distances: list[float] = []
-            candidate_counts: list[int] = []
-            for source_index, record in enumerate(source_records):
-                candidates = _lineage_local_candidates(
-                    flow,
-                    task,
-                    record["reference_theta"],
-                    record["reference_probabilities"],
-                    record["current_identity"],
-                    args,
-                )
-                for candidate in candidates:
-                    cache_key = (task.task_id, str(candidate["expression_collapse_key"]))
-                    if cache_key not in semantic_cache:
-                        semantic_cache[cache_key] = _lineage_raw_semantic_metrics(
-                            flow.template,
-                            [int(value) for value in candidate["choices"]],
-                            task,
-                        )
-                    candidate.update(semantic_cache[cache_key])
-                if not candidates:
-                    continue
-                current_key = str(record["current_identity"]["expression_collapse_key"])
-                current_candidate = next(
-                    row for row in candidates if str(row["expression_collapse_key"]) == current_key
-                )
-                selected = min(
-                    candidates,
-                    key=lambda row: (
-                        float(row["lineage_semantic_loss"]),
-                        float(row["cell_fr_rms"]),
-                        float(row.get("semantic_complexity", 0.0)),
-                    ),
-                )
-                semantic_improvement = float(current_candidate["lineage_semantic_loss"]) - float(
-                    selected["lineage_semantic_loss"]
-                )
-                semantic_improvements.append(semantic_improvement)
-                target_distances.append(float(selected["cell_fr_rms"]))
-                candidate_counts.append(len(candidates))
-                theta1 = logits_from_block_probabilities(
-                    [selected["target_probabilities"][index] for index in range(int(selected["target_probabilities"].shape[0]))],
-                    flow.template,
-                    eps=float(args.fisher_eps),
-                )
-                if bool(record.get("landscape_enabled", False)):
-                    target_row = _lineage_landscape_row(
-                        flow.template,
-                        task,
-                        theta1,
-                        iteration=iteration,
-                        source_index=source_index,
-                        t=1.0,
-                        point_kind="proximal_target",
-                    )
-                    target_row.update({
-                        "reference_semantic_loss": float(current_candidate["lineage_semantic_loss"]),
-                        "target_semantic_loss": float(selected["lineage_semantic_loss"]),
-                        "semantic_improvement": float(semantic_improvement),
-                        "reference_to_target_fr_rms": float(selected["cell_fr_rms"]),
-                    })
-                    trajectory_rows.append(target_row)
-                examples.append(CycleCoupledExample(
-                    task=task,
-                    theta0=record["theta0"].detach().clone(),
-                    theta1=theta1.detach().clone(),
-                    active_mask=selected["active_mask"].detach().clone(),
-                    proposal_index=int(source_index),
-                    diagnostics={
-                        "iteration": int(iteration),
-                        "source_index": int(source_index),
-                        "proposal_source": "lineage_local_fisher_proximal",
-                        "reference_expression": str(current_candidate["expression"]),
-                        "target_expression": str(selected["expression"]),
-                        "semantic_improvement": semantic_improvement,
-                        "target_fr_rms": float(selected["cell_fr_rms"]),
-                    },
-                    sample_weight=1.0,
-                    target_choices=tuple(int(value) for value in selected["choices"]),
-                    is_gt_anchor=False,
-                ))
-                coupling_rows.append({
-                    "iteration": int(iteration),
-                    "task_id": task.task_id,
-                    "source_index": int(source_index),
-                    "coupling": "same_source_lineage",
-                    "reference_expression": str(current_candidate["expression"]),
-                    "target_expression": str(selected["expression"]),
-                    "reference_semantic_loss": float(current_candidate["lineage_semantic_loss"]),
-                    "target_semantic_loss": float(selected["lineage_semantic_loss"]),
-                    "semantic_improvement": semantic_improvement,
-                    "target_fr_rms": float(selected["cell_fr_rms"]),
-                    "target_fr_mean": float(selected["cell_fr_mean"]),
-                    "candidate_count": int(len(candidates)),
-                    "source_lineage_preserved": 1.0,
-                })
-                for candidate_index, candidate in enumerate(candidates):
-                    proximal_rows.append({
-                        "iteration": int(iteration),
-                        "task_id": task.task_id,
-                        "source_index": int(source_index),
-                        "candidate_index": int(candidate_index),
-                        "selected": float(candidate is selected),
-                        "reference_expression": str(current_candidate["expression"]),
-                        "expression": str(candidate["expression"]),
-                        "choices": [int(value) for value in candidate["choices"]],
-                        "lineage_semantic_loss": float(candidate["lineage_semantic_loss"]),
-                        "lineage_raw_nmse": float(candidate["lineage_raw_nmse"]),
-                        "lineage_raw_signature_distance": float(candidate["lineage_raw_signature_distance"]),
-                        "cell_fr_rms": float(candidate["cell_fr_rms"]),
-                        "cell_fr_mean": float(candidate["cell_fr_mean"]),
-                        "proposal_priority": float(candidate["proposal_priority"]),
-                        "proposal_reachability": float(candidate.get("proposal_reachability", 0.0)),
-                        "changed_block": int(candidate.get("changed_block", -1)),
-                        "changed_action": int(candidate.get("changed_action", -1)),
-                    })
-            task_summary.update({
-                "proximal_candidate_evaluated_count": float(np.mean(candidate_counts)) if candidate_counts else 0.0,
-                "proximal_semantic_improvement": float(np.mean(semantic_improvements)) if semantic_improvements else 0.0,
-                "proximal_target_fr_rms": float(np.mean(target_distances)) if target_distances else 0.0,
-                "coupled_example_count": float(len(candidate_counts)),
-                "collection_runtime_sec": float(time.perf_counter() - task_started),
-            })
-            task_summaries.append(task_summary)
-    if examples:
-        uniform_weight = 1.0 / float(len(examples))
-        for example in examples:
-            example.sample_weight = uniform_weight
-    if not task_summaries:
-        raise RuntimeError("lineage proximal collector did not process any task")
-    summary: dict[str, float] = {}
-    for key in task_summaries[0]:
-        finite_values = [float(row[key]) for row in task_summaries if math.isfinite(float(row[key]))]
-        summary[key] = float(np.mean(finite_values)) if finite_values else 0.0
-    summary.update({
-        "cycle_iteration": float(iteration),
-        "cycle_task_count": float(len(task_summaries)),
-        "cycle_coupled_example_count": float(len(examples)),
-        "cycle_collection_runtime_sec": float(time.perf_counter() - collection_started),
-    })
-    return examples, proposal_rows, coupling_rows, proximal_rows, trajectory_rows, summary
-
-
-def _v3_gt_teacher_direction_loss(
-    flow: FixedSymbolConditionedVelocityNet,
-    example: CycleCoupledExample,
-    theta_t: torch.Tensor,
-    predicted_velocity: torch.Tensor,
-    active_mask: torch.Tensor,
-    block_loss_weights: torch.Tensor,
-    t: float,
-    args: argparse.Namespace,
-) -> torch.Tensor:
-    if not example.is_gt_anchor or example.target_choices is None:
-        return predicted_velocity.new_zeros(())
-    if float(t) > float(getattr(args, "cycle_gt_teacher_low_t_max", 0.10)):
-        return predicted_velocity.new_zeros(())
-    block_count = len(flow.template.blocks)
-    action_count = int(flow.template.source_count)
-    probabilities = masked_block_softmax(
-        theta_t.view(block_count, action_count),
-        flow.template,
-    )
-    with torch.no_grad():
-        hard_features = register_hard_prefix_semantic_features(
-            flow.template,
-            theta_t.detach(),
-            example.task.x_train.to(theta_t.device),
-            example.task.y_train.to(theta_t.device),
-        ).view(block_count, action_count, -1)
-        reachability = hard_features[:, :, 8]
-        temperature = max(float(getattr(args, "cycle_gt_teacher_temperature", 0.25)), 1.0e-6)
-        teacher_logits = -reachability / temperature
-        support = graph_action_mask(flow.template, device=theta_t.device)
-        teacher_logits = teacher_logits.masked_fill(~support, -1.0e9)
-        choices = torch.tensor(example.target_choices, dtype=torch.long, device=theta_t.device)
-        active_indices = active_mask.nonzero(as_tuple=False).flatten()
-        if int(active_indices.numel()) > 0:
-            teacher_logits[active_indices, choices.index_select(0, active_indices)] += float(
-                getattr(args, "cycle_gt_teacher_action_bias", 2.0)
-            )
-        teacher_probability = torch.softmax(teacher_logits, dim=-1)
-        teacher_probability = torch.where(support, teacher_probability, torch.zeros_like(teacher_probability))
-        teacher_probability = teacher_probability / teacher_probability.sum(dim=-1, keepdim=True).clamp_min(1.0e-8)
-        teacher_tangent = teacher_probability - probabilities.detach()
-    predicted = predicted_velocity.view(block_count, action_count)
-    predicted_tangent = probabilities * (
-        predicted - (probabilities * predicted).sum(dim=-1, keepdim=True)
-    )
-    denominator = probabilities.clamp_min(float(args.fisher_eps))
-    inner = ((predicted_tangent * teacher_tangent) / denominator).sum(dim=-1)
-    predicted_norm = torch.sqrt(((predicted_tangent.square()) / denominator).sum(dim=-1).clamp_min(1.0e-12))
-    teacher_norm = torch.sqrt(((teacher_tangent.square()) / denominator).sum(dim=-1).clamp_min(1.0e-12))
-    cosine = inner / (predicted_norm * teacher_norm).clamp_min(1.0e-8)
-    weights = active_mask.float() * block_loss_weights
-    if not bool((weights > 0).any().detach().cpu()):
-        return predicted_velocity.new_zeros(())
-    return ((1.0 - cosine.clamp(-1.0, 1.0)) * weights).sum() / weights.sum().clamp_min(1.0)
-
-
-def _v3_differentiable_rk2_terminal(
-    flow: FixedSymbolConditionedVelocityNet,
-    example: CycleCoupledExample,
-    *,
-    steps: int,
-    device: torch.device,
-) -> torch.Tensor:
-    theta0 = example.theta0.to(device)
-    theta = theta0.clone()
-    step_count = max(int(steps), 1)
-    for step in range(step_count):
-        t = float(step) / float(step_count)
-        dt = 1.0 / float(step_count)
-        velocity = flow(
-            example.task.x_train.to(device),
-            example.task.y_train.to(device),
-            theta,
-            t,
-            theta0,
-        )
-        midpoint = integrate(theta, velocity, flow.template, dt=0.5 * dt)
-        midpoint_velocity = flow(
-            example.task.x_train.to(device),
-            example.task.y_train.to(device),
-            midpoint,
-            min(t + 0.5 * dt, 1.0),
-            theta0,
-        )
-        theta = integrate(theta, midpoint_velocity, flow.template, dt=dt)
-    return theta
-
-
-def build_v3_gt_bootstrap_examples(
+def build_semantic_gt_bootstrap_examples(
     flow: FixedSymbolConditionedVelocityNet,
     train_tasks: list[TaskBundle],
     args: argparse.Namespace,
     device: torch.device,
 ) -> list[CycleCoupledExample]:
-    """Materialize source-conditioned GT atom bridges for the v3 bootstrap."""
+    """Materialize source-conditioned GT atom bridges for bootstrap training."""
     tasks = [task for task in train_tasks if task.traces]
     if not tasks:
-        raise RuntimeError("v3 bootstrap requires strictly compiled GT traces")
+        raise RuntimeError("bootstrap requires strictly compiled GT traces")
     sources_per_task = max(int(getattr(args, "cycle_particles_per_task", 8)), 1)
     generator = torch.Generator(device=device).manual_seed(int(args.seed) + 61_337)
     examples: list[CycleCoupledExample] = []
@@ -6899,7 +4583,7 @@ def build_v3_gt_bootstrap_examples(
                 active_mask=active_mask.detach(),
                 proposal_index=int(source_index),
                 diagnostics={
-                    "phase": "v3_gt_bootstrap",
+                    "phase": "semantic_gt_bootstrap",
                     "source_index": int(source_index),
                     "target_expression": str(trace.get("expression_string", "")),
                 },
@@ -6913,744 +4597,8 @@ def build_v3_gt_bootstrap_examples(
     return examples
 
 
-def train_cycle_flow(
-    flow: FixedSymbolConditionedVelocityNet,
-    examples: list[CycleCoupledExample],
-    args: argparse.Namespace,
-    device: torch.device,
-    *,
-    iteration: int,
-) -> tuple[list[dict[str, Any]], dict[str, float]]:
-    if not examples:
-        raise RuntimeError("cannot train cycle flow without coupled examples")
-    flow.train()
-    optimizer = torch.optim.AdamW(flow.parameters(), lr=float(args.cycle_flow_lr), weight_decay=float(args.weight_decay))
-    rng = random.Random(int(args.seed) + 71_003 + 997 * int(iteration))
-    example_weights = [max(float(example.sample_weight), 0.0) for example in examples]
-    if sum(example_weights) <= 0.0:
-        raise RuntimeError("soft coupling examples have zero total mass")
-    gt_examples = [example for example in examples if example.is_gt_anchor]
-    gt_weights = [max(float(example.sample_weight), 0.0) for example in gt_examples]
 
-    def choose_example(pool: list[CycleCoupledExample], weights: list[float]) -> CycleCoupledExample:
-        if not pool or sum(weights) <= 0.0:
-            return rng.choices(examples, weights=example_weights, k=1)[0]
-        return rng.choices(pool, weights=weights, k=1)[0]
-
-    block_loss_weights = torch.ones((len(flow.template.blocks),), dtype=torch.float32, device=device)
-    readout_weight = float(getattr(args, "cycle_readout_loss_weight", 3.0))
-    op_weight = float(getattr(args, "cycle_op_loss_weight", 1.5))
-    for block_index, block in enumerate(flow.template.blocks):
-        if str(block.kind) == "readout":
-            block_loss_weights[block_index] = max(readout_weight, 0.0)
-        elif str(block.kind) in {"reg_op", "op"}:
-            block_loss_weights[block_index] = max(op_weight, 0.0)
-    kind_masks = {
-        "readout": torch.tensor([str(block.kind) == "readout" for block in flow.template.blocks], dtype=torch.bool, device=device),
-        "op": torch.tensor([str(block.kind) in {"reg_op", "op"} for block in flow.template.blocks], dtype=torch.bool, device=device),
-        "arg": torch.tensor([str(block.kind) in {"reg_arg", "edge"} for block in flow.template.blocks], dtype=torch.bool, device=device),
-    }
-    inactive_coefficient = float(getattr(args, "cycle_inactive_identity_weight", 0.05))
-    teacher_coefficient = float(getattr(args, "cycle_gt_teacher_weight", 0.10))
-    endpoint_coefficient = float(getattr(args, "cycle_endpoint_loss_weight", 0.25))
-    replay_fraction = min(max(float(getattr(args, "cycle_gt_replay_fraction", 0.25)), 0.0), 1.0)
-    curve: list[dict[str, Any]] = []
-    best_loss = float("inf")
-    best_state: dict[str, torch.Tensor] | None = None
-    for epoch in range(max(int(args.cycle_flow_epochs), 1)):
-        epoch_started = time.perf_counter()
-        objective_losses: list[float] = []
-        fm_losses: list[float] = []
-        inactive_losses: list[float] = []
-        teacher_losses: list[float] = []
-        terminal_losses: list[float] = []
-        cosines: list[float] = []
-        norm_ratios: list[float] = []
-        finite: list[float] = []
-        replay_flags: list[float] = []
-        forced_replay_flags: list[float] = []
-        fisher_sums: dict[str, dict[str, float]] = {
-            key: {"predicted": 0.0, "zero": 0.0, "count": 0.0}
-            for key in ("global", "readout", "op", "arg")
-        }
-        inactive_predicted_sum = 0.0
-        inactive_count = 0.0
-        time_bin_losses: dict[str, dict[str, Any]] = {
-            key: {"losses": [], "predicted": 0.0, "zero": 0.0, "count": 0.0}
-            for key in ("0_001", "001_005", "005_020", "020_100", "100_1000")
-        }
-        for _step in range(max(int(args.cycle_steps_per_epoch), 1)):
-            optimizer.zero_grad(set_to_none=True)
-            batch_losses: list[torch.Tensor] = []
-            for _ in range(max(int(args.train_batch_size), 1)):
-                replay_gt = bool(gt_examples) and rng.random() < replay_fraction
-                example = choose_example(gt_examples, gt_weights) if replay_gt else choose_example(examples, example_weights)
-                forced_replay_flags.append(float(replay_gt))
-                replay_flags.append(float(example.is_gt_anchor))
-                sample_index = (
-                    int(epoch) * max(int(args.cycle_steps_per_epoch), 1) * max(int(args.train_batch_size), 1)
-                    + int(_step) * max(int(args.train_batch_size), 1)
-                    + len(batch_losses)
-                )
-                t = sample_cycle_time(
-                    rng,
-                    sample_index,
-                    str(args.cycle_time_sampling),
-                    inherited_mode=str(args.time_sampling),
-                    low_prob=float(args.low_t_sampling_prob),
-                    low_max=float(args.low_t_max),
-                )
-                theta_t, target_velocity = stage1_simplex_path(
-                    example.theta0.to(device),
-                    example.theta1.to(device),
-                    flow.template,
-                    float(t),
-                )
-                predicted_velocity = flow(
-                    example.task.x_train.to(device),
-                    example.task.y_train.to(device),
-                    theta_t,
-                    float(t),
-                    example.theta0.to(device),
-                )
-                active = example.active_mask.to(device)
-                active_weights = active.float() * block_loss_weights
-                fm_loss, _metrics = stage1_velocity_loss(
-                    theta_t,
-                    predicted_velocity,
-                    target_velocity,
-                    flow.template,
-                    active_weights,
-                    eps=float(args.fisher_eps),
-                )
-                if bool((~active).any().detach().cpu()):
-                    inactive_loss, _inactive_metrics = stage1_velocity_loss(
-                        theta_t,
-                        predicted_velocity,
-                        target_velocity,
-                        flow.template,
-                        (~active).float(),
-                        eps=float(args.fisher_eps),
-                    )
-                else:
-                    inactive_loss = predicted_velocity.new_zeros(())
-                teacher_loss = _v3_gt_teacher_direction_loss(
-                    flow,
-                    example,
-                    theta_t,
-                    predicted_velocity,
-                    active,
-                    block_loss_weights,
-                    float(t),
-                    args,
-                )
-                total_loss = (
-                    fm_loss
-                    + inactive_coefficient * inactive_loss
-                    + teacher_coefficient * teacher_loss
-                )
-                batch_losses.append(total_loss)
-                fm_value = float(fm_loss.detach().cpu())
-                fm_losses.append(fm_value)
-                inactive_losses.append(float(inactive_loss.detach().cpu()))
-                teacher_losses.append(float(teacher_loss.detach().cpu()))
-                if float(t) < 0.001:
-                    time_bin = "0_001"
-                elif float(t) < 0.005:
-                    time_bin = "001_005"
-                elif float(t) < 0.02:
-                    time_bin = "005_020"
-                elif float(t) < 0.1:
-                    time_bin = "020_100"
-                else:
-                    time_bin = "100_1000"
-                time_bin_losses[time_bin]["losses"].append(fm_value)
-                predicted_block_loss = stage1_velocity_block_losses(
-                    theta_t,
-                    predicted_velocity,
-                    target_velocity,
-                    flow.template,
-                    eps=float(args.fisher_eps),
-                ).detach()
-                zero_block_loss = stage1_velocity_block_losses(
-                    theta_t,
-                    torch.zeros_like(predicted_velocity),
-                    target_velocity,
-                    flow.template,
-                    eps=float(args.fisher_eps),
-                ).detach()
-                active_predicted = float(predicted_block_loss[active].sum().detach().cpu())
-                active_zero = float(zero_block_loss[active].sum().detach().cpu())
-                active_count = float(active.sum().detach().cpu())
-                fisher_sums["global"]["predicted"] += active_predicted
-                fisher_sums["global"]["zero"] += active_zero
-                fisher_sums["global"]["count"] += active_count
-                time_bin_losses[time_bin]["predicted"] += active_predicted
-                time_bin_losses[time_bin]["zero"] += active_zero
-                time_bin_losses[time_bin]["count"] += active_count
-                for kind, kind_mask in kind_masks.items():
-                    selected = active & kind_mask
-                    if bool(selected.any().detach().cpu()):
-                        fisher_sums[kind]["predicted"] += float(predicted_block_loss[selected].sum().detach().cpu())
-                        fisher_sums[kind]["zero"] += float(zero_block_loss[selected].sum().detach().cpu())
-                        fisher_sums[kind]["count"] += float(selected.sum().detach().cpu())
-                inactive = ~active
-                if bool(inactive.any().detach().cpu()):
-                    inactive_predicted_sum += float(predicted_block_loss[inactive].sum().detach().cpu())
-                    inactive_count += float(inactive.sum().detach().cpu())
-                alignment = velocity_alignment_diagnostics(
-                    theta_t.detach(),
-                    predicted_velocity.detach(),
-                    target_velocity.detach(),
-                    flow.template,
-                    active.float(),
-                    eps=float(args.fisher_eps),
-                )
-                cosines.append(float(alignment.get("pred_target_cosine_mean", 0.0)))
-                norm_ratios.append(float(alignment.get("pred_target_norm_ratio_mean", 0.0)))
-                finite.append(float(torch.isfinite(predicted_velocity).all().detach().cpu()))
-            batch_objective = torch.stack(batch_losses).mean()
-            batch_objective.backward()
-            if float(args.grad_clip) > 0.0:
-                torch.nn.utils.clip_grad_norm_(flow.parameters(), float(args.grad_clip))
-            optimizer.step()
-            objective_losses.append(float(batch_objective.detach().cpu()))
-
-        terminal_example_count = max(int(getattr(args, "cycle_consistency_examples", 16)), 0)
-        terminal_steps = max(int(getattr(args, "cycle_terminal_rk2_steps", 8)), 1)
-        terminal_batch_size = max(int(getattr(args, "cycle_terminal_batch_size", 2)), 1)
-        if endpoint_coefficient > 0.0 and terminal_example_count > 0:
-            selected_terminal = [
-                choose_example(examples, example_weights)
-                for _ in range(terminal_example_count)
-            ]
-            for start in range(0, len(selected_terminal), terminal_batch_size):
-                optimizer.zero_grad(set_to_none=True)
-                endpoint_losses: list[torch.Tensor] = []
-                for example in selected_terminal[start:start + terminal_batch_size]:
-                    terminal_theta = _v3_differentiable_rk2_terminal(
-                        flow,
-                        example,
-                        steps=terminal_steps,
-                        device=device,
-                    )
-                    predicted_probability = masked_block_softmax(
-                        terminal_theta.view(len(flow.template.blocks), int(flow.template.source_count)),
-                        flow.template,
-                    )
-                    target_probability = masked_block_softmax(
-                        example.theta1.to(device).view(len(flow.template.blocks), int(flow.template.source_count)),
-                        flow.template,
-                    )
-                    endpoint_loss = fisher_endpoint_map_loss(
-                        predicted_probability.unsqueeze(0),
-                        target_probability.unsqueeze(0),
-                        example.active_mask.to(device).unsqueeze(0),
-                    )
-                    endpoint_losses.append(endpoint_loss)
-                    terminal_losses.append(float(endpoint_loss.detach().cpu()))
-                terminal_objective = endpoint_coefficient * torch.stack(endpoint_losses).mean()
-                terminal_objective.backward()
-                if float(args.grad_clip) > 0.0:
-                    torch.nn.utils.clip_grad_norm_(flow.parameters(), float(args.grad_clip))
-                optimizer.step()
-
-        mean_fm_loss = float(np.mean(fm_losses)) if fm_losses else 0.0
-        mean_terminal_loss = float(np.mean(terminal_losses)) if terminal_losses else 0.0
-        mean_objective = (
-            float(np.mean(objective_losses)) if objective_losses else 0.0
-        ) + endpoint_coefficient * mean_terminal_loss
-        if mean_objective < best_loss:
-            best_loss = mean_objective
-            best_state = {key: value.detach().cpu().clone() for key, value in flow.state_dict().items()}
-        global_zero_mean = fisher_sums["global"]["zero"] / max(fisher_sums["global"]["count"], 1.0)
-        row = {
-            "phase": "cycle_flow_fisher_matching",
-            "iteration": int(iteration),
-            "epoch": int(epoch + 1),
-            "flow_fisher_velocity_loss": mean_fm_loss,
-            "flow_total_objective": mean_objective,
-            "flow_total_v4_objective": mean_objective,
-            "flow_total_v3_objective": mean_objective,
-            "flow_best_loss": float(best_loss),
-            "flow_inactive_fisher_loss": float(np.mean(inactive_losses)) if inactive_losses else 0.0,
-            "flow_gt_teacher_direction_loss": float(np.mean(teacher_losses)) if teacher_losses else 0.0,
-            "flow_terminal_consistency_loss": mean_terminal_loss,
-            "flow_terminal_consistency_example_count": int(len(terminal_losses)),
-            "flow_terminal_consistency_rk2_steps": int(terminal_steps),
-            "flow_gt_replay_fraction": float(np.mean(replay_flags)) if replay_flags else 0.0,
-            "flow_forced_gt_replay_fraction": float(np.mean(forced_replay_flags)) if forced_replay_flags else 0.0,
-            "flow_pred_target_cosine": float(np.mean(cosines)) if cosines else 0.0,
-            "flow_pred_target_norm_ratio": float(np.mean(norm_ratios)) if norm_ratios else 0.0,
-            "flow_finite_rate": float(np.mean(finite)) if finite else 0.0,
-            "flow_epoch_runtime_sec": float(time.perf_counter() - epoch_started),
-            "cycle_readout_loss_weight": float(readout_weight),
-            "cycle_op_loss_weight": float(op_weight),
-            "cycle_endpoint_loss_weight": float(endpoint_coefficient),
-            "cycle_inactive_identity_weight": float(inactive_coefficient),
-            "cycle_gt_teacher_weight": float(teacher_coefficient),
-            "flow_relative_fisher_loss": float(
-                fisher_sums["global"]["predicted"] / max(fisher_sums["global"]["zero"], 1.0e-12)
-            ),
-            "flow_zero_predictor_fisher_loss": float(global_zero_mean),
-            "flow_inactive_fisher_drift": float(inactive_predicted_sum / max(inactive_count, 1.0)),
-            "flow_inactive_relative_to_active_zero": float(
-                (inactive_predicted_sum / max(inactive_count, 1.0)) / max(global_zero_mean, 1.0e-12)
-            ),
-        }
-        for kind in ("readout", "op", "arg"):
-            values = fisher_sums[kind]
-            row[f"flow_{kind}_fisher_loss"] = float(values["predicted"] / max(values["count"], 1.0))
-            row[f"flow_{kind}_zero_predictor_loss"] = float(values["zero"] / max(values["count"], 1.0))
-            row[f"flow_{kind}_relative_fisher_loss"] = float(
-                values["predicted"] / max(values["zero"], 1.0e-12)
-            )
-            row[f"flow_{kind}_active_block_count"] = int(values["count"])
-        for bin_name, values in time_bin_losses.items():
-            bin_values = values["losses"]
-            row[f"flow_loss_t_bin_{bin_name}"] = float(np.mean(bin_values)) if bin_values else None
-            row[f"flow_loss_t_bin_{bin_name}_count"] = int(len(bin_values))
-            row[f"flow_relative_loss_t_bin_{bin_name}"] = (
-                float(values["predicted"] / max(values["zero"], 1.0e-12))
-                if values["count"] > 0 else None
-            )
-        curve.append(row)
-        if bool(args.log_epochs):
-            print(json.dumps(row), flush=True)
-    if best_state is not None:
-        flow.load_state_dict({key: value.to(device) for key, value in best_state.items()})
-    return curve, dict(curve[-1])
-
-
-def _write_cycle_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
-        for row in rows:
-            handle.write(json.dumps(_jsonable(row), ensure_ascii=False) + "\n")
-
-
-def write_graph_simplex_flow_visualization(out_dir: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        return
-    payload = json.dumps(_jsonable(rows), ensure_ascii=False).replace("</", "<\\/")
-    html = """<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Graph simplex flow</title>
-<style>
-:root{color-scheme:light;--ink:#1d232b;--muted:#687384;--line:#d9dee7;--active:#1d7f6e;--target:#b64a34;--panel:#f7f8fa}
-*{box-sizing:border-box}body{margin:0;font:13px/1.4 system-ui,sans-serif;color:var(--ink);background:white}
-header{padding:16px 20px;border-bottom:1px solid var(--line)}h1{font-size:18px;margin:0}
-main{padding:18px 20px;max-width:1600px;margin:auto}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-select,input{font:inherit}.wrap{border:1px solid var(--line);overflow:auto;background:white}canvas{display:block;min-width:1100px}
-.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px;margin:12px 0}
-.metric{background:var(--panel);border:1px solid var(--line);padding:8px}.metric span{display:block;color:var(--muted);font-size:11px}
-details{margin-top:12px;border:1px solid var(--line);background:var(--panel)}summary{cursor:pointer;padding:8px 10px;font-weight:650}
-pre{white-space:pre-wrap;margin:0;padding:10px;max-height:280px;overflow:auto}
-</style></head><body><header><h1>Graph simplex flow</h1></header><main>
-<div class="toolbar"><label>Particle <select id="particle"></select></label><label>t <input id="time" type="range" min="0" max="0" value="0" step="1"></label><span id="tlabel"></span></div>
-<div class="metrics" id="metrics"></div><div class="wrap"><canvas id="canvas"></canvas></div><details><summary>Selected rows</summary><pre id="raw"></pre></details>
-<script id="data" type="application/json">""" + payload + """</script>
-<script>
-const rows=JSON.parse(document.getElementById('data').textContent);
-const particle=document.getElementById('particle'),slider=document.getElementById('time'),tlabel=document.getElementById('tlabel'),metrics=document.getElementById('metrics'),raw=document.getElementById('raw');
-const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
-const groups={};
-for(const r of rows){const key=`${r.iteration}|${r.task_id}|${r.source_index}`;(groups[key]??=[]).push(r)}
-Object.keys(groups).sort().forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;particle.append(o)});
-function snapshots(items){const m={};for(const r of items){(m[String(r.step)]??=[]).push(r)}return Object.keys(m).sort((a,b)=>Number(a)-Number(b)).map(k=>m[k])}
-function draw(){
- const items=groups[particle.value]||[],snaps=snapshots(items);if(!snaps.length)return;
- slider.max=String(snaps.length-1);const snap=snaps[Number(slider.value)||0];tlabel.textContent=`t=${Number(snap[0].t).toFixed(3)}`;
- const layers=[...new Set(snap.map(r=>r.layer))].sort((a,b)=>a-b),width=Math.max(1100,260+layers.length*90),height=700,dpr=Math.max(1,window.devicePixelRatio||1);
- canvas.style.width=width+'px';canvas.style.height=height+'px';canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);ctx.font='11px system-ui';
- const readout=snap.filter(r=>r.kind==='readout'),ops=snap.filter(r=>r.kind==='reg_op'),args=snap.filter(r=>r.kind==='reg_arg');
- const baseY=60,rowGap=46,xLayer=l=>160+l*80;
- ctx.strokeStyle='#edf0f4';ctx.lineWidth=1;for(const l of layers){ctx.beginPath();ctx.moveTo(xLayer(l),25);ctx.lineTo(xLayer(l),height-30);ctx.stroke();ctx.fillStyle='#687384';ctx.fillText('L'+l,xLayer(l)-8,18)}
- function node(x,y,label,active){ctx.fillStyle=active?'#e9f5f2':'#f7f8fa';ctx.strokeStyle=active?'#1d7f6e':'#cfd6df';ctx.lineWidth=active?2:1;ctx.beginPath();ctx.roundRect(x-34,y-12,68,24,5);ctx.fill();ctx.stroke();ctx.fillStyle='#1d232b';ctx.textAlign='center';ctx.fillText(label,x,y+4)}
- for(let i=0;i<Math.max(8,readout.length+ops.length);i++)node(55,baseY+i*rowGap,'r'+i,false);
- for(const r of ops){const x=xLayer(r.layer),y=baseY+r.layer*rowGap;node(x,y,`op:${r.top_action}`,r.is_active_target_block);for(const a of r.top_actions){const alpha=Math.max(.04,Math.min(.95,a.probability));ctx.strokeStyle=r.is_active_target_block?`rgba(29,127,110,${alpha})`:`rgba(104,115,132,${alpha})`;ctx.lineWidth=1+7*a.probability;ctx.beginPath();ctx.moveTo(x-34,y);ctx.lineTo(x-78,Math.max(36,baseY+(a.index%12)*rowGap));ctx.stroke()}}
- for(const r of args){const x=xLayer(r.layer)+28+(r.slot*26),y=baseY+r.layer*rowGap+18;for(const a of r.top_actions){ctx.strokeStyle=r.is_active_target_block?`rgba(182,74,52,${Math.max(.05,a.probability)})`:`rgba(70,104,160,${Math.max(.04,a.probability)})`;ctx.lineWidth=1+8*a.probability;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(55,baseY+(a.index%12)*rowGap);ctx.stroke()}}
- for(const r of readout){const x=width-110,y=baseY+40*r.term;node(x,y,`out:${r.top_action}`,true);for(const a of r.top_actions){ctx.strokeStyle=`rgba(182,74,52,${Math.max(.05,a.probability)})`;ctx.lineWidth=1+8*a.probability;ctx.beginPath();ctx.moveTo(x-34,y);ctx.lineTo(xLayer(Math.max(...layers)),baseY+(a.index%12)*rowGap);ctx.stroke()}}
- const active=snap.filter(r=>r.is_active_target_block),targetMean=active.reduce((s,r)=>s+r.target_action_probability,0)/Math.max(active.length,1),entropy=snap.reduce((s,r)=>s+r.entropy,0)/Math.max(snap.length,1);
- metrics.innerHTML=`<div class="metric"><span>active target probability</span>${targetMean.toFixed(4)}</div><div class="metric"><span>mean entropy</span>${entropy.toFixed(4)}</div><div class="metric"><span>active blocks</span>${active.length}</div><div class="metric"><span>rows at t</span>${snap.length}</div>`;
- raw.textContent=JSON.stringify(snap.slice(0,40),null,2);
-}
-particle.onchange=()=>{slider.value='0';draw()};slider.oninput=draw;if(particle.options.length)particle.value=particle.options[0].value;draw();
-</script></main></body></html>"""
-    (out_dir / "graph_simplex_flow.html").write_text(html)
-
-
-def _landscape_pca(vectors: list[list[float]]) -> tuple[np.ndarray, list[float]]:
-    array = np.asarray(vectors, dtype=np.float64)
-    if array.ndim != 2 or int(array.shape[0]) == 0:
-        return np.zeros((0, 2), dtype=np.float64), [0.0, 0.0]
-    array = np.nan_to_num(array, nan=0.0, posinf=0.0, neginf=0.0)
-    centered = array - array.mean(axis=0, keepdims=True)
-    if int(centered.shape[0]) == 1 or float(np.linalg.norm(centered)) <= 1.0e-14:
-        return np.zeros((int(centered.shape[0]), 2), dtype=np.float64), [0.0, 0.0]
-    _u, singular_values, right = np.linalg.svd(centered, full_matrices=False)
-    component_count = min(2, int(right.shape[0]))
-    coordinates = centered @ right[:component_count].T
-    if component_count < 2:
-        coordinates = np.pad(coordinates, ((0, 0), (0, 2 - component_count)))
-    for component in range(2):
-        loading = right[component] if component < component_count else None
-        if loading is None or int(loading.size) == 0:
-            continue
-        pivot = int(np.argmax(np.abs(loading)))
-        if float(loading[pivot]) < 0.0:
-            coordinates[:, component] *= -1.0
-    variance = np.square(singular_values)
-    total = float(variance.sum())
-    explained = [
-        float(variance[index] / total) if index < int(variance.size) and total > 0.0 else 0.0
-        for index in range(2)
-    ]
-    return coordinates[:, :2], explained
-
-
-def write_outer_iteration_coupling_figure(
-    out_dir: Path,
-    rows: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Write the paper-facing I1/middle/final ODE coupling landscape."""
-    usable = [
-        dict(row)
-        for row in rows
-        if str(row.get("point_kind", "")) in {"flow", "semantic_target", "proximal_target", "gt_cell"}
-        and isinstance(row.get("parameter_vector"), list)
-        and isinstance(row.get("semantic_vector"), list)
-    ]
-    if not usable:
-        return {"status": "no_landscape_rows", "row_count": 0}
-    task_ids = sorted({str(row["task_id"]) for row in usable})
-    task_id = task_ids[0]
-    usable = [row for row in usable if str(row["task_id"]) == task_id]
-    flow_rows = [row for row in usable if str(row["point_kind"]) == "flow"]
-    iterations = sorted({int(row["iteration"]) for row in flow_rows})
-    times = sorted({round(float(row["t"]), 8) for row in flow_rows})
-    if not iterations or not times:
-        return {"status": "incomplete_landscape_rows", "row_count": int(len(usable))}
-    selected_iterations = [
-        int(iterations[0]),
-        int(iterations[len(iterations) // 2]),
-        int(iterations[-1]),
-    ]
-    parameter_coordinates, parameter_explained = _landscape_pca(
-        [list(row["parameter_vector"]) for row in usable]
-    )
-    semantic_coordinates, semantic_explained = _landscape_pca(
-        [list(row["semantic_vector"]) for row in usable]
-    )
-    for index, row in enumerate(usable):
-        row["_parameter_xy"] = parameter_coordinates[index].tolist()
-        row["_semantic_xy"] = semantic_coordinates[index].tolist()
-
-    def limits(key: str) -> tuple[tuple[float, float], tuple[float, float]]:
-        values = np.asarray([row[key] for row in usable], dtype=np.float64)
-        low = values.min(axis=0)
-        high = values.max(axis=0)
-        span = high - low
-        padding = np.where(span > 1.0e-9, 0.08 * span, 0.5)
-        return (
-            (float(low[0] - padding[0]), float(high[0] + padding[0])),
-            (float(low[1] - padding[1]), float(high[1] + padding[1])),
-        )
-
-    parameter_limits = limits("_parameter_xy")
-    semantic_limits = limits("_semantic_xy")
-    try:
-        import matplotlib
-
-        matplotlib.use("Agg")
-        matplotlib.rcParams["svg.fonttype"] = "none"
-        import matplotlib.pyplot as plt
-        from matplotlib.lines import Line2D
-    except ImportError as exc:
-        error = {
-            "status": "matplotlib_unavailable",
-            "error": str(exc),
-            "row_count": int(len(usable)),
-        }
-        (out_dir / "outer_iteration_flow_coupling_error.json").write_text(
-            json.dumps(error, indent=2, ensure_ascii=False) + "\n"
-        )
-        return error
-
-    source_indices = sorted({int(row["source_index"]) for row in flow_rows})
-    color_map = plt.get_cmap("tab10")
-    source_colors = {
-        source_index: color_map(position % 10)
-        for position, source_index in enumerate(source_indices)
-    }
-    figure, axes = plt.subplots(
-        3,
-        2 * len(times),
-        figsize=(max(12.0, 3.15 * len(times)), 8.1),
-        squeeze=False,
-        constrained_layout=True,
-    )
-    row_roles = ("first", "middle", "final")
-
-    def rows_for(iteration: int, source_index: int, point_kind: str) -> list[dict[str, Any]]:
-        return sorted(
-            [
-                row for row in usable
-                if int(row["iteration"]) == int(iteration)
-                and int(row["source_index"]) == int(source_index)
-                and str(row["point_kind"]) == point_kind
-            ],
-            key=lambda row: float(row["t"]),
-        )
-
-    for row_index, (iteration, role) in enumerate(zip(selected_iterations, row_roles)):
-        for time_index, time_value in enumerate(times):
-            parameter_axis = axes[row_index, 2 * time_index]
-            semantic_axis = axes[row_index, 2 * time_index + 1]
-            for axis, axis_limits in (
-                (parameter_axis, parameter_limits),
-                (semantic_axis, semantic_limits),
-            ):
-                axis.set_xlim(*axis_limits[0])
-                axis.set_ylim(*axis_limits[1])
-                axis.set_xticks([])
-                axis.set_yticks([])
-                axis.set_facecolor("#f8fafc")
-                for spine in axis.spines.values():
-                    spine.set_color("#cbd5e1")
-                    spine.set_linewidth(0.7)
-            if row_index == 0:
-                parameter_axis.set_title(f"t={time_value:.2f}\nparameter / Fisher chart", fontsize=8.5)
-                semantic_axis.set_title(f"t={time_value:.2f}\nexpression / semantics", fontsize=8.5)
-            for source_index in source_indices:
-                lineage = rows_for(iteration, source_index, "flow")
-                if not lineage:
-                    continue
-                history = [row for row in lineage if float(row["t"]) <= float(time_value) + 1.0e-7]
-                if not history:
-                    history = [min(lineage, key=lambda row: abs(float(row["t"]) - float(time_value)))]
-                current = min(lineage, key=lambda row: abs(float(row["t"]) - float(time_value)))
-                color = source_colors[source_index]
-                for axis, key in (
-                    (parameter_axis, "_parameter_xy"),
-                    (semantic_axis, "_semantic_xy"),
-                ):
-                    xy = np.asarray([row[key] for row in history], dtype=np.float64)
-                    axis.plot(xy[:, 0], xy[:, 1], color=color, linewidth=1.35, alpha=0.85, zorder=2)
-                    start_xy = np.asarray(lineage[0][key], dtype=np.float64)
-                    current_xy = np.asarray(current[key], dtype=np.float64)
-                    axis.scatter(
-                        [start_xy[0]], [start_xy[1]],
-                        s=24, facecolors="white", edgecolors=[color], linewidths=1.1, zorder=4,
-                    )
-                    axis.scatter(
-                        [current_xy[0]], [current_xy[1]],
-                        s=21, c=[color], edgecolors="white", linewidths=0.45, zorder=5,
-                    )
-                if time_index != len(times) - 1:
-                    continue
-                endpoint = lineage[-1]
-                proximal = rows_for(iteration, source_index, "semantic_target")
-                if not proximal:
-                    proximal = rows_for(iteration, source_index, "proximal_target")
-                gt_cells = rows_for(iteration, source_index, "gt_cell")
-                for axis, key in (
-                    (parameter_axis, "_parameter_xy"),
-                    (semantic_axis, "_semantic_xy"),
-                ):
-                    endpoint_xy = np.asarray(endpoint[key], dtype=np.float64)
-                    if proximal:
-                        target_xy = np.asarray(proximal[-1][key], dtype=np.float64)
-                        axis.plot(
-                            [endpoint_xy[0], target_xy[0]], [endpoint_xy[1], target_xy[1]],
-                            color=color, linestyle="--", linewidth=1.0, alpha=0.8, zorder=2,
-                        )
-                        axis.scatter(
-                            [target_xy[0]], [target_xy[1]], marker="D", s=39,
-                            facecolors="white", edgecolors=[color], linewidths=1.35, zorder=6,
-                        )
-                    if gt_cells:
-                        gt_xy = np.asarray(gt_cells[-1][key], dtype=np.float64)
-                        axis.plot(
-                            [endpoint_xy[0], gt_xy[0]], [endpoint_xy[1], gt_xy[1]],
-                            color="#64748b", linestyle=":", linewidth=0.9, alpha=0.65, zorder=1,
-                        )
-                        axis.scatter(
-                            [gt_xy[0]], [gt_xy[1]], marker="*", s=72,
-                            c="#f59e0b", edgecolors="#7c2d12", linewidths=0.55, zorder=7,
-                        )
-        axes[row_index, 0].annotate(
-            f"{role}\nouter I{iteration}",
-            xy=(-0.20, 0.5),
-            xycoords="axes fraction",
-            ha="right",
-            va="center",
-            fontsize=9,
-            fontweight="semibold",
-            color="#0f172a",
-        )
-
-    legend = [
-        Line2D([0], [0], color="#475569", linewidth=1.4, label="learned ODE trajectory"),
-        Line2D([0], [0], marker="o", color="none", markerfacecolor="white", markeredgecolor="#475569", label=r"source $\theta_0$"),
-        Line2D([0], [0], marker="D", color="none", markerfacecolor="white", markeredgecolor="#475569", label="Poisson semantic correction"),
-        Line2D([0], [0], marker="*", color="none", markerfacecolor="#f59e0b", markeredgecolor="#7c2d12", markersize=10, label="nearest compiled GT cell (diagnostic)"),
-    ]
-    figure.legend(
-        handles=legend,
-        loc="lower center",
-        bbox_to_anchor=(0.5, -0.015),
-        ncol=4,
-        frameon=False,
-        fontsize=8,
-    )
-    figure.suptitle(
-        f"Outer-iteration Fisher flow coupling landscape — {task_id}\n"
-        "color = fixed source particle; dashed = same-particle semantic correction; dotted = GT diagnostic gap",
-        fontsize=11,
-    )
-    svg_path = out_dir / "outer_iteration_flow_coupling.svg"
-    png_path = out_dir / "outer_iteration_flow_coupling.png"
-    figure.savefig(svg_path, bbox_inches="tight")
-    figure.savefig(png_path, dpi=240, bbox_inches="tight")
-    plt.close(figure)
-    metadata = {
-        "status": "written",
-        "task_id": task_id,
-        "row_count": int(len(usable)),
-        "source_count": int(len(source_indices)),
-        "available_iterations": iterations,
-        "selected_iterations": selected_iterations,
-        "ode_times": times,
-        "parameter_pca_explained_variance": parameter_explained,
-        "semantic_pca_explained_variance": semantic_explained,
-        "svg": svg_path.name,
-        "png": png_path.name,
-    }
-    (out_dir / "outer_iteration_flow_coupling_meta.json").write_text(
-        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
-    )
-    return metadata
-
-
-def _cycle_compiler_metrics(tasks: list[TaskBundle]) -> dict[str, Any]:
-    traces = [trace for task in tasks for trace in task.traces]
-    oracle_r2 = [float(trace.get("semantic_oracle_raw_r2", -1.0e9)) for trace in traces]
-    return {
-        "task_count": int(len(tasks)),
-        "compiled_task_count": int(sum(bool(task.traces) for task in tasks)),
-        "compile_failure_count": int(sum(len(task.compile_failures) for task in tasks)),
-        "accepted_trace_count": int(len(traces)),
-        "semantic_oracle_pass_count": int(sum(value >= 0.999999 for value in oracle_r2)),
-        "semantic_oracle_raw_r2_min": float(min(oracle_r2)) if oracle_r2 else None,
-        "semantic_oracle_raw_r2_mean": float(np.mean(oracle_r2)) if oracle_r2 else None,
-    }
-
-
-def _cycle_eval_record(record: dict[str, Any], *, model_role: str) -> dict[str, Any]:
-    out = {
-        key: value
-        for key, value in record.items()
-        if not key.startswith("endpoint_trace_family_") and not key.startswith("semantic_mass_")
-    }
-    renames = {
-        "endpoint_trace_family_best_index": "gt_compiled_trace_best_index",
-        "endpoint_trace_family_best_active_block_count": "gt_compiled_trace_best_active_block_count",
-        "endpoint_trace_family_best_argmax_match": "gt_compiled_trace_best_active_argmax_match",
-        "endpoint_trace_family_best_active_mean_prob": "gt_compiled_trace_best_active_mean_prob",
-        "endpoint_trace_family_best_active_min_prob": "gt_compiled_trace_best_active_min_prob",
-        "endpoint_trace_family_best_active_logprob_mean": "gt_compiled_trace_best_active_logprob_mean",
-        "endpoint_trace_family_best_active_logprob_sum": "gt_compiled_trace_best_active_logprob_sum",
-    }
-    for old_key, new_key in renames.items():
-        if old_key in record:
-            out[new_key] = record[old_key]
-    out["model_role"] = str(model_role)
-    return out
-
-
-def _cycle_eval_summary(records: list[dict[str, Any]], *, model_role: str) -> dict[str, Any]:
-    if not records:
-        return {"model_role": str(model_role), "evaluation_status": "not_run", "n_tasks": 0}
-
-    def mean(key: str) -> float | None:
-        values = [
-            float(row[key])
-            for row in records
-            if key in row and isinstance(row[key], (int, float, bool)) and math.isfinite(float(row[key]))
-        ]
-        return float(np.mean(values)) if values else None
-
-    raw_r2 = [float(row["raw_test_r2_without_affine"]) for row in records if math.isfinite(float(row.get("raw_test_r2_without_affine", float("nan"))))]
-    fitted_r2 = [float(row["r2"]) for row in records if math.isfinite(float(row.get("r2", float("nan"))))]
-    term_r2 = [float(row["term_linear_fit_r2"]) for row in records if math.isfinite(float(row.get("term_linear_fit_r2", float("nan"))))]
-    return {
-        "model_role": str(model_role),
-        "evaluation_status": "complete",
-        "n_tasks": int(len(records)),
-        "raw_test_r2_mean": float(np.mean(raw_r2)) if raw_r2 else None,
-        "raw_test_r2_median": float(np.median(raw_r2)) if raw_r2 else None,
-        "raw_test_r2_ge_0_99_rate": float(np.mean([value >= 0.99 for value in raw_r2])) if raw_r2 else None,
-        "coefficient_fitted_test_r2_mean": float(np.mean(fitted_r2)) if fitted_r2 else None,
-        "coefficient_fitted_test_r2_median": float(np.median(fitted_r2)) if fitted_r2 else None,
-        "coefficient_fitted_test_r2_ge_0_99_rate": float(np.mean([value >= 0.99 for value in fitted_r2])) if fitted_r2 else None,
-        "term_linear_fit_test_r2_mean": float(np.mean(term_r2)) if term_r2 else None,
-        "term_linear_fit_test_r2_median": float(np.median(term_r2)) if term_r2 else None,
-        "term_linear_fit_test_r2_ge_0_99_rate": float(np.mean([value >= 0.99 for value in term_r2])) if term_r2 else None,
-        "term_count_mean": mean("term_count"),
-        "unique_nonzero_term_count_mean": mean("unique_nonzero_term_count"),
-        "duplicate_term_count_mean": mean("duplicate_term_count"),
-        "skeleton_accuracy": mean("skeleton_match"),
-        "operator_dependency_accuracy": mean("operator_dependency_match"),
-        "variable_set_accuracy": mean("variable_set_match"),
-        "symbolic_equivalence_rate": mean("simplified_symbolic_equivalence"),
-        "valid_expression_fraction_mean": mean("valid_expression_fraction"),
-        "unique_expression_fraction_mean": mean("unique_expression_fraction"),
-        "hard_expression_mode_entropy_mean": mean("eval_hard_expression_mode_entropy"),
-        "hard_top_expression_share_mean": mean("eval_hard_top_expression_share"),
-        "hard_unique_expression_count_mean": mean("eval_hard_unique_expression_count"),
-        "theta0_unique_hash_count_mean": mean("eval_theta0_unique_hash_count"),
-        "theta0_unique_argmax_count_mean": mean("eval_theta0_unique_argmax_count"),
-        "population_unique_expression_count_mean": mean("eval_population_unique_expression_count"),
-        "population_multi_term_rate_mean": mean("eval_population_multi_term_rate"),
-        "population_zero_expression_rate_mean": mean("eval_population_zero_expression_rate"),
-        "population_raw_r2_mean": mean("eval_population_raw_r2_mean"),
-        "population_raw_r2_median": mean("eval_population_raw_r2_median"),
-        "population_raw_r2_best_mean": mean("eval_population_raw_r2_best"),
-        "population_term_fit_r2_mean": mean("eval_population_term_fit_r2_mean"),
-        "population_term_fit_r2_best_mean": mean("eval_population_term_fit_r2_best"),
-        "oracle_free_medoid_distance_mean": mean("eval_oracle_free_medoid_distance"),
-        "oracle_free_medoid_expression_share_mean": mean("eval_oracle_free_medoid_expression_share"),
-        "gt_oracle_best_of_n_raw_r2_mean": mean("eval_gt_oracle_best_of_n_raw_r2"),
-        "gt_oracle_best_of_n_term_fit_r2_mean": mean("eval_gt_oracle_best_of_n_term_fit_r2"),
-        "terminal_retraction_fr_mean": mean("eval_terminal_retraction_fr_mean"),
-        "terminal_retraction_fr_p95": mean("eval_terminal_retraction_fr_p95"),
-        "terminal_retraction_active_fr_mean": mean("eval_terminal_retraction_active_fr_mean"),
-        "terminal_retraction_active_fr_p95": mean("eval_terminal_retraction_active_fr_p95"),
-        "terminal_retraction_expression_preserved_rate": mean("eval_terminal_retraction_expression_preserved_rate"),
-        "flow_pre_retraction_hard_gt_hit_rate": mean("eval_population_flow_hard_gt_hit_rate"),
-        "flow_pre_retraction_sample_gt_hit_rate": mean("eval_population_flow_sample_gt_hit_rate"),
-        "flow_pre_retraction_gt_trace_probability_geometric_mean": mean(
-            "eval_population_flow_gt_trace_probability_geometric_mean"
-        ),
-        "flow_pre_retraction_gt_trace_active_argmax_match": mean(
-            "eval_population_flow_gt_trace_active_argmax_match"
-        ),
-        "flow_pre_retraction_nearest_gt_cell_fr_rms": mean(
-            "eval_population_flow_nearest_gt_cell_fr_rms"
-        ),
-        "terminal_entropy_mean": mean("terminal_entropy_mean"),
-        "terminal_pre_retraction_entropy_mean": mean("terminal_pre_retraction_entropy_mean"),
-        "terminal_max_probability_mean": mean("terminal_max_prob_mean"),
-        "decoded_active_probability_mean": mean("endpoint_sample_active_prob_mean"),
-        "decoded_active_argmax_match_mean": mean("endpoint_sample_active_argmax_match_mean"),
-        "gt_compiled_trace_best_active_argmax_match": mean("gt_compiled_trace_best_active_argmax_match"),
-        "gt_compiled_trace_best_active_mean_prob": mean("gt_compiled_trace_best_active_mean_prob"),
-        "evaluation_runtime_sec_mean": mean("eval_runtime_sec"),
-    }
-
-
-def _v5_crossfit_expression_energy(
+def _semantic_crossfit_expression_energy(
     expr: Expr,
     task: TaskBundle,
     *,
@@ -7701,14 +4649,14 @@ def _v5_crossfit_expression_energy(
         }
 
 
-def _train_v5_base_flow(
-    base: TaskConditionedVelocityNetV5,
+def _train_semantic_base_flow(
+    base: TaskConditionedVelocityNet,
     examples: list[CycleCoupledExample],
     args: argparse.Namespace,
     device: torch.device,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if not examples:
-        raise RuntimeError("v5 GT bootstrap requires compiled bridge examples")
+        raise RuntimeError("current GT bootstrap requires compiled bridge examples")
     optimizer = torch.optim.AdamW(base.parameters(), lr=float(args.lr), weight_decay=float(args.weight_decay))
     rng = random.Random(int(args.seed) + 91_001)
     curve: list[dict[str, Any]] = []
@@ -7806,7 +4754,7 @@ def _train_v5_base_flow(
             best = mean_loss
             best_state = {key: value.detach().cpu().clone() for key, value in base.state_dict().items()}
         row = {
-            "phase": "v5_gt_bootstrap",
+            "phase": "semantic_gt_bootstrap",
             "epoch": int(global_epoch),
             "bootstrap_stage": int(stage_index),
             "bootstrap_source_mass": float(source_mass),
@@ -7875,8 +4823,8 @@ def _bootstrap_gate_decision(
     }
 
 
-def _collect_v5_endpoint_populations(
-    flow: PoissonResidualVelocityV5,
+def _collect_semantic_endpoint_populations(
+    flow: PoissonResidualVelocity,
     tasks: list[TaskBundle],
     args: argparse.Namespace,
     device: torch.device,
@@ -7906,7 +4854,7 @@ def _collect_v5_endpoint_populations(
             random_theta(flow.template, scale=float(args.theta0_noise_scale), device=device, generator=generator)
             for _ in range(particle_count)
         ], dim=0)
-        endpoint_batch, rollout_diag = rollout_batch_v51(
+        endpoint_batch, rollout_diag = rollout_batch(
             flow,
             task,
             theta0_batch,
@@ -7927,7 +4875,7 @@ def _collect_v5_endpoint_populations(
                     ))
             choices = hard_decode_choices(endpoint, flow.template)
             expr, terms, _layers = execute_choices(flow.template, choices)
-            energy_diag = _v5_crossfit_expression_energy(
+            energy_diag = _semantic_crossfit_expression_energy(
                 expr,
                 task,
                 max_abs=float(args.term_fit_max_abs),
@@ -7971,7 +4919,7 @@ def _collect_v5_endpoint_populations(
         unique_counts.append(len({str(row["expression"]) for row in rows}))
         elapsed = float(time.perf_counter() - started)
         partial = {
-            "phase": "v5_endpoint_collection_partial",
+            "phase": "semantic_endpoint_collection_partial",
             "iteration": int(iteration),
             "completed_tasks": int(task_index + 1),
             "total_tasks": int(len(selected_tasks)),
@@ -7987,9 +4935,9 @@ def _collect_v5_endpoint_populations(
         partial_path.write_text(json.dumps(_jsonable(partial), indent=2) + "\n")
         timeout = float(getattr(args, "cycle_collection_timeout_sec", 300.0))
         if timeout > 0.0 and elapsed > timeout:
-            raise RuntimeError(f"v5 endpoint collection exceeded {timeout:.1f}s after {task_index + 1} tasks: {elapsed:.1f}s")
+            raise RuntimeError(f"current endpoint collection exceeded {timeout:.1f}s after {task_index + 1} tasks: {elapsed:.1f}s")
     summary = {
-        "phase": "v5_endpoint_collection",
+        "phase": "semantic_endpoint_collection",
         "iteration": int(iteration),
         "task_count": int(len(populations)),
         "particle_count": int(sum(len(rows) for rows in populations.values())),
@@ -8010,21 +4958,21 @@ def _collect_v5_endpoint_populations(
     return populations, landscape, summary
 
 
-def _fit_v5_semantic_potential(
+def _fit_semantic_potential(
     template: Any,
     populations: dict[str, list[dict[str, Any]]],
     args: argparse.Namespace,
     device: torch.device,
     *,
     iteration: int,
-) -> tuple[ConditionalSemanticPotentialV5, list[dict[str, Any]], dict[str, Any]]:
-    potential = ConditionalSemanticPotentialV5(template, int(args.hidden)).to(device)
+) -> tuple[ConditionalSemanticPotential, list[dict[str, Any]], dict[str, Any]]:
+    potential = ConditionalSemanticPotential(template, int(args.hidden)).to(device)
     optimizer = torch.optim.Adam(potential.parameters(), lr=float(args.cycle_poisson_lr))
     rng = random.Random(int(args.seed) + 110_017 * int(iteration))
     task_rows = [rows for rows in populations.values() if rows]
     curve: list[dict[str, Any]] = []
     if not task_rows:
-        raise RuntimeError("v5 Poisson potential requires endpoint populations")
+        raise RuntimeError("current Poisson potential requires endpoint populations")
     for step in range(max(int(args.cycle_poisson_steps), 1)):
         optimizer.zero_grad(set_to_none=True)
         batch_losses: list[torch.Tensor] = []
@@ -8049,7 +4997,7 @@ def _fit_v5_semantic_potential(
         torch.nn.utils.clip_grad_norm_(potential.parameters(), float(args.grad_clip))
         optimizer.step()
         row = {
-            "phase": "v5_weighted_poisson",
+            "phase": "semantic_weighted_poisson",
             "iteration": int(iteration),
             "step": int(step + 1),
             "poisson_loss": float(loss.detach().cpu()),
@@ -8064,16 +5012,16 @@ def _fit_v5_semantic_potential(
     return potential, curve, dict(curve[-1])
 
 
-def _correct_v5_populations(
+def _correct_semantic_populations(
     template: Any,
-    potential: ConditionalSemanticPotentialV5,
+    potential: ConditionalSemanticPotential,
     populations: dict[str, list[dict[str, Any]]],
     args: argparse.Namespace,
     device: torch.device,
     *,
     iteration: int,
-) -> tuple[list[V5ResidualExample], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    examples: list[V5ResidualExample] = []
+) -> tuple[list[ResidualFlowExample], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    examples: list[ResidualFlowExample] = []
     correction_rows: list[dict[str, Any]] = []
     landscape: list[dict[str, Any]] = []
     collapse_count = 0
@@ -8129,7 +5077,7 @@ def _correct_v5_populations(
             )
             fisher_step = float(torch.sqrt(step_blocks.square().mean()).detach().cpu())
             fisher_steps.append(fisher_step)
-            examples.append(V5ResidualExample(
+            examples.append(ResidualFlowExample(
                 task=task,
                 theta0=row["theta0"].detach(),
                 reference_theta1=row["reference_theta1"].detach(),
@@ -8165,7 +5113,7 @@ def _correct_v5_populations(
                     point_kind="semantic_target",
                 ))
     summary = {
-        "phase": "v5_same_particle_correction",
+        "phase": "semantic_same_particle_correction",
         "iteration": int(iteration),
         "residual_example_count": int(len(examples)),
         "support_collapse_task_count": int(collapse_count),
@@ -8176,24 +5124,24 @@ def _correct_v5_populations(
     return examples, correction_rows, landscape, summary
 
 
-def _train_v5_residual_head(
-    flow: PoissonResidualVelocityV5,
-    examples: list[V5ResidualExample],
+def _train_semantic_residual_head(
+    flow: PoissonResidualVelocity,
+    examples: list[ResidualFlowExample],
     args: argparse.Namespace,
     device: torch.device,
     *,
     iteration: int,
-) -> tuple[ResidualVelocityHeadV5 | None, list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[ResidualVelocityHead | None, list[dict[str, Any]], dict[str, Any]]:
     usable = [example for example in examples if float(example.diagnostics.get("support_collapsed", 0.0)) < 0.5]
     if not usable:
         return None, [], {
-            "phase": "v5_residual_skipped",
+            "phase": "semantic_residual_skipped",
             "iteration": int(iteration),
             "skip_reason": "all_task_populations_have_zero_semantic_variance",
         }
     for parameter in flow.parameters():
         parameter.requires_grad_(False)
-    head = ResidualVelocityHeadV5(flow.template, int(args.hidden)).to(device)
+    head = ResidualVelocityHead(flow.template, int(args.hidden)).to(device)
     train_trunk = len(flow.residual_heads) == 0
     if train_trunk:
         for parameter in flow.residual_trunk.parameters():
@@ -8284,7 +5232,7 @@ def _train_v5_residual_head(
                     for key, value in flow.residual_trunk.state_dict().items()
                 }
         row = {
-            "phase": "v5_residual_fisher_matching",
+            "phase": "semantic_residual_fisher_matching",
             "iteration": int(iteration),
             "epoch": int(epoch + 1),
             "residual_fisher_loss": mean_loss,
@@ -8303,371 +5251,6 @@ def _train_v5_residual_head(
     return head, curve, dict(curve[-1])
 
 
-def run_legacy_one_step_semantic_fisher_cycle(
-    args: argparse.Namespace,
-    *,
-    template: Any,
-    graph_family: str,
-    train_tasks: list[TaskBundle],
-    eval_tasks: list[TaskBundle],
-    source_counts: dict[str, int],
-    loaded_ckpt: dict[str, Any] | None,
-    device: torch.device,
-) -> dict[str, Any]:
-    if not _is_register_template(template):
-        raise ValueError("one_step_semantic_fisher_cycle requires register_categorical_blocks")
-    legacy_v2_eval = bool(getattr(args, "_legacy_v2_checkpoint", False))
-    if int(template.output_terms) != 1 and not legacy_v2_eval:
-        raise ValueError(
-            "v4 lineage-proximal training requires --output-terms 1; multi-readout charts are legacy-eval only"
-        )
-    if not legacy_v2_eval and str(getattr(args, "cycle_proposer_source", "learned_flow")) != "learned_flow":
-        raise ValueError("v4 lineage-proximal training requires --cycle-proposer-source learned_flow")
-    if not legacy_v2_eval and int(getattr(args, "cycle_mutation_samples", 0)) != 0:
-        raise ValueError("v4 lineage-proximal training forbids --cycle-mutation-samples")
-    if not legacy_v2_eval and int(getattr(args, "cycle_elite_modes", 0)) != 0:
-        raise ValueError("v4 lineage-proximal training forbids --cycle-elite-modes")
-    if not legacy_v2_eval and int(getattr(args, "cycle_archive_size", 0)) != 0:
-        raise ValueError("v4 lineage-proximal training forbids --cycle-archive-size")
-    if not legacy_v2_eval and bool(getattr(args, "cycle_soft_endpoint_samples", False)):
-        raise ValueError("v4 uses hard complete-expression cells; --cycle-soft-endpoint-samples is legacy-only")
-    if not legacy_v2_eval and int(getattr(args, "cycle_expression_samples", 0)) != 0:
-        raise ValueError("lineage-proximal training does not use global expression sampling; set --cycle-expression-samples 0")
-    if not legacy_v2_eval and abs(float(getattr(args, "cycle_projection_sharpness", 1.0)) - 1.0) > 1.0e-12:
-        raise ValueError("v4 single-expression endpoint cells require --cycle-projection-sharpness 1")
-    if not legacy_v2_eval and str(getattr(args, "eval_endpoint_decode_mode", "hard_argmax")) != "hard_argmax":
-        raise ValueError("v4 eval uses terminal retraction and requires --eval-endpoint-decode-mode hard_argmax")
-    loaded_model_cfg = loaded_ckpt.get("model_cfg", {}) if isinstance(loaded_ckpt, dict) else {}
-    model_kwargs = {
-        "semantic_features": bool(loaded_model_cfg.get("semantic_features", False)) if legacy_v2_eval else True,
-        "active_node_semantic_features": bool(loaded_model_cfg.get("active_node_semantic_features", False)) if legacy_v2_eval else True,
-        "global_state_mode": "full",
-        "metadata_embedding_dim": int(args.metadata_embedding_dim),
-        "task_encoder_mode": str(args.task_encoder_mode),
-        "task_conditioning": "xy",
-    }
-    if bool(getattr(args, "cycle_one_step_student", False)):
-        raise ValueError(
-            "--cycle-one-step-student has been removed; reference endpoints come from learned direct-velocity ODE rollout"
-        )
-    flow = FixedSymbolConditionedVelocityNet(
-        template,
-        hidden=int(args.hidden),
-        velocity_parameterization="direct_velocity",
-        **model_kwargs,
-    ).to(device)
-    train_curve: list[dict[str, Any]] = []
-    proposal_rows: list[dict[str, Any]] = []
-    coupling_rows: list[dict[str, Any]] = []
-    proximal_rows: list[dict[str, Any]] = []
-    landscape_rows: list[dict[str, Any]] = []
-    cycle_summaries: list[dict[str, Any]] = []
-    flow_bootstrap_summary: dict[str, Any] = {}
-    bootstrap_example_count = 0
-    bootstrap_examples: list[CycleCoupledExample] = []
-    iteration_eval_records: list[dict[str, Any]] = []
-    iteration_eval_summaries: list[dict[str, Any]] = []
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    if loaded_ckpt is not None:
-        loaded_objective = str(loaded_ckpt.get("objective_version", ""))
-        if loaded_objective != ONE_STEP_FISHER_OBJECTIVE_VERSION and not legacy_v2_eval:
-            raise ValueError("checkpoint is not a v4 lineage-proximal semantic Fisher cycle checkpoint")
-        flow.load_state_dict(loaded_ckpt["flow_model"])
-        loaded_summary = loaded_ckpt.get("summary", {})
-        if isinstance(loaded_summary, dict):
-            cycle_summaries = list(loaded_summary.get("cycle_history", []))
-    elif bool(args.eval_only):
-        raise ValueError("--eval-only requires a one-step cycle checkpoint")
-    else:
-        bootstrap_examples = build_v3_gt_bootstrap_examples(flow, train_tasks, args, device)
-        bootstrap_example_count = int(len(bootstrap_examples))
-        bootstrap_args = argparse.Namespace(**vars(args))
-        bootstrap_args.cycle_flow_epochs = max(int(args.epochs), 1)
-        bootstrap_args.cycle_steps_per_epoch = max(int(args.steps_per_epoch), 1)
-        bootstrap_args.cycle_flow_lr = float(args.lr)
-        bootstrap_args.cycle_time_sampling = "stratified_fisher"
-        flow_bootstrap_curve, flow_bootstrap_summary = train_cycle_flow(
-            flow,
-            bootstrap_examples,
-            bootstrap_args,
-            device,
-            iteration=0,
-        )
-        train_curve.extend({**row, "phase": "flow_gt_bootstrap_v4"} for row in flow_bootstrap_curve)
-        for iteration in range(1, max(int(args.cycle_iterations), 0) + 1):
-            examples, iteration_proposals, iteration_couplings, iteration_proximal, iteration_graph_rows, collection_summary = collect_lineage_proximal_couplings(
-                flow,
-                train_tasks,
-                args,
-                device,
-                iteration=iteration,
-            )
-            if examples:
-                replay_examples = [
-                    CycleCoupledExample(
-                        task=example.task,
-                        theta0=example.theta0,
-                        theta1=example.theta1,
-                        active_mask=example.active_mask,
-                        proposal_index=example.proposal_index,
-                        diagnostics={**example.diagnostics, "auxiliary_gt_replay": 1.0},
-                        sample_weight=1.0e-12,
-                        target_choices=example.target_choices,
-                        is_gt_anchor=True,
-                    )
-                    for example in bootstrap_examples
-                ]
-                flow_curve, flow_summary = train_cycle_flow(
-                    flow,
-                    [*examples, *replay_examples],
-                    args,
-                    device,
-                    iteration=iteration,
-                )
-                train_curve.extend(flow_curve)
-            else:
-                flow_summary = {
-                    "phase": "cycle_flow_update_rejected",
-                    "iteration": int(iteration),
-                    "flow_update_skipped": 1.0,
-                    "flow_update_skip_reason": "reference_endpoints_failed_single_expression_manifold_gate",
-                    "flow_fisher_velocity_loss": None,
-                    "flow_relative_fisher_loss": None,
-                }
-                train_curve.append(dict(flow_summary))
-            proposal_rows.extend(iteration_proposals)
-            coupling_rows.extend(iteration_couplings)
-            proximal_rows.extend(iteration_proximal)
-            landscape_rows.extend(iteration_graph_rows)
-            cycle_summary = {
-                "iteration": int(iteration),
-                **collection_summary,
-                **{key: value for key, value in flow_summary.items() if key not in {"phase", "epoch"}},
-                "proposer_student_enabled": 0.0,
-                "proposer_student_removed": 1.0,
-            }
-            if not bool(args.train_only) and bool(getattr(args, "cycle_eval_each_iteration", True)):
-                iter_records_raw, _iter_endpoints, _iter_sweep = evaluate_model(
-                    flow,
-                    None,
-                    eval_tasks,
-                    args,
-                    device,
-                    progress_out_dir=out_dir / f"cycle_eval_iter_{iteration}_progress",
-                    progress_prefix=f"cycle_eval_iter_{iteration}",
-                )
-                iter_records = [
-                    {
-                        **_cycle_eval_record(row, model_role="fisher_velocity_field"),
-                        "cycle_iteration": int(iteration),
-                    }
-                    for row in iter_records_raw
-                ]
-                iter_summary = _cycle_eval_summary(iter_records, model_role="fisher_velocity_field")
-                iter_summary["iteration"] = int(iteration)
-                iteration_eval_records.extend(iter_records)
-                iteration_eval_summaries.append(iter_summary)
-                _write_cycle_jsonl(out_dir / f"cycle_eval_iter_{iteration}_samples.jsonl", iter_records)
-                (out_dir / f"cycle_eval_iter_{iteration}_summary.json").write_text(
-                    json.dumps(_jsonable(iter_summary), indent=2, ensure_ascii=False) + "\n"
-                )
-                cycle_summary["iteration_eval"] = iter_summary
-            cycle_summaries.append(cycle_summary)
-            if bool(args.log_epochs):
-                print(json.dumps({"phase": "cycle_complete", **cycle_summary}), flush=True)
-
-    flow_records: list[dict[str, Any]] = []
-    reference_field_records: list[dict[str, Any]] = []
-    if not bool(args.train_only):
-        flow_records, _flow_endpoints, _flow_sweep = evaluate_model(
-            flow,
-            None,
-            eval_tasks,
-            args,
-            device,
-            progress_out_dir=out_dir / "flow_eval",
-            progress_prefix="flow",
-        )
-        if bool(getattr(args, "eval_reference_field_oracle", False)):
-            reference_field_records, _reference_endpoints, _reference_sweep = evaluate_reference_field_oracle(
-                flow,
-                eval_tasks,
-                args,
-                device,
-                progress_out_dir=out_dir / "reference_field_eval",
-                progress_prefix="reference_field",
-            )
-        flow_records = [_cycle_eval_record(row, model_role="fisher_velocity_field") for row in flow_records]
-        reference_field_records = [
-            _cycle_eval_record(row, model_role="reference_fisher_bridge_oracle")
-            for row in reference_field_records
-        ]
-
-    flow_summary = _cycle_eval_summary(flow_records, model_role="fisher_velocity_field")
-    reference_field_summary = _cycle_eval_summary(reference_field_records, model_role="reference_fisher_bridge_oracle")
-    run_objective_version = (
-        str(loaded_ckpt.get("objective_version", "")) if legacy_v2_eval and loaded_ckpt is not None
-        else ONE_STEP_FISHER_OBJECTIVE_VERSION
-    )
-    summary = {
-        "algorithm": "complete_expression_semantic_fm",
-        "training_flow": "one_step_semantic_fisher_cycle",
-        "objective_version": run_objective_version,
-        "legacy_v2_eval_only": bool(legacy_v2_eval),
-        "construction_graph": str(args.construction_graph),
-        "construction_family": str(graph_family),
-        "task_conditioning": "xy",
-        "theta0_conditioning": "full_state",
-        "proposer_source": "legacy_checkpoint" if legacy_v2_eval else "learned_flow_rollout",
-        "population_flow": "legacy_checkpoint_eval_only" if legacy_v2_eval else "per_lineage_local_fisher_proximal",
-        "inference_endpoint_generation": (
-            "legacy_checkpoint_rollout" if legacy_v2_eval else "learned_direct_velocity_rk2_rollout"
-        ),
-        "training_target_path": (
-            "not_applicable_read_only_eval"
-            if legacy_v2_eval
-            else "analytic_fisher_bridge_between_same_source_and_local_target"
-        ),
-        "endpoint_decode": str(getattr(args, "eval_endpoint_decode_mode", "hard_argmax")),
-        "eval_oracle_free_selection_mode": str(getattr(args, "eval_oracle_free_selection_mode", "train_fit")),
-        "eval_terminal_retraction": bool(getattr(args, "eval_terminal_retraction", True)),
-        "eval_terminal_retraction_eps": float(getattr(args, "eval_terminal_retraction_eps", -1.0)),
-        "hard_endpoint_population": True,
-        "cycle_soft_endpoint_samples_enabled": False,
-        "semantic_tilt": "none_global_reweighting_local_raw_semantic_map_only",
-        "semantic_tilt_distance": "not_used",
-        "cycle_semantic_energy_mode": str(getattr(args, "cycle_semantic_energy_mode", "fit_r2_first")),
-        "semantic_coefficient_fit_mode": (
-            "train_split_term_affine_fit_in_v4_local_objective"
-            if str(getattr(args, "cycle_semantic_energy_mode", "fit_r2_first")) == "fit_r2_first"
-            else "diagnostic_only_not_in_v4_local_objective"
-        ),
-        "endpoint_projection": "nearest_local_single_expression_cell_from_reference_endpoint",
-        "endpoint_projection_eps": float(args.cycle_projection_eps),
-        "endpoint_projection_sharpness": 1.0,
-        "endpoint_block_transport": "active_trace_blocks_with_inactive_source_identity",
-        "coupling": "same_source_lineage_no_global_recoupling",
-        "flow_bridge": "analytic_product_simplex_fisher_rao",
-        "proposer_update": "learned_direct_velocity_rk2_rollout",
-        "proposer_student_enabled": False,
-        "proposer_student_removed": True,
-        "eval_reference_field_oracle_enabled": bool(getattr(args, "eval_reference_field_oracle", False)),
-        "cycle_score_split": str(args.cycle_score_split),
-        "cycle_skeleton_tilt": str(args.cycle_skeleton_tilt),
-        "cycle_elite_modes": 0,
-        "cycle_archive_size": 0,
-        "cycle_explore_temperatures": "not_used",
-        "num_layers": int(args.num_layers),
-        "register_count": int(template.register_count),
-        "source_count": int(template.source_count),
-        "output_terms": int(getattr(template, "output_terms", 1)),
-        "term_fit_ridge": float(getattr(args, "term_fit_ridge", 1.0e-8)),
-        "term_fit_max_abs": float(getattr(args, "term_fit_max_abs", 1.0e6)),
-        "hidden": int(args.hidden),
-        "bootstrap_epochs": int(args.epochs),
-        "bootstrap_objective": "v4_gt_atom_fm_inactive_teacher_terminal",
-        "bootstrap_example_count": int(bootstrap_example_count),
-        "bootstrap_training_summary": flow_bootstrap_summary,
-        "cycle_iterations": int(args.cycle_iterations),
-        "cycle_particles_per_task": int(args.cycle_particles_per_task),
-        "cycle_expression_samples": "not_used",
-        "cycle_semantic_temperature": "not_used",
-        "cycle_semantic_kl_budget": "not_used",
-        "cycle_gt_anchor_alpha": "bootstrap_replay_only",
-        "cycle_correction_ratio_limit": "not_used",
-        "cycle_ot_entropy_scale": "not_used",
-        "cycle_proximal_radius": float(args.cycle_proximal_radius),
-        "cycle_proximal_candidate_budget": int(args.cycle_proximal_candidate_budget),
-        "cycle_proximal_alt_actions": int(args.cycle_proximal_alt_actions),
-        "cycle_manifold_fr_mean_gate": float(args.cycle_manifold_fr_mean_gate),
-        "cycle_manifold_fr_p95_gate": float(args.cycle_manifold_fr_p95_gate),
-        "cycle_flow_gt_probe_samples": int(args.cycle_flow_gt_probe_samples),
-        "cycle_landscape_sources": int(args.cycle_landscape_sources),
-        "cycle_landscape_task_limit": int(args.cycle_landscape_task_limit),
-        "cycle_landscape_time_points": int(args.cycle_landscape_time_points),
-        "cycle_mutation_samples": 0,
-        "cycle_flow_epochs": int(args.cycle_flow_epochs),
-        "cycle_proposer_epochs": 0,
-        "cycle_steps_per_epoch": int(args.cycle_steps_per_epoch),
-        "cycle_time_sampling": str(args.cycle_time_sampling),
-        "cycle_inactive_identity_weight": float(args.cycle_inactive_identity_weight),
-        "cycle_readout_loss_weight": float(getattr(args, "cycle_readout_loss_weight", 3.0)),
-        "cycle_op_loss_weight": float(getattr(args, "cycle_op_loss_weight", 1.5)),
-        "cycle_endpoint_loss_weight": float(getattr(args, "cycle_endpoint_loss_weight", 0.25)),
-        "cycle_terminal_rk2_steps": int(getattr(args, "cycle_terminal_rk2_steps", 8)),
-        "cycle_consistency_examples": int(getattr(args, "cycle_consistency_examples", 16)),
-        "cycle_gt_replay_fraction": float(getattr(args, "cycle_gt_replay_fraction", 0.25)),
-        "cycle_gt_teacher_weight": float(getattr(args, "cycle_gt_teacher_weight", 0.10)),
-        "cycle_gt_teacher_low_t_max": float(getattr(args, "cycle_gt_teacher_low_t_max", 0.10)),
-        "eval_theta0_mode": str(getattr(args, "eval_theta0_mode", "deterministic_random")),
-        "eval_theta0_samples": int(getattr(args, "eval_theta0_samples", 1)),
-        "eval_flow_gt_probe_samples": int(getattr(args, "eval_flow_gt_probe_samples", 4)),
-        "train_compiler": _cycle_compiler_metrics(train_tasks),
-        "eval_compiler": _cycle_compiler_metrics(eval_tasks),
-        "data_source_counts": source_counts,
-        "cycle_history": cycle_summaries,
-        "cycle_eval_history": iteration_eval_summaries,
-        "final_cycle": cycle_summaries[-1] if cycle_summaries else {},
-        "proposer_eval": {"model_role": "one_step_proposer", "evaluation_status": "removed", "n_tasks": 0},
-        "flow_eval": flow_summary,
-        "reference_field_eval": reference_field_summary,
-        "train_only": bool(args.train_only),
-        "eval_only": bool(args.eval_only),
-    }
-    task_split = make_task_split(train_tasks, eval_tasks)
-    checkpoint = {
-        "algorithm": "complete_expression_semantic_fm",
-        "objective_version": run_objective_version,
-        "template": {
-            "construction_graph": str(args.construction_graph),
-            "num_vars": int(template.num_vars),
-            "num_layers": int(template.num_layers),
-            "num_registers": int(template.register_count),
-            "ops": list(template.ops),
-            "output_terms": int(template.output_terms),
-        },
-        "model_cfg": {
-            "hidden": int(args.hidden),
-            "global_state_mode": "full",
-            "metadata_embedding_dim": int(args.metadata_embedding_dim),
-            "task_encoder_mode": str(args.task_encoder_mode),
-            "task_conditioning": "xy",
-            "semantic_features": bool(flow.semantic_features),
-            "active_node_semantic_features": bool(flow.active_node_semantic_features),
-            "semantic_feature_width": int(flow.semantic_feature_width),
-        },
-        "flow_model": flow.state_dict(),
-        "summary": summary,
-    }
-    combined_records = flow_records
-    _write_cycle_jsonl(out_dir / "one_step_cycle_train_curve.jsonl", train_curve)
-    _write_cycle_jsonl(out_dir / "one_step_cycle_proposals.jsonl", proposal_rows)
-    _write_cycle_jsonl(out_dir / "one_step_cycle_couplings.jsonl", coupling_rows)
-    _write_cycle_jsonl(out_dir / "cycle_lineage_proximal_candidates.jsonl", proximal_rows)
-    _write_cycle_jsonl(out_dir / "cycle_expression_posterior.jsonl", [])
-    _write_cycle_jsonl(out_dir / "cycle_expression_elites.jsonl", [])
-    _write_cycle_jsonl(out_dir / "cycle_graph_targets.jsonl", [])
-    _write_cycle_jsonl(out_dir / "outer_iteration_flow_landscape.jsonl", landscape_rows)
-    _write_cycle_jsonl(
-        out_dir / "cycle_flow_diagnostics.jsonl",
-        [row for row in train_curve if str(row.get("phase", "")) == "cycle_flow_fisher_matching"],
-    )
-    _write_cycle_jsonl(out_dir / "cycle_eval_iterations.jsonl", iteration_eval_records)
-    _write_cycle_jsonl(out_dir / "one_step_cycle_samples.jsonl", combined_records)
-    _write_cycle_jsonl(out_dir / "typed_op_node_flow_samples.jsonl", combined_records)
-    _write_cycle_jsonl(out_dir / "reference_field_samples.jsonl", reference_field_records)
-    summary["outer_iteration_flow_landscape"] = write_outer_iteration_coupling_figure(
-        out_dir,
-        landscape_rows,
-    )
-    (out_dir / "one_step_cycle_summary.json").write_text(json.dumps(_jsonable(summary), indent=2, ensure_ascii=False) + "\n")
-    (out_dir / "typed_op_node_flow_summary.json").write_text(json.dumps(_jsonable(summary), indent=2, ensure_ascii=False) + "\n")
-    (out_dir / "task_split.json").write_text(json.dumps(_jsonable(task_split), indent=2, ensure_ascii=False) + "\n")
-    torch.save(checkpoint, out_dir / "one_step_cycle_checkpoint.pt")
-    return {"summary": summary}
-
 
 def run_one_step_semantic_fisher_cycle(
     args: argparse.Namespace,
@@ -8680,15 +5263,13 @@ def run_one_step_semantic_fisher_cycle(
     loaded_ckpt: dict[str, Any] | None,
     device: torch.device,
 ) -> dict[str, Any]:
-    """Run the route-free v5 weighted-Poisson residual Fisher cycle."""
+    """Run the route-free semantic weighted-Poisson residual Fisher cycle."""
     if not _is_register_template(template):
-        raise ValueError("v5 requires register_categorical_blocks")
+        raise ValueError("semantic flow requires register_categorical_blocks")
     if int(template.output_terms) != 1:
-        raise ValueError("v5 requires --output-terms 1")
+        raise ValueError("semantic flow requires --output-terms 1")
     if str(getattr(args, "velocity_parameterization", "direct_velocity")) != "direct_velocity":
-        raise ValueError("v5 supports direct_velocity only")
-    if any(int(getattr(args, name, 0)) != 0 for name in ("cycle_mutation_samples", "cycle_elite_modes", "cycle_archive_size")):
-        raise ValueError("v5 forbids mutation, elite selection, and archives")
+        raise ValueError("semantic flow supports direct_velocity only")
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     model_kwargs = {
@@ -8697,8 +5278,8 @@ def run_one_step_semantic_fisher_cycle(
         "task_encoder_mode": str(args.task_encoder_mode),
         "task_conditioning": "xy",
     }
-    base = TaskConditionedVelocityNetV5(template, int(args.hidden), **model_kwargs).to(device)
-    flow = PoissonResidualVelocityV5(base).to(device)
+    base = TaskConditionedVelocityNet(template, int(args.hidden), **model_kwargs).to(device)
+    flow = PoissonResidualVelocity(base).to(device)
     train_curve: list[dict[str, Any]] = []
     correction_rows: list[dict[str, Any]] = []
     landscape_rows: list[dict[str, Any]] = []
@@ -8710,14 +5291,14 @@ def run_one_step_semantic_fisher_cycle(
     bootstrap_gate_result: dict[str, Any] = {"gate": "OFF", "passed": True}
 
     if loaded_ckpt is not None:
-        objective = str(loaded_ckpt.get("objective_version", ""))
-        if objective != V5_OBJECTIVE_VERSION:
-            raise ValueError("only semantic_poisson_residual_fisher_v5_1_bootstrap_first checkpoints can resume v5.1")
+        objective = str(loaded_ckpt.get("objective_name", ""))
+        if objective != OBJECTIVE_NAME:
+            raise ValueError("only semantic_poisson_residual_fisher_bootstrap checkpoints can resume training")
         stage_count = int(loaded_ckpt.get("residual_stage_count", 0))
         raw_steps = loaded_ckpt.get("residual_step_sizes", [float(args.cycle_correction_step)] * stage_count)
         for index in range(stage_count):
             flow.add_residual(
-                ResidualVelocityHeadV5(template, int(args.hidden)).to(device),
+                ResidualVelocityHead(template, int(args.hidden)).to(device),
                 float(raw_steps[index]),
             )
         flow.load_state_dict(loaded_ckpt["flow_model"])
@@ -8726,9 +5307,9 @@ def run_one_step_semantic_fisher_cycle(
             cycle_history = list(loaded_summary.get("cycle_history", []))
             bootstrap_summary = dict(loaded_summary.get("bootstrap_training_summary", {}))
     elif bool(args.eval_only):
-        raise ValueError("--eval-only requires a v5 checkpoint")
+        raise ValueError("--eval-only requires a semantic-flow checkpoint")
     else:
-        bootstrap_examples = build_v3_gt_bootstrap_examples(base, train_tasks, args, device)
+        bootstrap_examples = build_semantic_gt_bootstrap_examples(base, train_tasks, args, device)
         bootstrap_count = len(bootstrap_examples)
         gate_name = str(getattr(args, "bootstrap_gate", "off")).upper()
         raw_control = None
@@ -8736,11 +5317,11 @@ def run_one_step_semantic_fisher_cycle(
             control_args = argparse.Namespace(**vars(args))
             control_args.cycle_landscape_task_limit = 0
             control_args.cycle_collection_task_limit = 0
-            _control_population, _control_landscape, control_summary = _collect_v5_endpoint_populations(
+            _control_population, _control_landscape, control_summary = _collect_semantic_endpoint_populations(
                 flow, eval_tasks[:8], control_args, device, iteration=-1,
             )
             raw_control = float(control_summary.get("crossfit_raw_r2_mean", 0.0))
-        bootstrap_curve, bootstrap_summary = _train_v5_base_flow(base, bootstrap_examples, args, device)
+        bootstrap_curve, bootstrap_summary = _train_semantic_base_flow(base, bootstrap_examples, args, device)
         train_curve.extend(bootstrap_curve)
         if gate_name != "OFF":
             gate_args = argparse.Namespace(**vars(args))
@@ -8752,7 +5333,7 @@ def run_one_step_semantic_fisher_cycle(
                 gate_tasks = train_tasks[:8]
             else:
                 gate_tasks = eval_tasks[:8]
-            gate_population, gate_landscape, gate_summary = _collect_v5_endpoint_populations(
+            gate_population, gate_landscape, gate_summary = _collect_semantic_endpoint_populations(
                 flow, gate_tasks, gate_args, device, iteration=0,
             )
             del gate_population, gate_landscape
@@ -8761,7 +5342,7 @@ def run_one_step_semantic_fisher_cycle(
             )
             (out_dir / "bootstrap_gate.json").write_text(json.dumps(_jsonable(bootstrap_gate_result), indent=2) + "\n")
             torch.save({
-                "objective_version": V5_OBJECTIVE_VERSION,
+                "objective_name": OBJECTIVE_NAME,
                 "bootstrap_gate": bootstrap_gate_result,
                 "flow_model": flow.state_dict(),
             }, out_dir / "bootstrap_gate_checkpoint.pt")
@@ -8770,7 +5351,7 @@ def run_one_step_semantic_fisher_cycle(
         for parameter in base.parameters():
             parameter.requires_grad_(False)
         for iteration in range(1, max(int(args.cycle_iterations), 0) + 1):
-            populations, iteration_landscape, collection_summary = _collect_v5_endpoint_populations(
+            populations, iteration_landscape, collection_summary = _collect_semantic_endpoint_populations(
                 flow,
                 train_tasks,
                 args,
@@ -8781,7 +5362,7 @@ def run_one_step_semantic_fisher_cycle(
             timeout = float(getattr(args, "cycle_collection_timeout_sec", 300.0))
             if timeout > 0 and float(collection_summary["collection_runtime_sec"]) > timeout:
                 raise RuntimeError(
-                    f"v5 endpoint collection exceeded {timeout:.1f}s: "
+                    f"current endpoint collection exceeded {timeout:.1f}s: "
                     f"{float(collection_summary['collection_runtime_sec']):.1f}s"
                 )
             population_gate = {
@@ -8797,8 +5378,8 @@ def run_one_step_semantic_fisher_cycle(
                     "collection": collection_summary,
                 }
                 (out_dir / "bootstrap_population_collapse.json").write_text(json.dumps(_jsonable(failure), indent=2) + "\n")
-                raise RuntimeError("bootstrap population gate failed; Poisson mutation fallback is forbidden")
-            potential, potential_curve, potential_summary = _fit_v5_semantic_potential(
+                raise RuntimeError("bootstrap population gate failed; Poisson outer loop is disabled")
+            potential, potential_curve, potential_summary = _fit_semantic_potential(
                 template,
                 populations,
                 args,
@@ -8806,7 +5387,7 @@ def run_one_step_semantic_fisher_cycle(
                 iteration=iteration,
             )
             train_curve.extend(potential_curve)
-            residual_examples, iteration_corrections, correction_landscape, correction_summary = _correct_v5_populations(
+            residual_examples, iteration_corrections, correction_landscape, correction_summary = _correct_semantic_populations(
                 template,
                 potential,
                 populations,
@@ -8816,7 +5397,7 @@ def run_one_step_semantic_fisher_cycle(
             )
             correction_rows.extend(iteration_corrections)
             landscape_rows.extend(correction_landscape)
-            head, residual_curve, residual_summary = _train_v5_residual_head(
+            head, residual_curve, residual_summary = _train_semantic_residual_head(
                 flow,
                 residual_examples,
                 args,
@@ -8847,10 +5428,10 @@ def run_one_step_semantic_fisher_cycle(
                     progress_prefix=f"cycle_eval_iter_{iteration}",
                 )
                 records = [
-                    {**_cycle_eval_record(row, model_role="v5_poisson_residual_field"), "cycle_iteration": int(iteration)}
+                    {**_cycle_eval_record(row, model_role="semantic_poisson_residual_field"), "cycle_iteration": int(iteration)}
                     for row in records
                 ]
-                iteration_summary = _cycle_eval_summary(records, model_role="v5_poisson_residual_field")
+                iteration_summary = _cycle_eval_summary(records, model_role="semantic_poisson_residual_field")
                 iteration_summary["iteration"] = int(iteration)
                 iteration_eval_records.extend(records)
                 iteration_eval_summaries.append(iteration_summary)
@@ -8861,7 +5442,7 @@ def run_one_step_semantic_fisher_cycle(
                 )
             cycle_history.append(cycle_summary)
             if bool(args.log_epochs):
-                print(json.dumps({"phase": "v5_cycle_complete", **cycle_summary}), flush=True)
+                print(json.dumps({"phase": "semantic_cycle_complete", **cycle_summary}), flush=True)
 
     flow_records: list[dict[str, Any]] = []
     if not bool(args.train_only):
@@ -8874,12 +5455,12 @@ def run_one_step_semantic_fisher_cycle(
             progress_out_dir=out_dir / "flow_eval",
             progress_prefix="flow",
         )
-        flow_records = [_cycle_eval_record(row, model_role="v5_poisson_residual_field") for row in flow_records]
-    flow_summary = _cycle_eval_summary(flow_records, model_role="v5_poisson_residual_field")
+        flow_records = [_cycle_eval_record(row, model_role="semantic_poisson_residual_field") for row in flow_records]
+    flow_summary = _cycle_eval_summary(flow_records, model_role="semantic_poisson_residual_field")
     summary = {
         "algorithm": "complete_expression_semantic_fm",
         "training_flow": "semantic_poisson_residual_fisher_cycle",
-        "objective_version": V5_OBJECTIVE_VERSION,
+        "objective_name": OBJECTIVE_NAME,
         "construction_graph": str(args.construction_graph),
         "construction_family": str(graph_family),
         "task_conditioning": "xy",
@@ -8889,8 +5470,6 @@ def run_one_step_semantic_fisher_cycle(
         "semantic_update": "weighted_poisson_minimum_fisher_kinetic",
         "coupling": "same_particle_no_matching",
         "matching": "none",
-        "mutation": "none",
-        "archive": "none",
         "output_terms": 1,
         "cycle_particles_per_task": int(args.cycle_particles_per_task),
         "expressions_per_endpoint": 1,
@@ -8915,7 +5494,7 @@ def run_one_step_semantic_fisher_cycle(
     task_split = make_task_split(train_tasks, eval_tasks)
     checkpoint = {
         "algorithm": "complete_expression_semantic_fm",
-        "objective_version": V5_OBJECTIVE_VERSION,
+        "objective_name": OBJECTIVE_NAME,
         "template": {
             "construction_graph": str(args.construction_graph),
             "num_vars": int(template.num_vars),
@@ -8936,7 +5515,7 @@ def run_one_step_semantic_fisher_cycle(
         "summary": summary,
     }
     _write_cycle_jsonl(out_dir / "one_step_cycle_train_curve.jsonl", train_curve)
-    _write_cycle_jsonl(out_dir / "v5_semantic_corrections.jsonl", correction_rows)
+    _write_cycle_jsonl(out_dir / "semantic_corrections.jsonl", correction_rows)
     _write_cycle_jsonl(out_dir / "outer_iteration_flow_landscape.jsonl", landscape_rows)
     _write_cycle_jsonl(out_dir / "cycle_eval_iterations.jsonl", iteration_eval_records)
     _write_cycle_jsonl(out_dir / "one_step_cycle_samples.jsonl", flow_records)
@@ -8950,8 +5529,6 @@ def run_one_step_semantic_fisher_cycle(
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if str(args.training_flow) != "one_step_semantic_fisher_cycle":
         raise ValueError("only one_step_semantic_fisher_cycle is supported")
-    if bool(getattr(args, "legacy_v2_eval", False)) and not bool(args.eval_only):
-        raise ValueError("--legacy-v2-eval is read-only and requires --eval-only")
     _seed_everything(int(args.seed))
     device = _resolve_device(args.device)
     loaded_ckpt: dict[str, Any] | None = None
@@ -8984,7 +5561,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     print(
         json.dumps(
             {
-                "phase": "v5_task_sources_loaded",
+                "phase": "semantic_task_sources_loaded",
                 "train_tasks": len(train_raw),
                 "eval_tasks": len(eval_raw),
                 "runtime_sec": time.perf_counter() - setup_started,
@@ -9022,7 +5599,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     print(
         json.dumps(
             {
-                "phase": "v5_task_bundles_compiled",
+                "phase": "semantic_task_bundles_compiled",
                 "train_tasks": len(train_tasks),
                 "eval_tasks": len(eval_tasks),
                 "gt_traces_per_task": int(args.gt_traces_per_task),
@@ -9031,8 +5608,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         ),
         flush=True,
     )
-    runner = run_legacy_one_step_semantic_fisher_cycle if bool(getattr(args, "legacy_v2_eval", False)) else run_one_step_semantic_fisher_cycle
-    return runner(
+    return run_one_step_semantic_fisher_cycle(
         args,
         template=template,
         graph_family=graph_family,
@@ -9046,7 +5622,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="results/clean_benchmark/semantic_poisson_residual_fisher_v5_1/run")
+    parser.add_argument("--out", default="results/clean_benchmark/semantic_flow/run")
     parser.add_argument("--manifest", default="data/benchmark_suites/benchmark_manifest.json")
     parser.add_argument("--manifest-root", default="data/benchmark_suites")
     parser.add_argument("--suites", nargs="+", default=["nguyen", "constant", "livermore", "jin"])
@@ -9057,7 +5633,7 @@ def main() -> None:
     parser.add_argument("--symbolicgpt-point-train-fraction", type=float, default=0.8)
     parser.add_argument("--task-id-filter", default="")
     parser.add_argument("--allow-empty-eval", action="store_true")
-    parser.add_argument("--trace-cache-root", default="data/cache/semantic_flow_v5")
+    parser.add_argument("--trace-cache-root", default="data/cache/semantic_flow")
     parser.add_argument("--trace-cache-mode", choices=["off", "require"], default="off")
     parser.add_argument("--trace-cache-seed", type=int, default=20260711)
     parser.add_argument("--bootstrap-source-mass-schedule", default="0.30,0.20,0.10")
@@ -9117,104 +5693,25 @@ def main() -> None:
     parser.add_argument("--time-sampling", choices=["uniform", "low_t_mixture"], default="uniform")
     parser.add_argument("--low-t-sampling-prob", type=float, default=0.4)
     parser.add_argument("--low-t-max", type=float, default=0.35)
-    parser.add_argument("--semantic-action-features", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--active-node-semantic-features", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--semantic-score-stage", choices=["off"], default="off")
-    parser.add_argument("--score-epochs", type=int, default=1)
-    parser.add_argument("--score-steps-per-epoch", type=int, default=5)
-    parser.add_argument("--score-batch-size", type=int, default=2)
-    parser.add_argument("--score-label-temperature", type=float, default=0.5)
-    parser.add_argument("--rollout-guidance-mode", choices=["off", "semantic_mass_ng", "graph_mass_online", "both"], default="off")
-    parser.add_argument("--rollout-velocity-gain", type=float, default=1.0)
-    parser.add_argument("--semantic-mass-samples", type=int, default=16)
-    parser.add_argument("--semantic-mass-temperature", type=float, default=0.5)
-    parser.add_argument("--semantic-mass-complexity-weight", type=float, default=1.0e-3)
-    parser.add_argument("--semantic-mass-invalid-penalty", type=float, default=20.0)
-    parser.add_argument("--semantic-mass-collapse-penalty", type=float, default=5.0)
-    parser.add_argument("--semantic-tilt-energy", choices=["target_distance", "penalized_energy"], default="target_distance")
-    parser.add_argument("--semantic-mass-posterior-mix", type=float, default=0.05)
-    parser.add_argument("--semantic-guidance-strength", "--guidance-strength", dest="semantic_guidance_strength", type=float, default=0.05)
-    parser.add_argument("--semantic-guidance-time-gate", choices=["sin2", "one"], default="sin2")
-    parser.add_argument("--semantic-guidance-fr-cap", "--guidance-absolute-cap", dest="semantic_guidance_fr_cap", type=float, default=0.05)
-    parser.add_argument("--semantic-endpoint-samples", type=int, default=16)
-    parser.add_argument("--semantic-endpoint-mix", type=float, default=1.0)
-    parser.add_argument("--semantic-endpoint-fr-cap", type=float, default=0.0)
-    parser.add_argument("--semantic-endpoint-top-fraction", type=float, default=0.25)
-    parser.add_argument("--semantic-endpoint-projection-mode", choices=["weighted_marginal", "elite_marginal", "elite_map", "elite_map_fallback"], default="elite_map_fallback")
-    parser.add_argument("--semantic-endpoint-elite-fraction", type=float, default=0.25)
-    parser.add_argument("--semantic-endpoint-min-elite-samples", type=int, default=2)
-    parser.add_argument("--semantic-endpoint-p0-per-task", type=int, default=4)
-    parser.add_argument("--semantic-endpoint-map-fallback-min-improvement", type=float, default=0.0)
-    parser.add_argument("--semantic-endpoint-projection-check-samples", type=int, default=8)
-    parser.add_argument("--semantic-endpoint-buffer-size", type=int, default=256)
-    parser.add_argument("--semantic-endpoint-task-limit", type=int, default=0)
-    parser.add_argument("--semantic-endpoint-progress-interval", type=int, default=64)
-    parser.add_argument("--semantic-endpoint-collection-checkpoint", default="")
-    parser.add_argument("--semantic-endpoint-resume-collection", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--semantic-endpoint-training-mode", choices=["corrected_bridge_fm"], default="corrected_bridge_fm")
-    parser.add_argument("--semantic-endpoint-train-base", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--cycle-iterations", type=int, default=1)
     parser.add_argument("--cycle-collection-task-limit", type=int, default=0)
     parser.add_argument("--cycle-particles-per-task", type=int, default=8)
     parser.add_argument("--cycle-expression-samples", type=int, default=0)
-    parser.add_argument("--cycle-semantic-temperature", type=float, default=0.25)
-    parser.add_argument("--cycle-semantic-kl-budget", type=float, default=0.10)
     parser.add_argument("--cycle-poisson-steps", type=int, default=64)
     parser.add_argument("--cycle-poisson-lr", type=float, default=1.0e-3)
     parser.add_argument("--cycle-correction-step", type=float, default=0.10)
     parser.add_argument("--cycle-support-variance-eps", type=float, default=1.0e-6)
     parser.add_argument("--cycle-collection-timeout-sec", type=float, default=300.0)
-    parser.add_argument(
-        "--cycle-semantic-energy-mode",
-        choices=["fit_r2_first", "raw_semantic"],
-        default="fit_r2_first",
-        help="trace-posterior energy for the v4 semantic proximal step; raw_semantic keeps the old raw-output objective",
-    )
-    parser.add_argument("--cycle-gt-anchor-alpha", type=float, default=-1.0)
-    parser.add_argument("--cycle-correction-ratio-limit", type=float, default=0.25)
-    parser.add_argument("--cycle-ot-entropy-scale", type=float, default=0.05)
-    parser.add_argument("--cycle-proximal-radius", type=float, default=0.35)
-    parser.add_argument("--cycle-proximal-candidate-budget", type=int, default=6)
-    parser.add_argument("--cycle-proximal-alt-actions", type=int, default=1)
-    parser.add_argument("--cycle-manifold-fr-mean-gate", type=float, default=0.15)
-    parser.add_argument("--cycle-manifold-fr-p95-gate", type=float, default=0.35)
-    parser.add_argument("--cycle-flow-gt-probe-samples", type=int, default=4)
     parser.add_argument("--cycle-landscape-sources", type=int, default=4)
     parser.add_argument("--cycle-landscape-task-limit", type=int, default=1)
     parser.add_argument("--cycle-landscape-time-points", type=int, default=5)
-    parser.add_argument("--cycle-proposer-source", choices=["learned_flow", "reference_bridge", "gt_reference"], default="learned_flow")
-    parser.add_argument("--cycle-one-step-student", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--cycle-one-step-student-gate-fr", type=float, default=0.25)
-    parser.add_argument("--cycle-projection-eps", type=float, default=0.02)
-    parser.add_argument("--cycle-projection-sharpness", type=float, default=1.0)
-    parser.add_argument("--cycle-explore-temperatures", default="0.7,1.0,1.5")
-    parser.add_argument("--cycle-elite-modes", type=int, default=0)
-    parser.add_argument("--cycle-archive-size", type=int, default=0)
-    parser.add_argument("--cycle-mutation-samples", type=int, default=0)
-    parser.add_argument("--cycle-soft-endpoint-samples", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--cycle-eval-each-iteration", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--cycle-score-split", choices=["deterministic_half"], default="deterministic_half")
-    parser.add_argument("--cycle-skeleton-tilt", choices=["eval_only"], default="eval_only")
     parser.add_argument("--cycle-proposer-rollout-steps", type=int, default=8)
     parser.add_argument("--cycle-graph-visualization-sources", type=int, default=4)
     parser.add_argument("--cycle-flow-epochs", type=int, default=4)
-    parser.add_argument("--cycle-proposer-epochs", type=int, default=0)
     parser.add_argument("--cycle-steps-per-epoch", type=int, default=50)
     parser.add_argument("--cycle-flow-lr", type=float, default=5.0e-4)
-    parser.add_argument("--cycle-proposer-lr", type=float, default=0.0)
     parser.add_argument("--cycle-time-sampling", choices=["stratified_fisher", "inherit"], default="stratified_fisher")
-    parser.add_argument("--cycle-inactive-identity-weight", type=float, default=0.05)
-    parser.add_argument("--cycle-readout-loss-weight", type=float, default=3.0)
-    parser.add_argument("--cycle-op-loss-weight", type=float, default=1.5)
-    parser.add_argument("--cycle-endpoint-loss-weight", type=float, default=0.25)
-    parser.add_argument("--cycle-consistency-examples", type=int, default=16)
-    parser.add_argument("--cycle-terminal-rk2-steps", type=int, default=8)
-    parser.add_argument("--cycle-terminal-batch-size", type=int, default=2)
-    parser.add_argument("--cycle-gt-replay-fraction", type=float, default=0.25)
-    parser.add_argument("--cycle-gt-teacher-weight", type=float, default=0.10)
-    parser.add_argument("--cycle-gt-teacher-low-t-max", type=float, default=0.10)
-    parser.add_argument("--cycle-gt-teacher-temperature", type=float, default=0.25)
-    parser.add_argument("--cycle-gt-teacher-action-bias", type=float, default=2.0)
     parser.add_argument("--ode-steps", type=int, default=64)
     parser.add_argument("--ode-sweep-steps", default="32,64")
     parser.add_argument("--eval-theta0-samples", type=int, default=1)
@@ -9244,7 +5741,6 @@ def main() -> None:
     parser.add_argument("--fixed-batch-size", type=int, default=64)
     parser.add_argument("--eval-only", action="store_true")
     parser.add_argument("--train-only", action="store_true")
-    parser.add_argument("--legacy-cycle-eval", "--legacy-v2-eval", dest="legacy_v2_eval", action="store_true")
     parser.add_argument("--load-checkpoint", default="")
     parser.add_argument("--early-stop-loss", type=float, default=0.0)
     parser.add_argument("--device", default="auto")
