@@ -2265,8 +2265,39 @@ def register_low_cost_semantic_features(
     rows: list[torch.Tensor] = []
     for block in template.blocks:
         bank = banks[-1] if block.kind == "readout" else banks[int(block.layer)]
-        if block.kind in {"readout", "reg_arg"}:
+        if block.kind == "readout":
             features = _semantic_features_batch(bank.transpose(0, 1), y)
+            extra = features.new_zeros((int(features.shape[0]), 2))
+        elif block.kind == "reg_arg":
+            layer = int(block.layer)
+            slot = int(block.slot)
+            features = _semantic_features_batch(bank.transpose(0, 1), y)
+            op_index = register_op_block_index(template, layer)
+            other_slot = 1 - slot
+            other_index = register_arg_block_index(template, layer, other_slot)
+            op_probs = masked_single_block_softmax(blocks[op_index], template, op_index)
+            other_probs = masked_single_block_softmax(blocks[other_index], template, other_index)
+            other = (bank * other_probs[None, :]).sum(dim=1)
+            keep_value = bank[:, int(template.write_register_for_layer(layer))]
+            consequences: list[torch.Tensor] = []
+            for action in range(int(block.size)):
+                candidate = bank[:, action]
+                mixed = torch.zeros_like(candidate)
+                for op_action, op in enumerate(template.ops):
+                    if op_action >= int(op_probs.numel()):
+                        continue
+                    if op_arity(str(op)) == 1:
+                        arg0 = candidate if slot == 0 else other
+                        value = _safe_apply_semantic(str(op), [arg0])
+                    else:
+                        arg0, arg1 = (candidate, other) if slot == 0 else (other, candidate)
+                        value = _safe_apply_semantic(str(op), [arg0, arg1])
+                    mixed = mixed + op_probs[op_action] * value
+                if int(template.keep_action_index) < int(op_probs.numel()):
+                    mixed = mixed + op_probs[int(template.keep_action_index)] * keep_value
+                consequences.append(sanitize_values(mixed))
+            consequence_features = _semantic_features_batch(torch.stack(consequences), y)
+            extra = consequence_features[:, :2]
         elif block.kind == "reg_op":
             layer = int(block.layer)
             arg0_p = masked_single_block_softmax(blocks[register_arg_block_index(template, layer, 0)], template, register_arg_block_index(template, layer, 0))
@@ -2283,9 +2314,11 @@ def register_low_cost_semantic_features(
                 else:
                     values.append(torch.zeros_like(arg0))
             features = _semantic_features_batch(torch.stack(values), y)
+            extra = features.new_zeros((int(features.shape[0]), 2))
         else:
             features = theta.new_zeros((int(block.size), 8))
-        rows.append(torch.cat([features, features.new_zeros((int(features.shape[0]), 2))], dim=1))
+            extra = features.new_zeros((int(features.shape[0]), 2))
+        rows.append(torch.cat([features, extra], dim=1))
     return torch.cat(rows, dim=0)
 
 
