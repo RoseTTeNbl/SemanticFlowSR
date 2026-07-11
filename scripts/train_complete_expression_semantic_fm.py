@@ -4810,8 +4810,8 @@ def _train_semantic_base_flow(
     optimizer = torch.optim.AdamW(base.parameters(), lr=float(args.lr), weight_decay=float(args.weight_decay))
     rng = random.Random(int(args.seed) + 91_001)
     curve: list[dict[str, Any]] = []
-    best = float("inf")
-    best_state: dict[str, torch.Tensor] | None = None
+    final_best = float("inf")
+    final_best_row: dict[str, Any] | None = None
     schedule = [float(value) for value in str(getattr(args, "bootstrap_source_mass_schedule", "0.30,0.20,0.10")).split(",")]
     if any(value <= 0.0 or value >= 0.5 for value in schedule):
         raise ValueError("bootstrap source-mass schedule values must be in (0, 0.5)")
@@ -4823,6 +4823,9 @@ def _train_semantic_base_flow(
     particles_per_task = max(int(getattr(args, "cycle_particles_per_task", 8)), 1)
     global_epoch = 0
     for stage_index, source_mass in enumerate(schedule, start=1):
+      stage_best = float("inf")
+      stage_best_state: dict[str, torch.Tensor] | None = None
+      stage_best_row: dict[str, Any] | None = None
       for epoch in range(stage_epochs):
         global_epoch += 1
         loss_sum = torch.zeros((), device=device)
@@ -4915,9 +4918,6 @@ def _train_semantic_base_flow(
         mean_loss = float((loss_sum / max(loss_count, 1)).cpu())
         mean_zero_loss = float((zero_sum / max(zero_count, 1)).cpu())
         mean_inactive_loss = float((inactive_sum / max(inactive_count, 1)).cpu())
-        if mean_loss < best:
-            best = mean_loss
-            best_state = {key: value.detach().cpu().clone() for key, value in base.state_dict().items()}
         row = {
             "phase": "semantic_gt_bootstrap",
             "epoch": int(global_epoch),
@@ -4936,13 +4936,20 @@ def _train_semantic_base_flow(
             numerator, denominator = relative_sums[key]
             denominator_value = float(denominator.cpu())
             row[f"flow_{key}_relative_fisher_loss"] = float((numerator / denominator.clamp_min(1.0e-12)).cpu()) if denominator_value > 0.0 else None
+        relative_loss = float(row["flow_relative_fisher_loss"])
+        if relative_loss < stage_best:
+            stage_best = relative_loss
+            stage_best_state = {key: value.detach().cpu().clone() for key, value in base.state_dict().items()}
+            stage_best_row = dict(row)
         curve.append(row)
         if bool(args.log_epochs):
             print(json.dumps(row), flush=True)
-    if best_state is not None:
-        base.load_state_dict({key: value.to(device) for key, value in best_state.items()})
-    summary = dict(curve[-1])
-    summary["best_flow_fisher_velocity_loss"] = float(best)
+      if stage_best_state is not None:
+          base.load_state_dict({key: value.to(device) for key, value in stage_best_state.items()})
+          final_best = stage_best
+          final_best_row = stage_best_row
+    summary = dict(final_best_row or curve[-1])
+    summary["best_flow_relative_fisher_loss"] = float(final_best)
     return curve, summary
 
 
