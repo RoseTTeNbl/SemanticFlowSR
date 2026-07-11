@@ -2920,6 +2920,16 @@ def integrate_batch(theta: torch.Tensor, velocity: torch.Tensor, template: Fixed
     return torch.cat(rows, dim=1)
 
 
+def _block_fisher_distances(source: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    root_source = source.float().clamp_min(1.0e-12).sqrt()
+    root_target = target.float().to(source.device).clamp_min(1.0e-12).sqrt()
+    half_angle = torch.atan2(
+        (root_source - root_target).norm(dim=-1),
+        (root_source + root_target).norm(dim=-1).clamp_min(1.0e-12),
+    )
+    return 4.0 * half_angle
+
+
 @torch.no_grad()
 def rollout_batch(
     flow: PoissonResidualVelocity,
@@ -2994,7 +3004,7 @@ def rollout_with_snapshots(
                 theta.view(len(model.template.blocks), int(model.template.source_count)),
                 model.template,
             )
-            block_step = _lineage_block_fisher_distances(before_probability, after_probability)
+            block_step = _block_fisher_distances(before_probability, after_probability)
             max_step_distance = max(max_step_distance, float(block_step.max().detach().cpu()))
             finite_steps += int(torch.isfinite(theta).all().detach().cpu())
         completed_step = step + 1
@@ -3333,6 +3343,50 @@ def hard_decode_choices(theta: torch.Tensor, template: Any) -> list[int]:
     return choices
 
 
+def _gt_rollout_diagnostics(
+    template: RegisterOperatorSimplexTemplate,
+    theta: torch.Tensor,
+    probabilities: torch.Tensor,
+    choices: list[int],
+    task: TaskBundle,
+    generator: torch.Generator,
+    *,
+    sample_count: int,
+) -> dict[str, Any]:
+    expr, _terms, _layers = execute_choices(template, choices)
+    expression = to_string(expr, int(template.num_vars), simplify=False)
+    sampled_hits = 0
+    for _ in range(max(int(sample_count), 0)):
+        sampled_choices = sample_choices(theta, template, generator)
+        sampled_expr, _sampled_terms, _sampled_layers = execute_choices(template, sampled_choices)
+        sampled_expression = to_string(sampled_expr, int(template.num_vars), simplify=False)
+        sampled_hits += int(_symbolic_equiv(task.ground_truth, sampled_expression))
+    trace_rows: list[tuple[float, float, float]] = []
+    for trace in task.traces:
+        trace_choices = [int(value) for value in trace.get("choices", [])]
+        active_indices = [int(value) for value in trace.get("active_block_indices", [])]
+        if not trace_choices or not active_indices:
+            continue
+        active = torch.tensor(active_indices, dtype=torch.long, device=probabilities.device)
+        selected = torch.tensor([trace_choices[index] for index in active_indices], dtype=torch.long, device=probabilities.device)
+        selected_probability = probabilities[active, selected].clamp_min(1.0e-12)
+        trace_rows.append((
+            float(selected_probability.log().mean().exp().cpu()),
+            float((probabilities.argmax(dim=-1)[active] == selected).float().mean().cpu()),
+            float(selected_probability.log().sum().cpu()),
+        ))
+    best = max(trace_rows, key=lambda row: (row[0], row[2])) if trace_rows else (0.0, 0.0, -math.inf)
+    return {
+        "flow_hard_expression": expression,
+        "flow_hard_gt_symbolic_hit": float(_symbolic_equiv(task.ground_truth, expression)),
+        "flow_sample_gt_hit_rate": float(sampled_hits / max(int(sample_count), 1)) if sample_count > 0 else 0.0,
+        "flow_gt_trace_probability_geometric_mean_max": best[0],
+        "flow_gt_trace_active_argmax_match_max": best[1],
+        "flow_nearest_gt_cell_fr_rms": None,
+        "flow_nearest_gt_cell_fr_mean": None,
+    }
+
+
 def terminal_single_expression_retraction(
     theta: torch.Tensor,
     template: RegisterOperatorSimplexTemplate,
@@ -3574,14 +3628,13 @@ def select_best_rollout(
         gt_probe_generator = torch.Generator(device=theta.device).manual_seed(
             int(args.seed) + _stable_task_seed(task.task_id) + 104_729 * int(_theta_sample)
         )
-        pre_retraction_gt_diag = _lineage_gt_rollout_diagnostics(
+        pre_retraction_gt_diag = _gt_rollout_diagnostics(
             model.template,
             theta,
             raw_probabilities,
             raw_choices,
             task,
             gt_probe_generator,
-            projection_eps=float(getattr(args, "cycle_projection_eps", 0.02)),
             sample_count=max(int(getattr(args, "eval_flow_gt_probe_samples", 4)), 0),
         )
         direct_gt_diag = {
@@ -4472,6 +4525,98 @@ def make_task_split(train_tasks: list[TaskBundle], eval_tasks: list[TaskBundle])
             task.task_id: [float(trace.get("semantic_oracle_raw_r2", 0.0)) for trace in task.traces]
             for task in eval_tasks
         },
+    }
+
+
+def _cycle_compiler_metrics(tasks: list[TaskBundle]) -> dict[str, Any]:
+    traces = [trace for task in tasks for trace in task.traces]
+    oracle_r2 = [float(trace.get("semantic_oracle_raw_r2", -math.inf)) for trace in traces]
+    return {
+        "task_count": int(len(tasks)),
+        "compiled_task_count": int(sum(bool(task.traces) for task in tasks)),
+        "compile_failure_count": int(sum(len(task.compile_failures) for task in tasks)),
+        "accepted_trace_count": int(len(traces)),
+        "semantic_oracle_pass_count": int(sum(value >= 0.999999 for value in oracle_r2)),
+        "semantic_oracle_raw_r2_min": float(min(oracle_r2)) if oracle_r2 else None,
+        "semantic_oracle_raw_r2_mean": float(np.mean(oracle_r2)) if oracle_r2 else None,
+    }
+
+
+def _write_cycle_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as handle:
+        for row in rows:
+            handle.write(json.dumps(_jsonable(row), ensure_ascii=False) + "\n")
+
+
+def write_outer_iteration_coupling_figure(out_dir: Path, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Persist the trajectory records consumed by the paper visualization."""
+    if not rows:
+        return {"status": "not_run", "row_count": 0}
+    path = out_dir / "outer_iteration_flow_landscape.jsonl"
+    _write_cycle_jsonl(path, rows)
+    iterations = sorted({int(row.get("iteration", 0)) for row in rows})
+    time_points = sorted({float(row.get("t", 0.0)) for row in rows})
+    metadata = {
+        "status": "complete",
+        "row_count": int(len(rows)),
+        "iteration_count": int(len(iterations)),
+        "iterations": iterations,
+        "time_points": time_points,
+        "records": str(path),
+    }
+    (out_dir / "outer_iteration_flow_landscape.json").write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
+    )
+    return metadata
+
+
+def _cycle_eval_record(record: dict[str, Any], *, model_role: str) -> dict[str, Any]:
+    out = dict(record)
+    out["model_role"] = str(model_role)
+    return out
+
+
+def _cycle_eval_summary(records: list[dict[str, Any]], *, model_role: str) -> dict[str, Any]:
+    if not records:
+        return {"model_role": str(model_role), "evaluation_status": "not_run", "n_tasks": 0}
+
+    def values(key: str) -> list[float]:
+        return [
+            float(row[key])
+            for row in records
+            if key in row and isinstance(row[key], (int, float, bool)) and math.isfinite(float(row[key]))
+        ]
+
+    def mean(key: str) -> float | None:
+        rows = values(key)
+        return float(np.mean(rows)) if rows else None
+
+    def median(key: str) -> float | None:
+        rows = values(key)
+        return float(np.median(rows)) if rows else None
+
+    return {
+        "model_role": str(model_role),
+        "evaluation_status": "complete",
+        "n_tasks": int(len(records)),
+        "raw_test_r2_mean": mean("raw_test_r2_without_affine"),
+        "raw_test_r2_median": median("raw_test_r2_without_affine"),
+        "coefficient_fitted_test_r2_mean": mean("r2"),
+        "coefficient_fitted_test_r2_median": median("r2"),
+        "term_linear_fit_test_r2_mean": mean("term_linear_fit_r2"),
+        "skeleton_accuracy": mean("skeleton_match"),
+        "operator_dependency_accuracy": mean("operator_dependency_match"),
+        "symbolic_equivalence_rate": mean("simplified_symbolic_equivalence"),
+        "valid_expression_fraction_mean": mean("valid_expression_fraction"),
+        "population_unique_expression_count_mean": mean("eval_population_unique_expression_count"),
+        "population_raw_r2_mean": mean("eval_population_raw_r2_mean"),
+        "population_raw_r2_median": mean("eval_population_raw_r2_median"),
+        "population_term_fit_r2_mean": mean("eval_population_term_fit_r2_mean"),
+        "terminal_retraction_fr_mean": mean("eval_terminal_retraction_fr_mean"),
+        "terminal_retraction_fr_p95": mean("eval_terminal_retraction_fr_p95"),
+        "terminal_retraction_expression_preserved_rate": mean("eval_terminal_retraction_expression_preserved_rate"),
+        "evaluation_runtime_sec_mean": mean("eval_runtime_sec"),
     }
 
 
