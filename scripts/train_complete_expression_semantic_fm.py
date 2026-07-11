@@ -4688,8 +4688,9 @@ def _train_semantic_base_flow(
         for _step in range(max(int(args.steps_per_epoch), 1)):
             optimizer.zero_grad(set_to_none=True)
             batch: list[torch.Tensor] = []
-            for _ in range(max(int(args.train_batch_size), 1)):
-                pool = rng.choice(task_pools)
+            task_batch_size = min(max(int(args.train_batch_size), 1), len(task_pools))
+            selected_pools = rng.sample(task_pools, k=task_batch_size)
+            for pool in selected_pools:
                 selected_examples = [pool[index % len(pool)] for index in range(particles_per_task)]
                 draw = rng.random()
                 t = rng.random() * 0.1 if draw < 0.2 else (0.1 + 0.8 * rng.random() if draw < 0.8 else 0.9 + 0.1 * rng.random())
@@ -4722,7 +4723,7 @@ def _train_semantic_base_flow(
                     active_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, weights, eps=float(args.fisher_eps))
                     inactive = ~example.active_mask.to(device)
                     inactive_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, inactive.float(), eps=float(args.fisher_eps))
-                    loss = active_loss + float(getattr(args, "bootstrap_inactive_weight", 0.10)) * inactive_loss
+                    loss = active_loss + float(getattr(args, "bootstrap_inactive_weight", 0.20)) * inactive_loss
                     zero, _ = stage1_velocity_loss(theta_t, torch.zeros_like(target), target, base.template, weights, eps=float(args.fisher_eps))
                     task_losses.append(loss)
                     zero_losses.append(float(zero.detach().cpu()))
@@ -5637,7 +5638,7 @@ def main() -> None:
     parser.add_argument("--trace-cache-mode", choices=["off", "require"], default="off")
     parser.add_argument("--trace-cache-seed", type=int, default=20260711)
     parser.add_argument("--bootstrap-source-mass-schedule", default="0.30,0.20,0.10")
-    parser.add_argument("--bootstrap-inactive-weight", type=float, default=0.10)
+    parser.add_argument("--bootstrap-inactive-weight", type=float, default=0.20)
     parser.add_argument("--bootstrap-gate", choices=["off", "A", "B", "C"], default="off")
     parser.add_argument("--training-flow", choices=["one_step_semantic_fisher_cycle"], default="one_step_semantic_fisher_cycle")
     parser.add_argument("--construction-graph", choices=list(CONSTRUCTION_GRAPHS), default="register_categorical_blocks")

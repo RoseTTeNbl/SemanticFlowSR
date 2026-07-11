@@ -82,7 +82,7 @@ ARGS=(
   --cycle-poisson-steps "${POISSON_STEPS:-64}" --cycle-poisson-lr "${POISSON_LR:-1e-3}"
   --cycle-correction-step "${CORRECTION_STEP:-0.1}" --cycle-support-variance-eps "${SUPPORT_VARIANCE_EPS:-1e-6}"
   --cycle-collection-timeout-sec "${COLLECTION_TIMEOUT_SEC:-300}"
-  --bootstrap-source-mass-schedule "${BOOTSTRAP_SOURCE_MASS_SCHEDULE:-0.30,0.20,0.10}" --bootstrap-inactive-weight "${BOOTSTRAP_INACTIVE_WEIGHT:-0.10}"
+  --bootstrap-source-mass-schedule "${BOOTSTRAP_SOURCE_MASS_SCHEDULE:-0.30,0.20,0.10}" --bootstrap-inactive-weight "${BOOTSTRAP_INACTIVE_WEIGHT:-0.20}"
   --bootstrap-gate "${BOOTSTRAP_GATE:-C}"
   --cycle-landscape-sources "${LANDSCAPE_SOURCES:-4}"
   --cycle-landscape-task-limit "${LANDSCAPE_TASK_LIMIT:-1}"

@@ -23,7 +23,7 @@ COMMON=(
   --epochs "${BOOTSTRAP_EPOCHS:-6}" --steps-per-epoch "${BOOTSTRAP_STEPS:-60}" --train-batch-size 8
   --cycle-iterations 0 --cycle-particles-per-task 8 --cycle-proposer-rollout-steps 8
   --cycle-collection-timeout-sec 300 --bootstrap-source-mass-schedule 0.30,0.20,0.10
-  --bootstrap-inactive-weight 0.10 --no-cycle-eval-each-iteration
+  --bootstrap-inactive-weight "${BOOTSTRAP_INACTIVE_WEIGHT:-0.20}" --no-cycle-eval-each-iteration
   --eval-theta0-samples 8 --eval-samples 1 --seed "${SEED:-20260711}" --log-epochs
 )
 
