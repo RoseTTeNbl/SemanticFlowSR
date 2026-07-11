@@ -72,6 +72,7 @@ ARGS=(
   --output-terms 1 --gt-traces-per-task 8
   --hidden "$HIDDEN" --metadata-embedding-dim 16
   --max-train-points 64 --max-eval-points 64
+  --semantic-condition-points "${SEMANTIC_CONDITION_POINTS:-16}"
   --epochs "$BOOTSTRAP_EPOCHS" --steps-per-epoch "$BOOTSTRAP_STEPS" --train-batch-size 4
   --lr "${BOOTSTRAP_LR:-5e-4}" --weight-decay 1e-5 --grad-clip 1.0
   --theta0-noise-scale 1.0 --theta0-endpoint-coupling none

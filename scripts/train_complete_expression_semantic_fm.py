@@ -1885,6 +1885,7 @@ class TaskConditionedVelocityNet(FixedSymbolConditionedVelocityNet):
     route_free = True
 
     def __init__(self, template: Any, hidden: int, **kwargs: Any):
+        self.semantic_condition_points = int(kwargs.pop("semantic_condition_points", 16))
         kwargs.pop("velocity_parameterization", None)
         kwargs.pop("active_node_semantic_features", None)
         # The old online register semantic path contains hard-prefix and signed
@@ -1902,7 +1903,8 @@ class TaskConditionedVelocityNet(FixedSymbolConditionedVelocityNet):
     def forward(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
         # Reuse the established state/task trunk while making every former
         # seed channel a deterministic function of the current Eulerian state.
-        velocity = self._predict_field(x, y, theta, float(t), theta)
+        semantic_count = min(max(self.semantic_condition_points, 1), int(x.shape[0]))
+        velocity = self._predict_field(x[:semantic_count], y[:semantic_count], theta, float(t), theta)
         gates = register_soft_block_reachability(self.template, theta).repeat_interleave(int(self.template.source_count))
         return center_theta(velocity * gates, self.template)
 
@@ -1917,7 +1919,10 @@ class TaskConditionedVelocityNet(FixedSymbolConditionedVelocityNet):
         t: float,
         task_embedding: torch.Tensor,
     ) -> torch.Tensor:
-        velocity = self._predict_field(x, y, theta, float(t), theta, task_embedding=task_embedding)
+        semantic_count = min(max(self.semantic_condition_points, 1), int(x.shape[0]))
+        velocity = self._predict_field(
+            x[:semantic_count], y[:semantic_count], theta, float(t), theta, task_embedding=task_embedding
+        )
         gates = register_soft_block_reachability(self.template, theta).repeat_interleave(int(self.template.source_count))
         return center_theta(velocity * gates, self.template)
 
@@ -5438,6 +5443,7 @@ def run_one_step_semantic_fisher_cycle(
         "metadata_embedding_dim": int(args.metadata_embedding_dim),
         "task_encoder_mode": str(args.task_encoder_mode),
         "task_conditioning": "xy",
+        "semantic_condition_points": int(args.semantic_condition_points),
     }
     base = TaskConditionedVelocityNet(template, int(args.hidden), **model_kwargs).to(device)
     flow = PoissonResidualVelocity(base).to(device)
@@ -5833,6 +5839,7 @@ def main() -> None:
     parser.add_argument("--eval-task-limit", type=int, default=2)
     parser.add_argument("--max-train-points", type=int, default=64)
     parser.add_argument("--max-eval-points", type=int, default=64)
+    parser.add_argument("--semantic-condition-points", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--steps-per-epoch", type=int, default=10)
     parser.add_argument("--train-batch-size", type=int, default=4)

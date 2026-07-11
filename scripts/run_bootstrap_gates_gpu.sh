@@ -19,7 +19,7 @@ COMMON=(
   --ops copy,add,sub,mul,protected_div,sin,cos,square,cube,protected_log,protected_sqrt,exp
   --output-terms 1 --gt-traces-per-task 8
   --trace-cache-root "$CACHE" --trace-cache-mode require
-  --hidden 128 --metadata-embedding-dim 16 --max-train-points 64 --max-eval-points 64
+  --hidden 128 --metadata-embedding-dim 16 --max-train-points 64 --max-eval-points 64 --semantic-condition-points 16
   --epochs "${BOOTSTRAP_EPOCHS:-6}" --steps-per-epoch "${BOOTSTRAP_STEPS:-60}" --train-batch-size 8
   --cycle-iterations 0 --cycle-particles-per-task 8 --cycle-proposer-rollout-steps 8
   --cycle-collection-timeout-sec 300 --bootstrap-source-mass-schedule 0.30,0.20,0.10
