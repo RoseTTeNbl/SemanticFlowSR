@@ -33,6 +33,7 @@ from semflow_sr.flow.semantic_poisson import (
     poisson_summary,
     weighted_poisson_loss,
 )
+from semflow_sr.flow.trace_cache import load_trace_cache, validate_task_record
 from semflow_sr.one_step_fisher import (
     CorrectionBudgetError,
     FISHER_TIME_BINS,
@@ -93,7 +94,7 @@ DEFAULT_OPS = (
     "exp",
 )
 
-V5_OBJECTIVE_VERSION = "semantic_poisson_residual_fisher_v5"
+V5_OBJECTIVE_VERSION = "semantic_poisson_residual_fisher_v5_1_bootstrap_first"
 
 
 @dataclass(frozen=True)
@@ -766,6 +767,17 @@ def masked_block_softmax(logits: torch.Tensor, template: Any, eps: float = 1.0e-
     return p / p.sum(dim=-1, keepdim=True).clamp_min(float(eps))
 
 
+def masked_block_softmax_batch(logits: torch.Tensor, template: Any, eps: float = 1.0e-8) -> torch.Tensor:
+    if logits.ndim != 3:
+        raise ValueError("batched logits must have shape [particle, block, action]")
+    mask = graph_action_mask(template, device=logits.device).unsqueeze(0)
+    masked = logits.float().masked_fill(~mask, -1.0e9)
+    p = torch.softmax(masked, dim=-1)
+    p = torch.where(mask, p, torch.zeros_like(p)).clamp_min(float(eps))
+    p = torch.where(mask, p, torch.zeros_like(p))
+    return p / p.sum(dim=-1, keepdim=True).clamp_min(float(eps))
+
+
 def terminal_summary(theta: torch.Tensor, template: Any, trace: dict[str, Any] | None = None) -> dict[str, float]:
     entropies: list[float] = []
     max_probs: list[float] = []
@@ -1079,6 +1091,9 @@ def load_tasks(args: argparse.Namespace, template_num_vars: int, device: torch.d
             list(task.variable_names),
             dict(task.metadata),
         ))
+    task_filter = {value.strip() for value in str(getattr(args, "task_id_filter", "")).split(",") if value.strip()}
+    if task_filter:
+        tasks = [task for task in tasks if str(task.name) in task_filter]
     train: list[SRTask] = []
     eval_: list[SRTask] = []
     for task in tasks:
@@ -1091,7 +1106,7 @@ def load_tasks(args: argparse.Namespace, template_num_vars: int, device: torch.d
         train = train[: int(args.train_task_limit)]
     if int(args.eval_task_limit) > 0:
         eval_ = eval_[: int(args.eval_task_limit)]
-    if not eval_ and train:
+    if not eval_ and train and not bool(getattr(args, "allow_empty_eval", False)):
         eval_.append(train.pop())
     overlap = {t.name for t in train} & {t.name for t in eval_}
     if overlap:
@@ -1324,7 +1339,6 @@ def compile_expr_to_register_trace(
     copy_assignment: str = "canonical",
 ) -> dict[str, Any]:
     del copy_assignment
-    del rng
     expr = _canonical_register_expr(expr)
     flattened_terms = _flatten_add_terms(expr)
     term_plans: list[list[Expr]] = [[expr]]
@@ -1385,6 +1399,16 @@ def compile_expr_to_register_trace(
                     choices[bidx] = int(term_registers[term_index])
                 else:
                     choices[bidx] = int(template.zero_source_index)
+            # Equivalent traces preserve canonical SSA/CSE and vary only
+            # commutative argument order.  This creates distinct legal graph
+            # fibers without changing the decoded expression semantics.
+            for layer in range(int(next_layer[0])):
+                op_choice = int(choices[register_op_block_index(template, layer)])
+                if 0 <= op_choice < len(template.ops) and str(template.ops[op_choice]) in {"add", "mul"}:
+                    if rng.random() < 0.5:
+                        left = register_arg_block_index(template, layer, 0)
+                        right = register_arg_block_index(template, layer, 1)
+                        choices[left], choices[right] = choices[right], choices[left]
             active = active_block_indices_for_choices(template, choices)
             decoded, terms, layers = execute_choices(template, choices)
             unique_terms, duplicate_terms = _unique_nonzero_terms(terms)
@@ -1481,6 +1505,8 @@ def build_task_bundles(
     seed: int,
     split: str,
     copy_assignment: str,
+    cached_records: dict[str, dict[str, Any]] | None = None,
+    require_cache: bool = False,
 ) -> list[TaskBundle]:
     bundles: list[TaskBundle] = []
     for idx, task in enumerate(tasks):
@@ -1488,16 +1514,10 @@ def build_task_bundles(
         y_train = torch.tensor(task.y_train, dtype=torch.float32, device=device)
         x_test = _pad_x(torch.tensor(task.X_test, dtype=torch.float32, device=device), template.num_vars)
         y_test = torch.tensor(task.y_test, dtype=torch.float32, device=device)
-        x_train, y_train = _limit_points(x_train, y_train, int(max_train_points), int(seed) + idx)
-        x_test, y_test = _limit_points(x_test, y_test, int(max_eval_points), int(seed) + 1000 + idx)
-        traces, failures = compile_task_traces(
-            task,
-            template,
-            k=int(traces_per_task),
-            seed=int(seed) + idx * 7919,
-            copy_assignment=str(copy_assignment),
-        )
-        bundles.append(TaskBundle(
+        task_seed = int(seed) + _stable_task_seed(str(task.name))
+        x_train, y_train = _limit_points(x_train, y_train, int(max_train_points), task_seed)
+        x_test, y_test = _limit_points(x_test, y_test, int(max_eval_points), task_seed + 1000)
+        bundle = TaskBundle(
             task_id=str(task.name),
             suite=str(task.metadata.get("suite", "unknown")),
             split=str(split),
@@ -1508,9 +1528,38 @@ def build_task_bundles(
             x_test=x_test,
             y_test=y_test,
             ground_truth=str(task.expression or task.metadata.get("ground_truth", "")),
-            traces=traces,
-            compile_failures=failures,
-        ))
+            traces=[],
+            compile_failures=[],
+        )
+        record = None if cached_records is None else cached_records.get(bundle.task_id)
+        if record is not None:
+            validate_task_record(bundle, template, record)
+            for cached in list(record.get("traces", []))[: int(traces_per_task)]:
+                choices = [int(value) for value in cached["choices"]]
+                decoded, _terms, layers = execute_choices(template, choices)
+                trace = _trace_payload(
+                    template,
+                    choices,
+                    [int(value) for value in cached["active_block_indices"]],
+                    decoded,
+                    layers,
+                )
+                trace.update({key: value for key, value in cached.items() if key not in {"choices", "active_block_indices"}})
+                bundle.traces.append(trace)
+            bundle.compile_failures = [str(value) for value in record.get("compile_failures", [])]
+        elif require_cache:
+            raise ValueError(f"compiled trace cache is missing task {bundle.task_id}")
+        else:
+            bundle.traces, bundle.compile_failures = compile_task_traces(
+                task,
+                template,
+                k=int(traces_per_task),
+                seed=task_seed + 7919,
+                copy_assignment=str(copy_assignment),
+            )
+        if require_cache and not bundle.traces:
+            raise ValueError(f"compiled trace cache has no usable trace for {bundle.task_id}")
+        bundles.append(bundle)
     return bundles
 
 
@@ -1628,6 +1677,7 @@ class FixedSymbolConditionedVelocityNet(nn.Module):
         metadata_embedding_dim: int = 0,
         task_encoder_mode: str = "point_mlp",
         task_conditioning: str = "xy",
+        semantic_feature_mode: str = "full",
     ):
         super().__init__()
         self.template = template
@@ -1651,6 +1701,7 @@ class FixedSymbolConditionedVelocityNet(nn.Module):
             raise ValueError(f"unknown task conditioning mode: {self.task_conditioning}")
         self.task_encoder_mode = str(task_encoder_mode)
         self.task_encoder = TaskSemanticEncoder(template.num_vars, hidden, mode=self.task_encoder_mode)
+        self.semantic_feature_mode = str(semantic_feature_mode)
         block_meta, action_meta = _meta_rows(template)
         block_ids, action_ids = _id_rows(template)
         self.register_buffer("block_meta", block_meta, persistent=False)
@@ -1761,12 +1812,15 @@ class FixedSymbolConditionedVelocityNet(nn.Module):
         theta0: torch.Tensor,
         *,
         endpoint_output: bool = False,
+        task_embedding: torch.Tensor | None = None,
     ) -> torch.Tensor:
         theta = theta.float().flatten()
         theta0 = theta0.to(theta.device).float().flatten()
         feature_theta = theta0 if endpoint_output else theta
         feature_t = 0.0 if endpoint_output else float(t)
-        if self.task_conditioning in {"off", "xy_residual"}:
+        if task_embedding is not None:
+            task = task_embedding.to(theta.device)
+        elif self.task_conditioning in {"off", "xy_residual"}:
             task = theta.new_zeros(self.hidden)
         else:
             task = self.task_encoder(x.to(theta.device), y.to(theta.device))
@@ -1806,7 +1860,11 @@ class FixedSymbolConditionedVelocityNet(nn.Module):
         ])
         semantic_part = theta.new_zeros((self.theta_dim, self.semantic_feature_width))
         if self.semantic_features and self.task_conditioning in {"xy", "xy_residual"}:
-            semantic_part = action_consequence_features(self.template, feature_theta, x.to(theta.device), y.to(theta.device))
+            semantic_part = (
+                register_low_cost_semantic_features(self.template, feature_theta, x.to(theta.device), y.to(theta.device))
+                if self.semantic_feature_mode == "soft_register_low_cost" and _is_register_template(self.template)
+                else action_consequence_features(self.template, feature_theta, x.to(theta.device), y.to(theta.device))
+            )
         base_semantic_part = semantic_part if self.task_conditioning == "xy" else theta.new_zeros((self.theta_dim, self.semantic_feature_width))
         active_node_part = theta.new_zeros((self.theta_dim, self.semantic_feature_width))
         if self.active_node_semantic_features and self.task_conditioning in {"xy", "xy_residual"}:
@@ -1843,7 +1901,8 @@ class TaskConditionedVelocityNetV5(FixedSymbolConditionedVelocityNet):
         kwargs.pop("active_node_semantic_features", None)
         # The old online register semantic path contains hard-prefix and signed
         # pair work.  V5 evaluates complete semantics once at the endpoint.
-        kwargs["semantic_features"] = False
+        kwargs["semantic_features"] = True
+        kwargs["semantic_feature_mode"] = "soft_register_low_cost"
         super().__init__(
             template,
             hidden,
@@ -1855,7 +1914,42 @@ class TaskConditionedVelocityNetV5(FixedSymbolConditionedVelocityNet):
     def forward(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
         # Reuse the established state/task trunk while making every former
         # seed channel a deterministic function of the current Eulerian state.
-        return self._predict_field(x, y, theta, float(t), theta)
+        velocity = self._predict_field(x, y, theta, float(t), theta)
+        gates = register_soft_block_reachability(self.template, theta).repeat_interleave(int(self.template.source_count))
+        return center_theta(velocity * gates, self.template)
+
+    def encode_task(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        return self.task_encoder(x, y)
+
+    def forward_with_task_embedding(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        theta: torch.Tensor,
+        t: float,
+        task_embedding: torch.Tensor,
+    ) -> torch.Tensor:
+        velocity = self._predict_field(x, y, theta, float(t), theta, task_embedding=task_embedding)
+        gates = register_soft_block_reachability(self.template, theta).repeat_interleave(int(self.template.source_count))
+        return center_theta(velocity * gates, self.template)
+
+    def forward_batch(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
+        if theta.ndim == 1:
+            return self.forward(x, y, theta, t)
+        task_embedding = self.encode_task(x, y)
+        return self.forward_batch_with_task_embedding(x, y, theta, t, task_embedding)
+
+    def forward_batch_with_task_embedding(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        theta: torch.Tensor,
+        t: float,
+        task_embedding: torch.Tensor,
+    ) -> torch.Tensor:
+        return torch.vmap(
+            lambda row: self.forward_with_task_embedding(x, y, row, t, task_embedding)
+        )(theta)
 
 
 class ResidualFeatureTrunkV5(nn.Module):
@@ -1955,6 +2049,17 @@ class PoissonResidualVelocityV5(nn.Module):
             for index, head in enumerate(self.residual_heads):
                 velocity = velocity + self.residual_step_sizes[index].to(velocity) * head(features)
         return center_theta(velocity, self.template)
+
+    def forward_batch(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
+        if theta.ndim == 1:
+            return self.forward(x, y, theta, t)
+        task_embedding = self.base.encode_task(x, y)
+        velocity = self.base.forward_batch_with_task_embedding(x, y, theta, float(t), task_embedding)
+        if self.residual_heads:
+            features = torch.vmap(lambda row: self.residual_trunk(x, y, row, float(t)))(theta)
+            for index, head in enumerate(self.residual_heads):
+                velocity = velocity + self.residual_step_sizes[index].to(velocity) * torch.vmap(head)(features)
+        return torch.vmap(lambda row: center_theta(row, self.template))(velocity)
 
 
 def _call_velocity_field(
@@ -2157,6 +2262,83 @@ def register_soft_semantics(
         writes.append(regs[int(template.write_register_for_layer(layer))])
     banks.append(bank_tensor())
     return banks, writes
+
+
+def register_low_cost_semantic_features(
+    template: RegisterOperatorSimplexTemplate,
+    theta: torch.Tensor,
+    x: torch.Tensor,
+    y: torch.Tensor,
+) -> torch.Tensor:
+    """Smooth register/action summaries without hard prefixes or pair search."""
+    theta = theta.float().flatten()
+    banks, _writes = register_soft_semantics(template, theta, x)
+    blocks = split_blocks(theta, template)
+    rows: list[torch.Tensor] = []
+    for block in template.blocks:
+        bank = banks[-1] if block.kind == "readout" else banks[int(block.layer)]
+        if block.kind in {"readout", "reg_arg"}:
+            features = _semantic_features_batch(bank.transpose(0, 1), y)
+        elif block.kind == "reg_op":
+            layer = int(block.layer)
+            arg0_p = masked_single_block_softmax(blocks[register_arg_block_index(template, layer, 0)], template, register_arg_block_index(template, layer, 0))
+            arg1_p = masked_single_block_softmax(blocks[register_arg_block_index(template, layer, 1)], template, register_arg_block_index(template, layer, 1))
+            arg0 = (bank * arg0_p[None, :]).sum(dim=1)
+            arg1 = (bank * arg1_p[None, :]).sum(dim=1)
+            values = []
+            for action in range(int(block.size)):
+                if action < len(template.ops):
+                    op = str(template.ops[action])
+                    values.append(_safe_apply_semantic(op, [arg0] if op_arity(op) == 1 else [arg0, arg1]))
+                elif action == int(template.keep_action_index):
+                    values.append(bank[:, int(template.write_register_for_layer(layer))])
+                else:
+                    values.append(torch.zeros_like(arg0))
+            features = _semantic_features_batch(torch.stack(values), y)
+        else:
+            features = theta.new_zeros((int(block.size), 8))
+        rows.append(torch.cat([features, features.new_zeros((int(features.shape[0]), 2))], dim=1))
+    return torch.cat(rows, dim=0)
+
+
+def register_soft_block_reachability(
+    template: RegisterOperatorSimplexTemplate,
+    theta: torch.Tensor,
+) -> torch.Tensor:
+    """Differentiable probability that each block can affect the soft readout."""
+    blocks = split_blocks(theta.float().flatten(), template)
+    readout_index = register_readout_block_index(template, 0)
+    reach = masked_single_block_softmax(blocks[readout_index], template, readout_index).clone()
+    gates = theta.new_zeros((len(template.blocks),), dtype=torch.float32)
+    gates[readout_index] = 1.0
+    for layer in reversed(range(int(template.num_layers))):
+        write_register = int(template.write_register_for_layer(layer))
+        gate = reach[write_register].clamp(0.0, 1.0)
+        op_index = register_op_block_index(template, layer)
+        arg0_index = register_arg_block_index(template, layer, 0)
+        arg1_index = register_arg_block_index(template, layer, 1)
+        gates[op_index] = gate
+        gates[arg0_index] = gate
+        gates[arg1_index] = gate
+        op_probability = masked_single_block_softmax(blocks[op_index], template, op_index)
+        arg0_probability = masked_single_block_softmax(blocks[arg0_index], template, arg0_index)
+        arg1_probability = masked_single_block_softmax(blocks[arg1_index], template, arg1_index)
+        unary_mass = gate.new_zeros(())
+        binary_mass = gate.new_zeros(())
+        for action, op in enumerate(template.ops):
+            if action >= int(op_probability.numel()):
+                continue
+            if op_arity(str(op)) == 1:
+                unary_mass = unary_mass + op_probability[action]
+            else:
+                binary_mass = binary_mass + op_probability[action]
+        keep_mass = op_probability[int(template.keep_action_index)] if int(template.keep_action_index) < int(op_probability.numel()) else gate.new_zeros(())
+        propagated = reach.clone()
+        propagated[write_register] = gate * keep_mass
+        propagated = propagated + gate * (unary_mass + binary_mass) * arg0_probability
+        propagated = propagated + gate * binary_mass * arg1_probability
+        reach = propagated.clamp(0.0, 1.0)
+    return gates.clamp(0.0, 1.0)
 
 
 def register_active_node_semantic_features(
@@ -2739,6 +2921,52 @@ def rollout(
         "rollout_integrator": "rk2",
         "max_block_fisher_step": float(max_step_distance),
         "rollout_finite_rate": float(finite_steps / max(step_count, 1)),
+    }
+
+
+def integrate_batch(theta: torch.Tensor, velocity: torch.Tensor, template: FixedSymbolTemplate, dt: float) -> torch.Tensor:
+    """Integrate a [particle, theta] batch while centering every block."""
+    rows = []
+    cursor = 0
+    for block in template.blocks:
+        size = int(block.size)
+        logits = theta[:, cursor:cursor + size]
+        vel = velocity[:, cursor:cursor + size]
+        nxt = logits + float(dt) * vel
+        rows.append(nxt - nxt.mean(dim=1, keepdim=True))
+        cursor += size
+    return torch.cat(rows, dim=1)
+
+
+@torch.no_grad()
+def rollout_batch_v51(
+    flow: PoissonResidualVelocityV5,
+    task: TaskBundle,
+    theta0: torch.Tensor,
+    *,
+    steps: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """Batched RK2 rollout; no endpoint/expression work occurs inside the loop."""
+    if theta0.ndim != 2:
+        raise ValueError("theta0 batch must have shape [particle, theta]")
+    theta = theta0.clone()
+    step_count = max(int(steps), 1)
+    max_step_distance = 0.0
+    for step in range(step_count):
+        t = float(step) / float(step_count)
+        dt = 1.0 / float(step_count)
+        velocity = flow.forward_batch(task.x_train, task.y_train, theta, t)
+        midpoint = integrate_batch(theta, velocity, flow.template, 0.5 * dt)
+        midpoint_velocity = flow.forward_batch(task.x_train, task.y_train, midpoint, min(t + 0.5 * dt, 1.0))
+        theta_next = integrate_batch(theta, midpoint_velocity, flow.template, dt)
+        before = masked_block_softmax_batch(theta.view(theta.shape[0], len(flow.template.blocks), int(flow.template.source_count)), flow.template)
+        after = masked_block_softmax_batch(theta_next.view(theta.shape[0], len(flow.template.blocks), int(flow.template.source_count)), flow.template)
+        max_step_distance = max(max_step_distance, float(torch.linalg.vector_norm(after - before).detach().cpu()))
+        theta = theta_next
+    return theta, {
+        "integration_step_count": float(step_count),
+        "rollout_integrator": "rk2_batched",
+        "max_batch_probability_step": float(max_step_distance),
     }
 
 
@@ -7486,48 +7714,88 @@ def _train_v5_base_flow(
     curve: list[dict[str, Any]] = []
     best = float("inf")
     best_state: dict[str, torch.Tensor] | None = None
-    for epoch in range(max(int(args.epochs), 1)):
+    schedule = [float(value) for value in str(getattr(args, "bootstrap_source_mass_schedule", "0.30,0.20,0.10")).split(",")]
+    if any(value <= 0.0 or value >= 0.5 for value in schedule):
+        raise ValueError("bootstrap source-mass schedule values must be in (0, 0.5)")
+    stage_epochs = max(int(args.epochs), 1)
+    examples_by_task: dict[str, list[CycleCoupledExample]] = {}
+    for example in examples:
+        examples_by_task.setdefault(example.task.task_id, []).append(example)
+    task_pools = list(examples_by_task.values())
+    particles_per_task = max(int(getattr(args, "cycle_particles_per_task", 8)), 1)
+    global_epoch = 0
+    for stage_index, source_mass in enumerate(schedule, start=1):
+      for epoch in range(stage_epochs):
+        global_epoch += 1
         losses: list[float] = []
         zero_losses: list[float] = []
+        inactive_losses: list[float] = []
+        time_losses = {"low": [], "mid": [], "high": []}
+        relative_sums = {key: [0.0, 0.0] for key in ("global", "low", "mid", "high", "readout", "op", "arg")}
+        kind_masks = {
+            "readout": torch.tensor([str(block.kind) == "readout" for block in base.template.blocks], dtype=torch.bool, device=device),
+            "op": torch.tensor([str(block.kind) == "reg_op" for block in base.template.blocks], dtype=torch.bool, device=device),
+            "arg": torch.tensor([str(block.kind) == "reg_arg" for block in base.template.blocks], dtype=torch.bool, device=device),
+        }
         for _step in range(max(int(args.steps_per_epoch), 1)):
             optimizer.zero_grad(set_to_none=True)
             batch: list[torch.Tensor] = []
             for _ in range(max(int(args.train_batch_size), 1)):
-                example = rng.choice(examples)
-                t = sample_cycle_time(
-                    rng,
-                    len(losses) + len(batch),
-                    "stratified_fisher",
-                    inherited_mode="uniform",
-                    low_prob=0.0,
-                    low_max=0.1,
-                )
-                theta_t, target = stage1_simplex_path(
-                    example.theta0.to(device),
-                    example.theta1.to(device),
-                    base.template,
-                    float(t),
-                )
-                predicted = base(example.task.x_train.to(device), example.task.y_train.to(device), theta_t, float(t))
-                weights = example.active_mask.to(device).float()
-                loss, _ = stage1_velocity_loss(
-                    theta_t,
-                    predicted,
-                    target,
-                    base.template,
-                    weights,
-                    eps=float(args.fisher_eps),
-                )
-                zero, _ = stage1_velocity_loss(
-                    theta_t,
-                    torch.zeros_like(target),
-                    target,
-                    base.template,
-                    weights,
-                    eps=float(args.fisher_eps),
-                )
-                batch.append(loss)
-                zero_losses.append(float(zero.detach().cpu()))
+                pool = rng.choice(task_pools)
+                selected_examples = [pool[index % len(pool)] for index in range(particles_per_task)]
+                draw = rng.random()
+                t = rng.random() * 0.1 if draw < 0.2 else (0.1 + 0.8 * rng.random() if draw < 0.8 else 0.9 + 0.1 * rng.random())
+                theta_rows: list[torch.Tensor] = []
+                target_rows: list[torch.Tensor] = []
+                for example in selected_examples:
+                    source_probability = masked_block_softmax(
+                        example.theta0.to(device).view(len(base.template.blocks), int(base.template.source_count)), base.template,
+                    )
+                    target_probability = source_conditioned_trace_target_probabilities(
+                        source_probability, torch.tensor(example.target_choices, dtype=torch.long, device=device),
+                        example.active_mask.to(device), projection_eps=source_mass, projection_sharpness=1.0,
+                    )
+                    theta1 = logits_from_block_probabilities(
+                        [target_probability[index] for index in range(int(target_probability.shape[0]))], base.template, eps=float(args.fisher_eps),
+                    )
+                    theta_t, target = stage1_simplex_path(example.theta0.to(device), theta1, base.template, float(t))
+                    if rng.random() < 0.20:
+                        noise = torch.randn_like(theta_t) * 0.02
+                        theta_t = center_theta(theta_t + noise, base.template)
+                    theta_rows.append(theta_t)
+                    target_rows.append(target)
+                theta_batch = torch.stack(theta_rows)
+                target_batch = torch.stack(target_rows)
+                task = selected_examples[0].task
+                predicted_batch = base.forward_batch(task.x_train.to(device), task.y_train.to(device), theta_batch, float(t))
+                task_losses: list[torch.Tensor] = []
+                for example, theta_t, predicted, target in zip(selected_examples, theta_batch, predicted_batch, target_batch):
+                    weights = example.active_mask.to(device).float()
+                    active_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, weights, eps=float(args.fisher_eps))
+                    inactive = ~example.active_mask.to(device)
+                    inactive_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, inactive.float(), eps=float(args.fisher_eps))
+                    loss = active_loss + float(getattr(args, "bootstrap_inactive_weight", 0.10)) * inactive_loss
+                    zero, _ = stage1_velocity_loss(theta_t, torch.zeros_like(target), target, base.template, weights, eps=float(args.fisher_eps))
+                    task_losses.append(loss)
+                    zero_losses.append(float(zero.detach().cpu()))
+                    inactive_losses.append(float(inactive_loss.detach().cpu()))
+                    time_key = "low" if t < 0.1 else "high" if t >= 0.9 else "mid"
+                    time_losses[time_key].append(float(active_loss.detach().cpu()))
+                    predicted_blocks = stage1_velocity_block_losses(theta_t, predicted, target, base.template, eps=float(args.fisher_eps)).detach()
+                    zero_blocks = stage1_velocity_block_losses(theta_t, torch.zeros_like(predicted), target, base.template, eps=float(args.fisher_eps)).detach()
+                    active = example.active_mask.to(device)
+                    predicted_active = float(predicted_blocks[active].sum().cpu())
+                    zero_active = float(zero_blocks[active].sum().cpu())
+                    relative_sums["global"][0] += predicted_active
+                    relative_sums["global"][1] += zero_active
+                    relative_sums[time_key][0] += predicted_active
+                    relative_sums[time_key][1] += zero_active
+                    for kind, mask in kind_masks.items():
+                        selected = active & mask
+                        if bool(selected.any().detach().cpu()):
+                            relative_sums[kind][0] += float(predicted_blocks[selected].sum().cpu())
+                            relative_sums[kind][1] += float(zero_blocks[selected].sum().cpu())
+                batch.append(torch.stack(task_losses).mean())
             objective = torch.stack(batch).mean()
             objective.backward()
             torch.nn.utils.clip_grad_norm_(base.parameters(), float(args.grad_clip))
@@ -7539,11 +7807,21 @@ def _train_v5_base_flow(
             best_state = {key: value.detach().cpu().clone() for key, value in base.state_dict().items()}
         row = {
             "phase": "v5_gt_bootstrap",
-            "epoch": int(epoch + 1),
+            "epoch": int(global_epoch),
+            "bootstrap_stage": int(stage_index),
+            "bootstrap_source_mass": float(source_mass),
             "flow_fisher_velocity_loss": mean_loss,
             "flow_zero_predictor_loss": float(np.mean(zero_losses)) if zero_losses else 0.0,
-            "flow_relative_fisher_loss": float(mean_loss / max(float(np.mean(zero_losses)), 1.0e-12)) if zero_losses else None,
+            "flow_relative_fisher_loss": float(relative_sums["global"][0] / max(relative_sums["global"][1], 1.0e-12)),
+            "flow_inactive_fisher_loss": float(np.mean(inactive_losses)) if inactive_losses else 0.0,
+            "flow_inactive_relative_to_active_zero": float((np.mean(inactive_losses) if inactive_losses else 0.0) / max(float(np.mean(zero_losses)), 1.0e-12)),
+            "flow_low_fisher_loss": float(np.mean(time_losses["low"])) if time_losses["low"] else None,
+            "flow_mid_fisher_loss": float(np.mean(time_losses["mid"])) if time_losses["mid"] else None,
+            "flow_high_fisher_loss": float(np.mean(time_losses["high"])) if time_losses["high"] else None,
         }
+        for key in ("low", "mid", "high", "readout", "op", "arg"):
+            numerator, denominator = relative_sums[key]
+            row[f"flow_{key}_relative_fisher_loss"] = float(numerator / max(denominator, 1.0e-12)) if denominator > 0.0 else None
         curve.append(row)
         if bool(args.log_epochs):
             print(json.dumps(row), flush=True)
@@ -7552,6 +7830,49 @@ def _train_v5_base_flow(
     summary = dict(curve[-1])
     summary["best_flow_fisher_velocity_loss"] = float(best)
     return curve, summary
+
+
+def _bootstrap_gate_decision(
+    gate: str,
+    bootstrap: dict[str, Any],
+    population: dict[str, Any],
+    *,
+    raw_control: float | None = None,
+) -> dict[str, Any]:
+    name = str(gate).upper()
+    if name == "OFF":
+        return {"gate": name, "passed": True, "checks": {}}
+    limits = {
+        "A": {"global": 0.05, "detail": 0.10, "inactive": 0.01, "fit": 1.0, "gt": 1.0, "skeleton": 0.0, "operator": 0.0},
+        "B": {"global": 0.20, "detail": 0.30, "inactive": 0.02, "fit": 0.75, "gt": 0.75, "skeleton": 0.50, "operator": 0.50},
+        "C": {"global": 0.25, "detail": 0.35, "inactive": 0.02, "fit": 0.50, "gt": 0.0, "skeleton": 0.25, "operator": 0.25},
+    }[name]
+    checks: dict[str, bool] = {
+        "global_relative": float(bootstrap.get("flow_relative_fisher_loss", math.inf)) < limits["global"],
+        "inactive_drift": float(bootstrap.get("flow_inactive_relative_to_active_zero", math.inf)) < limits["inactive"],
+        "fitted_r2_rate": float(population.get("fitted_r2_gt_0_95_rate", 0.0)) >= limits["fit"],
+        "gt_family_hit_rate": float(population.get("gt_trace_family_hit_rate", 0.0)) >= limits["gt"],
+        "skeleton_rate": float(population.get("skeleton_match_rate", 0.0)) >= limits["skeleton"],
+        "operator_rate": float(population.get("operator_dependency_match_rate", 0.0)) >= limits["operator"],
+    }
+    for key in ("low", "mid", "high", "readout", "op", "arg"):
+        value = bootstrap.get(f"flow_{key}_relative_fisher_loss")
+        checks[f"{key}_relative"] = value is not None and float(value) < limits["detail"]
+    if name == "A":
+        checks["raw_r2_rate"] = float(population.get("raw_r2_gt_0_999_rate", 0.0)) >= 1.0
+    if name == "B":
+        checks["population_diversity"] = float(population.get("population_unique_expression_count_mean", 0.0)) >= 2.0
+    if name == "C":
+        checks["semantic_variance"] = float(population.get("population_noncollapsed_task_rate", 0.0)) >= 0.50
+        checks["raw_r2_control_improvement"] = raw_control is not None and float(population.get("crossfit_raw_r2_mean", -math.inf)) >= float(raw_control) + 0.20
+    return {
+        "gate": name,
+        "passed": bool(all(checks.values())),
+        "checks": checks,
+        "bootstrap": bootstrap,
+        "population": population,
+        "raw_control": raw_control,
+    }
 
 
 def _collect_v5_endpoint_populations(
@@ -7573,45 +7894,37 @@ def _collect_v5_endpoint_populations(
     fitted_r2: list[float] = []
     raw_r2: list[float] = []
     invalid: list[float] = []
+    unique_counts: list[int] = []
+    noncollapsed_tasks = 0
+    gt_hits: list[float] = []
+    skeleton_hits: list[float] = []
+    operator_hits: list[float] = []
     for task_index, task in enumerate(selected_tasks):
         rows: list[dict[str, Any]] = []
         capture = task_index < max(int(getattr(args, "cycle_landscape_task_limit", 1)), 0)
+        theta0_batch = torch.stack([
+            random_theta(flow.template, scale=float(args.theta0_noise_scale), device=device, generator=generator)
+            for _ in range(particle_count)
+        ], dim=0)
+        endpoint_batch, rollout_diag = rollout_batch_v51(
+            flow,
+            task,
+            theta0_batch,
+            steps=int(args.cycle_proposer_rollout_steps),
+        )
         for source_index in range(particle_count):
-            theta0 = random_theta(
-                flow.template,
-                scale=float(args.theta0_noise_scale),
-                device=device,
-                generator=generator,
-            )
+            theta0 = theta0_batch[source_index]
+            endpoint = endpoint_batch[source_index]
             if capture and source_index < max(int(getattr(args, "cycle_landscape_sources", 4)), 0):
-                endpoint, rollout_diag, snapshots = rollout_with_snapshots(
-                    flow,
-                    task,
-                    theta0,
-                    steps=int(args.cycle_proposer_rollout_steps),
+                _endpoint, _diag, snapshots = rollout_with_snapshots(
+                    flow, task, theta0, steps=int(args.cycle_proposer_rollout_steps),
                     snapshot_count=int(args.cycle_landscape_time_points),
                 )
                 for snapshot_t, snapshot in snapshots:
                     landscape.append(_lineage_landscape_row(
-                        flow.template,
-                        task,
-                        snapshot,
-                        iteration=int(iteration),
-                        source_index=int(source_index),
-                        t=float(snapshot_t),
-                        point_kind="flow",
+                        flow.template, task, snapshot, iteration=int(iteration),
+                        source_index=int(source_index), t=float(snapshot_t), point_kind="flow",
                     ))
-            else:
-                endpoint, rollout_diag = rollout(
-                    flow,
-                    None,
-                    task,
-                    theta0,
-                    steps=int(args.cycle_proposer_rollout_steps),
-                    mode="off",
-                    args=args,
-                    generator=generator,
-                )
             choices = hard_decode_choices(endpoint, flow.template)
             expr, terms, _layers = execute_choices(flow.template, choices)
             energy_diag = _v5_crossfit_expression_energy(
@@ -7636,12 +7949,45 @@ def _collect_v5_endpoint_populations(
                 **energy_diag,
                 **rollout_diag,
             }
+            gt_choice_family = {tuple(int(value) for value in trace["choices"]) for trace in task.traces}
+            row["gt_trace_family_hit"] = float(tuple(int(value) for value in choices) in gt_choice_family)
+            structural = with_structural_metrics({
+                "ground_truth": task.ground_truth,
+                "raw_expression": str(row["expression"]),
+            })
+            row["skeleton_match"] = float(structural["skeleton_match"])
+            row["operator_dependency_match"] = float(structural["operator_dependency_match"])
             rows.append(row)
             energies.append(float(energy_diag["semantic_energy"]))
             fitted_r2.append(float(energy_diag["crossfit_fitted_r2"]))
             raw_r2.append(float(energy_diag["crossfit_raw_r2"]))
             invalid.append(float(energy_diag["semantic_invalid"]))
+            gt_hits.append(float(row["gt_trace_family_hit"]))
+            skeleton_hits.append(float(row["skeleton_match"]))
+            operator_hits.append(float(row["operator_dependency_match"]))
         populations[task.task_id] = rows
+        task_energies = np.asarray([float(row["semantic_energy"]) for row in rows], dtype=np.float64)
+        noncollapsed_tasks += int(float(task_energies.var()) > float(args.cycle_support_variance_eps))
+        unique_counts.append(len({str(row["expression"]) for row in rows}))
+        elapsed = float(time.perf_counter() - started)
+        partial = {
+            "phase": "v5_endpoint_collection_partial",
+            "iteration": int(iteration),
+            "completed_tasks": int(task_index + 1),
+            "total_tasks": int(len(selected_tasks)),
+            "completed_particles": int(sum(len(value) for value in populations.values())),
+            "runtime_sec": elapsed,
+            "seconds_per_particle": elapsed / max(sum(len(value) for value in populations.values()), 1),
+            "crossfit_fitted_r2_mean": float(np.mean(fitted_r2)) if fitted_r2 else None,
+            "crossfit_raw_r2_mean": float(np.mean(raw_r2)) if raw_r2 else None,
+            "unique_expression_count_mean": float(np.mean(unique_counts)) if unique_counts else 0.0,
+        }
+        partial_path = Path(args.out) / "endpoint_collection.partial.json"
+        partial_path.parent.mkdir(parents=True, exist_ok=True)
+        partial_path.write_text(json.dumps(_jsonable(partial), indent=2) + "\n")
+        timeout = float(getattr(args, "cycle_collection_timeout_sec", 300.0))
+        if timeout > 0.0 and elapsed > timeout:
+            raise RuntimeError(f"v5 endpoint collection exceeded {timeout:.1f}s after {task_index + 1} tasks: {elapsed:.1f}s")
     summary = {
         "phase": "v5_endpoint_collection",
         "iteration": int(iteration),
@@ -7652,6 +7998,13 @@ def _collect_v5_endpoint_populations(
         "crossfit_fitted_r2_mean": float(np.mean(fitted_r2)) if fitted_r2 else None,
         "crossfit_raw_r2_mean": float(np.mean(raw_r2)) if raw_r2 else None,
         "semantic_invalid_rate": float(np.mean(invalid)) if invalid else None,
+        "population_unique_expression_count_mean": float(np.mean(unique_counts)) if unique_counts else 0.0,
+        "population_noncollapsed_task_rate": float(noncollapsed_tasks / max(len(populations), 1)),
+        "gt_trace_family_hit_rate": float(np.mean(gt_hits)) if gt_hits else 0.0,
+        "skeleton_match_rate": float(np.mean(skeleton_hits)) if skeleton_hits else 0.0,
+        "operator_dependency_match_rate": float(np.mean(operator_hits)) if operator_hits else 0.0,
+        "fitted_r2_gt_0_95_rate": float(np.mean(np.asarray(fitted_r2) > 0.95)) if fitted_r2 else 0.0,
+        "raw_r2_gt_0_999_rate": float(np.mean(np.asarray(raw_r2) > 0.999)) if raw_r2 else 0.0,
         "collection_runtime_sec": float(time.perf_counter() - started),
     }
     return populations, landscape, summary
@@ -8354,11 +8707,12 @@ def run_one_step_semantic_fisher_cycle(
     iteration_eval_summaries: list[dict[str, Any]] = []
     bootstrap_summary: dict[str, Any] = {}
     bootstrap_count = 0
+    bootstrap_gate_result: dict[str, Any] = {"gate": "OFF", "passed": True}
 
     if loaded_ckpt is not None:
         objective = str(loaded_ckpt.get("objective_version", ""))
         if objective != V5_OBJECTIVE_VERSION:
-            raise ValueError("only semantic_poisson_residual_fisher_v5 checkpoints can resume v5")
+            raise ValueError("only semantic_poisson_residual_fisher_v5_1_bootstrap_first checkpoints can resume v5.1")
         stage_count = int(loaded_ckpt.get("residual_stage_count", 0))
         raw_steps = loaded_ckpt.get("residual_step_sizes", [float(args.cycle_correction_step)] * stage_count)
         for index in range(stage_count):
@@ -8376,8 +8730,43 @@ def run_one_step_semantic_fisher_cycle(
     else:
         bootstrap_examples = build_v3_gt_bootstrap_examples(base, train_tasks, args, device)
         bootstrap_count = len(bootstrap_examples)
+        gate_name = str(getattr(args, "bootstrap_gate", "off")).upper()
+        raw_control = None
+        if gate_name == "C":
+            control_args = argparse.Namespace(**vars(args))
+            control_args.cycle_landscape_task_limit = 0
+            control_args.cycle_collection_task_limit = 0
+            _control_population, _control_landscape, control_summary = _collect_v5_endpoint_populations(
+                flow, eval_tasks[:8], control_args, device, iteration=-1,
+            )
+            raw_control = float(control_summary.get("crossfit_raw_r2_mean", 0.0))
         bootstrap_curve, bootstrap_summary = _train_v5_base_flow(base, bootstrap_examples, args, device)
         train_curve.extend(bootstrap_curve)
+        if gate_name != "OFF":
+            gate_args = argparse.Namespace(**vars(args))
+            gate_args.cycle_landscape_task_limit = 0
+            gate_args.cycle_collection_task_limit = 0
+            if gate_name == "A":
+                gate_tasks = train_tasks[:1]
+            elif gate_name == "B":
+                gate_tasks = train_tasks[:8]
+            else:
+                gate_tasks = eval_tasks[:8]
+            gate_population, gate_landscape, gate_summary = _collect_v5_endpoint_populations(
+                flow, gate_tasks, gate_args, device, iteration=0,
+            )
+            del gate_population, gate_landscape
+            bootstrap_gate_result = _bootstrap_gate_decision(
+                gate_name, bootstrap_summary, gate_summary, raw_control=raw_control,
+            )
+            (out_dir / "bootstrap_gate.json").write_text(json.dumps(_jsonable(bootstrap_gate_result), indent=2) + "\n")
+            torch.save({
+                "objective_version": V5_OBJECTIVE_VERSION,
+                "bootstrap_gate": bootstrap_gate_result,
+                "flow_model": flow.state_dict(),
+            }, out_dir / "bootstrap_gate_checkpoint.pt")
+            if not bool(bootstrap_gate_result["passed"]):
+                raise RuntimeError(f"bootstrap {gate_name} gate failed; Poisson outer loop is disabled")
         for parameter in base.parameters():
             parameter.requires_grad_(False)
         for iteration in range(1, max(int(args.cycle_iterations), 0) + 1):
@@ -8395,6 +8784,20 @@ def run_one_step_semantic_fisher_cycle(
                     f"v5 endpoint collection exceeded {timeout:.1f}s: "
                     f"{float(collection_summary['collection_runtime_sec']):.1f}s"
                 )
+            population_gate = {
+                "population_noncollapsed_task_rate": float(collection_summary.get("population_noncollapsed_task_rate", 0.0)) >= 0.50,
+                "population_unique_expression_count_mean": float(collection_summary.get("population_unique_expression_count_mean", 0.0)) >= 2.0,
+                "semantic_invalid_rate": float(collection_summary.get("semantic_invalid_rate", 1.0)) < 0.10,
+            }
+            if not all(population_gate.values()):
+                failure = {
+                    "status": "bootstrap_population_collapse",
+                    "iteration": int(iteration),
+                    "checks": population_gate,
+                    "collection": collection_summary,
+                }
+                (out_dir / "bootstrap_population_collapse.json").write_text(json.dumps(_jsonable(failure), indent=2) + "\n")
+                raise RuntimeError("bootstrap population gate failed; Poisson mutation fallback is forbidden")
             potential, potential_curve, potential_summary = _fit_v5_semantic_potential(
                 template,
                 populations,
@@ -8496,6 +8899,7 @@ def run_one_step_semantic_fisher_cycle(
         "cycle_poisson_lr": float(args.cycle_poisson_lr),
         "bootstrap_example_count": int(bootstrap_count),
         "bootstrap_training_summary": bootstrap_summary,
+        "bootstrap_gate": bootstrap_gate_result,
         "residual_stage_count": int(len(flow.residual_heads)),
         "cycle_history": cycle_history,
         "cycle_eval_history": iteration_eval_summaries,
@@ -8556,6 +8960,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         _inherit_graph_architecture_from_checkpoint(args, loaded_ckpt)
     graph_family = canonical_construction_graph(str(args.construction_graph))
     template = make_construction_template(args, graph_family)
+    cached_records = None
+    require_trace_cache = str(getattr(args, "trace_cache_mode", "off")) == "require"
+    if require_trace_cache:
+        cached_records, _cache_manifest = load_trace_cache(str(args.trace_cache_root), template)
     setup_started = time.perf_counter()
     train_raw, eval_raw, source_counts = load_all_task_sources(
         args,
@@ -8581,9 +8989,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         max_train_points=int(args.max_train_points),
         max_eval_points=int(args.max_eval_points),
         device=device,
-        seed=int(args.seed),
+        seed=int(getattr(args, "trace_cache_seed", args.seed)) if require_trace_cache else int(args.seed),
         split="train",
         copy_assignment=str(args.trace_copy_assignment),
+        cached_records=cached_records,
+        require_cache=require_trace_cache,
     )
     eval_tasks = build_task_bundles(
         eval_raw,
@@ -8592,9 +9002,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         max_train_points=int(args.max_train_points),
         max_eval_points=int(args.max_eval_points),
         device=device,
-        seed=int(args.seed) + 12_345,
+        seed=(int(getattr(args, "trace_cache_seed", args.seed)) + 12_345) if require_trace_cache else int(args.seed) + 12_345,
         split="eval",
         copy_assignment=str(args.trace_copy_assignment),
+        cached_records=cached_records,
+        require_cache=require_trace_cache,
     )
     print(
         json.dumps(
@@ -8623,7 +9035,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="results/clean_benchmark/semantic_poisson_residual_fisher_v5/run")
+    parser.add_argument("--out", default="results/clean_benchmark/semantic_poisson_residual_fisher_v5_1/run")
     parser.add_argument("--manifest", default="data/benchmark_suites/benchmark_manifest.json")
     parser.add_argument("--manifest-root", default="data/benchmark_suites")
     parser.add_argument("--suites", nargs="+", default=["nguyen", "constant", "livermore", "jin"])
@@ -8632,6 +9044,14 @@ def main() -> None:
     parser.add_argument("--symbolicgpt-eval-limit", type=int, default=0)
     parser.add_argument("--symbolicgpt-eval-splits", default="val,test")
     parser.add_argument("--symbolicgpt-point-train-fraction", type=float, default=0.8)
+    parser.add_argument("--task-id-filter", default="")
+    parser.add_argument("--allow-empty-eval", action="store_true")
+    parser.add_argument("--trace-cache-root", default="data/cache/semantic_flow_v5")
+    parser.add_argument("--trace-cache-mode", choices=["off", "require"], default="off")
+    parser.add_argument("--trace-cache-seed", type=int, default=20260711)
+    parser.add_argument("--bootstrap-source-mass-schedule", default="0.30,0.20,0.10")
+    parser.add_argument("--bootstrap-inactive-weight", type=float, default=0.10)
+    parser.add_argument("--bootstrap-gate", choices=["off", "A", "B", "C"], default="off")
     parser.add_argument("--training-flow", choices=["one_step_semantic_fisher_cycle"], default="one_step_semantic_fisher_cycle")
     parser.add_argument("--construction-graph", choices=list(CONSTRUCTION_GRAPHS), default="register_categorical_blocks")
     parser.add_argument("--task-conditioning", choices=["auto", "off", "xy", "xy_residual"], default="xy")

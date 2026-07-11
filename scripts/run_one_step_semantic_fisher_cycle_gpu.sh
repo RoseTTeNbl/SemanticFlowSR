@@ -8,13 +8,19 @@ RUN_GPU="${RUN_GPU:-1}"
 export CUDA_VISIBLE_DEVICES="$RUN_GPU"
 
 SCALE="${SCALE:-smoke}"
-TAG="${TAG:-semantic_poisson_residual_fisher_v5_l12_20260711_${SCALE}}"
-BASE="${RESULT_BASE:-results/clean_benchmark/semantic_poisson_residual_fisher_v5}"
+TAG="${TAG:-semantic_poisson_residual_fisher_v5_1_l12_20260711_${SCALE}}"
+BASE="${RESULT_BASE:-results/clean_benchmark/semantic_poisson_residual_fisher_v5_1}"
 LOG_DIR="${LOG_DIR:-logs/complete_expression_semantic_fm}"
 OUT="${OUT:-$BASE/$TAG}"
 LOG="$LOG_DIR/$TAG.log"
 mkdir -p "$LOG_DIR"
 if [ -e "$OUT" ]; then echo "Refusing existing OUT=$OUT" >&2; exit 3; fi
+TRACE_CACHE_ROOT="${TRACE_CACHE_ROOT:-data/cache/semantic_flow_v5}"
+if [ ! -f "$TRACE_CACHE_ROOT/compiled_trace_families_v1.jsonl" ] || [ ! -f "$TRACE_CACHE_ROOT/compiled_trace_families_v1.manifest.json" ]; then
+  echo "Missing v5.1 trace cache under $TRACE_CACHE_ROOT" >&2
+  echo "Build it first with scripts/build_semantic_flow_trace_cache.py" >&2
+  exit 4
+fi
 
 case "$SCALE" in
   smoke)
@@ -60,9 +66,10 @@ ARGS=(
   --train-task-limit "$TRAIN_LIMIT" --eval-task-limit "$EVAL_LIMIT"
   --symbolicgpt-root "${SYMBOLICGPT_ROOT:-data/generated/symbolicgpt_large_2000_200_200}"
   --symbolicgpt-train-limit "$SYMBOLICGPT_TRAIN_LIMIT" --symbolicgpt-eval-limit "$SYMBOLICGPT_EVAL_LIMIT"
+  --trace-cache-root "$TRACE_CACHE_ROOT" --trace-cache-mode require
   --num-vars 3 --num-layers 12 --num-registers 17
   --ops copy,add,sub,mul,protected_div,sin,cos,square,cube,protected_log,protected_sqrt,exp
-  --output-terms 1 --gt-traces-per-task 1
+  --output-terms 1 --gt-traces-per-task 8
   --hidden "$HIDDEN" --metadata-embedding-dim 16
   --max-train-points 64 --max-eval-points 64
   --epochs "$BOOTSTRAP_EPOCHS" --steps-per-epoch "$BOOTSTRAP_STEPS" --train-batch-size 4
@@ -75,6 +82,8 @@ ARGS=(
   --cycle-poisson-steps "${POISSON_STEPS:-64}" --cycle-poisson-lr "${POISSON_LR:-1e-3}"
   --cycle-correction-step "${CORRECTION_STEP:-0.1}" --cycle-support-variance-eps "${SUPPORT_VARIANCE_EPS:-1e-6}"
   --cycle-collection-timeout-sec "${COLLECTION_TIMEOUT_SEC:-300}"
+  --bootstrap-source-mass-schedule "${BOOTSTRAP_SOURCE_MASS_SCHEDULE:-0.30,0.20,0.10}" --bootstrap-inactive-weight "${BOOTSTRAP_INACTIVE_WEIGHT:-0.10}"
+  --bootstrap-gate "${BOOTSTRAP_GATE:-C}"
   --cycle-landscape-sources "${LANDSCAPE_SOURCES:-4}"
   --cycle-landscape-task-limit "${LANDSCAPE_TASK_LIMIT:-1}"
   --cycle-landscape-time-points "${LANDSCAPE_TIME_POINTS:-5}"

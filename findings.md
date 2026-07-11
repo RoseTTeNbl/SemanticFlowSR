@@ -1,5 +1,28 @@
 # Findings
 
+## 2026-07-11 conditional Monge correction to routed-flow theory
+
+- The previous routed-flow proposal was too permissive. Feeding a route ID or `theta0` to the velocity model avoids regression conflict only by enlarging the conditioning space; it does not produce the requested task-only Eulerian field. The active object should be `v(theta, D, t)`, with `theta0` used only as the ODE initial state.
+- Flow-matching conditional averaging is not itself mathematically invalid. For bridge samples `(Theta_t, U_t)`, the population minimizer is `E[U_t | Theta_t, D, t]`, and the irreducible loss is the conditional velocity variance. The failure mode is therefore high bridge conditional variance: arbitrary or discontinuous endpoint assignment creates conflicting velocities near the same state.
+- A task-conditional Fisher Monge map is the correct bridge object. If `T_D` transports the continuous prior to a continuous epsilon-sharp endpoint law and the displacement interpolation remains in a convex normal neighborhood, then the bridge velocity is a single-valued function of `(theta, D, t)` and its conditional variance is zero almost everywhere.
+- Exact one-hot/Dirac expression endpoints are incompatible with a finite-time invertible ODE from a continuous prior. Endpoint cells must retain continuous interior jitter/base coordinates; hard retraction remains an explicitly reported decode operation, not the target law itself.
+- The active implementation currently violates the desired construction in two concrete ways:
+  - `FixedSymbolConditionedVelocityNet.forward(..., theta0)` repeatedly injects full `theta0`, so the learned object is `v(theta,D,t;theta0)`;
+  - `active_node_semantic_features` invokes `register_hard_prefix_semantic_features`, which hard-decodes at every ODE evaluation and makes the field discontinuous at argmax boundaries.
+- The active v4 outer update is not a semantic probability tilt. It evaluates up to six one-block neighbors and takes a hard argmin using `0.7 raw NMSE + 0.3 signature distance`. Coefficient fitting exists elsewhere, but this active target constructor does not use it, so training and evaluation remain misaligned.
+- The failed medium outer iteration spent about 377 seconds collecting rollouts, then the manifold gate rejected every task and produced zero coupled examples. This gate is a circular dependency and should not precede semantic target construction.
+- Recommended minimal population update:
+  `K source rollouts -> one full expression each -> at most one register-residual-guided offspring each -> coefficient-fit cross-validated energy -> Gibbs weights with ESS-controlled temperature -> K continuous sharp target slots -> Fisher-distance Hungarian/Monge assignment -> one Fisher FM loss`.
+- The semantic tilt-to-velocity link can be stated canonically. For `rho_beta proportional exp(-beta E) rho`, the tilt obeys `partial_beta rho = -(E-E_bar)rho`. The minimum-kinetic-energy transport field satisfies the weighted Poisson equation `div_FR(rho grad_FR phi)=(E-E_bar)rho`. The practical finite-particle approximation is Fisher Monge assignment; no PDE solver is needed.
+- Particle interaction should first live in target construction, where parent/offspring expressions compete and share useful register semantics. A permutation-equivariant population field is a principled later extension if independent particles collapse, but it is not needed for the first low-cost implementation.
+
+
+## 2026-07-11 recovery hypothesis
+
+- The next falsifiable question is narrower than the current v3/v4 algorithm: given a compiled high-quality single-expression endpoint for each training task, can the conditional Fisher flow learn to transport random `theta0` to that endpoint and recover a coefficient-fitted expression with held-out `R2 > 0.95`?
+- A negative result on that supervised problem identifies the flow/conditioning/ODE as the bottleneck. A positive result means the expensive semantic outer loop is unnecessary for the first paper-quality baseline and can be reintroduced only as a later self-improvement ablation.
+- Runtime should scale mainly with ordinary FM batches plus one final eval. Any configuration that invokes RK2 terminal consistency inside epochs or evaluates every outer iteration is outside the minimal recovery experiment.
+
 ## 2026-07-09 Iterative Corrected-Bridge Stage2 Update
 
 - Latest theory update changes the operational Stage2 interpretation to iterative endpoint-corrected flow matching:
@@ -378,3 +401,38 @@
 - 2026-07-10 full e8 控制器仅通过 CUDA preflight，未生成 run 目录，当前无仓库训练进程。
 - 核心 pytest 收集因缺失 `semflow_sr.edge_flow.pullback_chart` 失败。
 - 完整诊断已追加到 `docs/STRUCTURAL_CLOSURE.md`。
+
+## 2026-07-11 v4 lineage medium failure diagnosis
+
+- The active medium run `v4_lineage_medium_gpu3_3iter_20260711_codex` was not worth continuing:
+  - bootstrap FM improved relative loss only to about `0.531` after 6 epochs, with low-t relative losses still `0.62-0.68`;
+  - terminal consistency was very expensive and still high (`2.655` at epoch 6);
+  - the reference endpoints failed the single-expression manifold gate, so iteration 1 produced `coupled_example_count=0` and `flow_update_skipped=1`;
+  - terminal retraction active FR remained large (`mean≈1.18`, p95≈`1.86`), so endpoint projection was a large correction rather than a small terminal cleanup.
+- The reported negative R2 is partly an evaluation/selection bug, not only a generative failure:
+  - coefficients are actually fitted in `evaluate_expression` through train-split affine and term-linear least squares;
+  - however `select_best_rollout` overwrote the train-fit-selected candidate with `raw_semantic_population_medoid`;
+  - the old medium population contained candidates such as `sin(x0**2)` with term-fit R2 around `0.949`, but the medoid selected unrelated/low-R2 expressions.
+- Offline analysis of the 6-task partial medium:
+  - selected term-fit R2 mean: `0.1249`;
+  - best-of-pop term-fit R2 mean: `0.8708`;
+  - best-of-pop term-fit median: `0.9135`;
+  - at least one task exceeded term-fit R2 `0.95`.
+  This means the immediate next gate should be: can the learned flow reliably place mass on these high-fit candidates and select them without GT, not whether semantic medoid is stable.
+- The old v3/v4 semantic energy was also misaligned with the desired R2 target:
+  - posterior energy used raw NMSE/signature as the main signal;
+  - final evaluation and paper baselines use fitted/affine R2;
+  - raw-negative but coefficient-fit-good candidates were therefore penalized or selected inconsistently.
+- Cost diagnosis:
+  - medium bootstrap epoch runtime was about 300 seconds with terminal consistency enabled;
+  - per-iteration eval took about 1257 seconds for 6 tasks;
+  - a tiny smoke with terminal consistency disabled had a 6-second epoch, showing the previous medium cost was mostly configuration overhead, not an unavoidable flow-matching cost.
+- Code response on 2026-07-11:
+  - eval selection default changed to `train_fit_score`;
+  - semantic medoid preserved only as optional diagnostic via `--eval-oracle-free-selection-mode semantic_medoid`;
+  - trace-posterior energy default changed to `fit_r2_first`;
+  - runner defaults now disable terminal consistency and per-iteration eval for R2-first diagnostics.
+- Remaining algorithmic blocker after the selection/objective fix:
+  - the flow endpoint still does not concentrate near GT trace cells (`gt active argmax match≈0.19`, hard/sample GT hit `0`);
+  - manifold gate failure means outer semantic coupling does not yet produce new training pairs;
+  - therefore the next useful run should be short and R2-first, measuring population best/selected fitted R2 and GT-cell probability before any longer medium/full experiment.

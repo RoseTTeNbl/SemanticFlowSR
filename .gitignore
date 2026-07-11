@@ -67,6 +67,7 @@ venv/
 !/tests/test_semantic_poisson_flow.py
 !/tests/test_semantic_poisson_v5_integration.py
 !/tests/test_external_baseline_results_lock.py
+!/tests/test_trace_cache_v51.py
 
 # External clones (reference / large data; keep code-tracking out)
 /external/

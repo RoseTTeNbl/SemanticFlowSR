@@ -1,5 +1,50 @@
 # Progress
 
+## 2026-07-11
+
+- Switched from algorithm cleanup back to external baseline restoration because the user requested a
+  complete, tidy recovery of all baseline result directories and data for experiment-section readers.
+- Audited the external baseline surface: `configs/eval/external_baselines.yaml`,
+  `semflow_sr/eval/baseline_runner.py`, every `scripts/run_*_baseline.py`,
+  `scripts/run_external_baseline_matrix.py`, `scripts/run_paper_complete_benchmarks.sh`, and
+  `scripts/build_paper_complete_results.py`.
+- Confirmed `results/` contains only `README.md` plus the currently running v4 medium output tree;
+  no external baseline source JSON survived the cleanup.
+- Searched historical local locations under `/home/ywj/wyh/results` and
+  `_internal/experiments/sfsr_isolated_20260702`; no copyable SFSR baseline JSON/CSV artifacts were
+  found.
+- Verified required conda environments exist and can start: `semflow` imports DEAP/gplearn, `deap`
+  imports DEAP, `pysr` imports PySR, `dso37` imports DSO, and `tpsr` imports torch. The TPSR model
+  checkpoint and diffusion proposal data files are present.
+- Decided to restore in two layers: first the repository paper-complete layout under
+  `results/clean_benchmark_20260701/`, then separate matrix-compatible PySR/E2E/top-level legacy
+  result files not covered by the paper-complete shell script.
+- Completed a one-task smoke of the paper-complete baseline pipeline. GP, DEAP, DSO, TPSR,
+  LocalDiffusionProposal, SymGPT-small, NeSymReS-small, HVAE-small, and NGGP-small all wrote
+  schema-compatible JSON outputs into `results/_baseline_restore_smoke_20260711/`.
+- The first smoke failed in `scripts/run_dsr_baseline.py` because `dso37` did not automatically see
+  the repository package path. Rerunning with `PYTHONPATH=$PWD` fixed that import issue.
+- The final paper-complete build stage failed on a historical `semflow_sr.edge_flow.pullback_chart`
+  import. Replaced the eager package import in `semflow_sr/edge_flow/__init__.py` with lazy access
+  so benchmark summarization can load the usable `edge_flow.benchmark` module without the missing
+  training-only module.
+- Added `PySR` and `E2E` to the paper-complete shell script, because they are configured external
+  baselines but were not in the original paper-complete default method set. Also taught
+  `build_paper_complete_results.py` to map `pysr_*` files to method name `PySR`.
+- Ran one-task smoke checks for `pysr` and `e2e`; both formula-dev and SymbolicGPT-large outputs
+  were written and the paper-complete builder ingested them successfully.
+- Started the full external-baseline restoration as a detached `setsid` job after `nohup env` proved
+  unreliable in this execution environment. PID is recorded at
+  `results/clean_benchmark_20260701/paper_complete_20260702/baseline_restore_20260711.pid`; driver
+  log is `results/clean_benchmark_20260701/paper_complete_20260702/logs/baseline_restore_driver_20260711.log`.
+- Confirmed the full restore job completed the GP source runs: `gp_formula_dev_seed0.json` has 34/34
+  ok records and `gp_symbolicgpt_large_seed0.json` has 178/178 ok records. The script then advanced
+  to `deap_formula_dev`, proving sequential method handoff and resume behavior are working.
+- Restored the external-baseline matrix command plan at
+  `results/benchmark_plans/external_baseline_commands.json` and stdout copy
+  `results/benchmark_plans/external_baseline_commands.txt`; it contains 99 commands covering 11
+  external-comparison methods over 9 suite groups.
+
 ## 2026-07-10
 
 - Read repository instructions and inherited Stage1/semantic endpoint planning records.

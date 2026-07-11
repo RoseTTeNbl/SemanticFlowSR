@@ -37,7 +37,7 @@ They are not evaluated inside RK2.
 
 ## Checkpoint contract
 
-The objective id is `semantic_poisson_residual_fisher_v5`.  Checkpoints record
+The objective id is `semantic_poisson_residual_fisher_v5_1_bootstrap_first`.  Checkpoints record
 the residual stage, correction step, Poisson configuration, and
 `theta0_conditioning=none`.  A v2/v3/v4 checkpoint is rejected for v5 resume;
 legacy evaluation remains a separate explicit path.

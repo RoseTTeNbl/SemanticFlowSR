@@ -140,3 +140,5 @@ Removed role:
 | 2-task v3 GPU short diagnostic stalled in trace semantic collection | 1 | Stop after bootstrap evidence; deduplicate/canonicalize traces before expensive semantic scoring and cache expression metrics |
 | Legacy checkpoint policy test expected the old flag spelling | 1 | Update assertion to the new `--legacy-cycle-eval` alias; behavior was correct |
 | GT endpoint had nonzero distance to its own cell | 1 | Make lineage cell projection idempotent when selected active probabilities already exceed `1-epsilon` |
+| DSO smoke failed with `ModuleNotFoundError: semflow_sr` in `dso37` | 1 | External envs do not have the repo installed; rerun baseline restoration with `PYTHONPATH=$PWD` so manifest runners can import local package code. |
+| Baseline command-plan redirect failed because `results/benchmark_plans/` did not exist | 1 | Create the directory before redirecting matrix script stdout. |

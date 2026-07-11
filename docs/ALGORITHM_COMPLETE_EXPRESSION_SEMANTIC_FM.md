@@ -1,6 +1,6 @@
 # SemanticFlowSR v5 algorithm
 
-The active method is `semantic_poisson_residual_fisher_v5`.  It transports a
+The active method is `semantic_poisson_residual_fisher_v5_1_bootstrap_first`.  It transports a
 population with one shared conditional velocity field
 
 ```text

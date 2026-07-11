@@ -218,6 +218,28 @@
   mass.  V3 examples now need a `sample_weight` carrying the soft plan edge, the complete target trace
   choices, and a GT-anchor marker so training can sample the full coupling without capacity slots.
 - Canonical recompilation provides a deterministic representative after expression-level fiber
+
+## 2026-07-11 external baseline restoration
+
+- The active baseline restoration path is the repository-owned paper-complete workflow:
+  `scripts/run_paper_complete_benchmarks.sh` followed by
+  `scripts/build_paper_complete_results.py`.
+- The expected source-run buckets are
+  `results/clean_benchmark_20260701/external_baselines/formula_dev/` and
+  `results/clean_benchmark_20260701/external_baselines/symbolicgpt_large/`.
+- The expected paper-readable outputs are under
+  `results/clean_benchmark_20260701/paper_complete_20260702/` with `source_runs/`,
+  `final_tables/`, `per_task/`, `manifests/`, `logs/`, and `trained_small_models/`.
+- The current SFSR repo has no surviving baseline result JSON after the user's results cleanup;
+  `logs/` only retains SemanticFlowSR training logs. Historical search under `/home/ywj/wyh/results`
+  and `_internal/experiments/sfsr_isolated_20260702` did not find copyable SFSR baseline outputs.
+- Required conda environments are present and startable: `semflow`, `deap`, `pysr`, `dso37`, and
+  `tpsr`. The official TPSR checkpoint and local diffusion proposal files are present.
+- `scripts/run_paper_complete_benchmarks.sh` has been upgraded to cover the full external-baseline
+  method surface used by `configs/eval/external_baselines.yaml`: GP, GP-DEAP, PySR, DSO, TPSR, E2E,
+  LocalDiffusionProposal, SymGPT-small, NeSymReS-small, HVAE-small, and NGGP-small. Its smoke checks
+  confirm every method can write the shared baseline JSON schema and the paper-complete builder can
+  ingest the resulting files.
   aggregation.  The empirical prior mass still sums every sampled graph fiber; only endpoint
   materialization uses the canonical SSA representative, so duplicate fibers cannot become separate
   posterior modes.

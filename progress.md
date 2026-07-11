@@ -1,5 +1,12 @@
 # Progress
 
+## 2026-07-11 minimal R2-first medium recovery
+
+- User approved replacing the over-complex medium path with a logically minimal, low-cost, high-R2 flow experiment.
+- Active design target: one readout, compiled/GT single-expression endpoints, a single Fisher velocity-matching loss, train-split coefficient fitting for candidate scoring, and final held-out R2/structure reporting.
+- Semantic outer iterations, trace-population proximal updates, Sinkhorn/Hungarian recoupling, differentiable terminal consistency, and per-iteration eval are excluded from this recovery run.
+- Parallel read-only audits started for baseline ETA, minimal flow design, and coefficient-fit/R2 failure localization.
+
 ## 2026-07-09 full graph Stage1 run
 
 - Continued the requested full Stage1 run for `graph_target_conditioned_stage1_full_20260709_r1`.
@@ -960,3 +967,55 @@
 - On 8 compilable train tasks: family mass 0.9996136576, top-1/top-4 recall 1.0, matched active argmax 1.0.
 - On 4 held-out tasks: family mass/top-4 recall 0.0 and matched active argmax 0.3923786181; supervised memorization passes but structural generalization fails.
 - Removed the earlier v1/v2 intermediate outputs and retained only the final validated result and log.
+
+## 2026-07-11 v4 medium R2-first emergency diagnosis
+- Confirmed external baseline restoration remains active under `scripts/run_paper_complete_benchmarks.sh` PID 13063; current stage is PySR symbolicgpt_large and it should continue through the remaining baseline methods.
+- Stopped only the failed mainline medium process group `v4_lineage_medium_gpu3_3iter_20260711_codex`; baseline restoration was not touched.
+- Medium evidence before stop:
+  - bootstrap epoch runtime about 300s with `cycle_consistency_examples=16` and 8-step terminal RK2;
+  - per-iteration eval runtime about 1257s for 6 tasks;
+  - iteration 1 failed the single-expression manifold gate (`reference_manifold_fr_mean=1.3356`, p95 `2.3363`) and skipped the flow update;
+  - selected eval summary was poor: raw R2 median `-4.7364`, coefficient/term-fit R2 median `-0.0090`.
+- Sample-level diagnosis: the population already contained much better coefficient-fit candidates, but final selection used semantic medoid and hid them.
+  - Old selected term-fit R2 mean on the 6-task partial medium: `0.1249`.
+  - Offline best-of-pop term-fit R2 mean: `0.8708`, median `0.9135`.
+  - This proves the first problem is not merely "no coefficient fitting"; it is objective/selection mismatch plus failed flow concentration.
+- Implemented R2-first fixes in `scripts/train_complete_expression_semantic_fm.py`:
+  - default eval candidate selection is now `train_fit_score`;
+  - old semantic medoid remains available via `--eval-oracle-free-selection-mode semantic_medoid`;
+  - trace-posterior energy now defaults to `--cycle-semantic-energy-mode fit_r2_first`, using train-split affine/term-fit NMSE instead of raw-only NMSE/signature.
+- Implemented lightweight runner defaults in `scripts/run_one_step_semantic_fisher_cycle_gpu.sh`:
+  - `SEMANTIC_ENERGY_MODE=fit_r2_first`;
+  - `EVAL_SELECTION_MODE=train_fit`;
+  - `CONSISTENCY_EXAMPLES=0`, `ENDPOINT_LOSS_WEIGHT=0.0`;
+  - `CYCLE_EVAL_EACH_ITERATION=0`, with env toggles to re-enable.
+- Validation:
+  - `py_compile` passed for `scripts/train_complete_expression_semantic_fm.py`;
+  - `bash -n scripts/run_one_step_semantic_fisher_cycle_gpu.sh` passed;
+  - focused tests passed: `tests/test_hard_endpoint_multiterm_cycle.py tests/test_theta0_register_flow.py` (`17 passed`);
+  - tiny smoke `v4_r2first_smoke_20260711_codex` completed and confirmed terminal consistency is disabled (`flow_terminal_consistency_example_count=0`) and epoch runtime fell to about 6s. Quality of this 1-epoch/2-step smoke is not evidence of SR success.
+
+## 2026-07-11 routed-flow theory correction
+- Launched `v4_r2first_bootstrap_medium_20260711_codex` as a simplified bootstrap-only medium, then stopped it after the user identified a deeper theory issue with single-field velocity averaging.
+- Observed simplified training before stop:
+  - outer iterations disabled;
+  - terminal consistency, GT teacher, inactive identity loss disabled;
+  - 6 epoch bootstrap completed with relative Fisher loss `0.927 -> 0.515`;
+  - low-t bins remained weak (`0.617` and `0.631` relative loss at epoch 6);
+  - final eval had not produced summary/progress files before stop.
+- New theoretical direction: a single velocity field conditioned only on `(theta_t, D, t)` can learn an averaged conditional direction under multimodal endpoint assignments. The next algorithm should use an explicit route/reparameterization variable (or fixed source particle identity) so each `(D, route)` defines one deterministic bridge/velocity field in augmented space.
+- Proposed next implementation target: routed evolutionary FM — fixed source/route bank, deterministic route-conditioned endpoint assignment, small evolution-style candidate refinement by train-fit R2, and pure Fisher bridge FM on `(theta0_route, route, D, theta1_route)` pairs. This keeps training/inference consistent and avoids block-marginal/semantic-medoid averaging.
+
+## 2026-07-11 conditional Monge population-flow correction
+
+- Corrected the preceding routed-flow idea after the user objected to `r` as a condition. No route ID should be introduced, and `theta0` should no longer be a network condition if the claimed object is a task-only Eulerian velocity field.
+- Derived the FM risk decomposition and identified conditional bridge-velocity variance as the precise averaging diagnostic.
+- Audited the current active v4 path and confirmed:
+  - full `theta0` conditioning is repeated in global/local model features;
+  - hard-prefix argmax semantics are recomputed inside every ODE field evaluation;
+  - one endpoint already decodes only one expression; remaining multi-trace samples are diagnostic only;
+  - active semantic correction is hard local argmin on raw metrics, not coefficient-fit Gibbs tilt;
+  - the failed medium manifold gate incurred collection cost but yielded zero update examples.
+- Selected the new algorithmic direction: continuous task-conditioned field, one expression per particle, one semantic local offspring, ESS-controlled complete-expression tilt, continuous sharp endpoint slots, finite-particle Fisher Monge assignment, and a single FM loss.
+- Wrote the durable derivation and implementation boundary in `.planning/one_step_semantic_fisher_cycle/CONDITIONAL_MONGE_POPULATION_FLOW_20260711.md`.
+- Read-only background check found that the external-baseline controller has completed normally rather than failed. The driver log ends with `[paper-complete] done`; all configured formula-dev and symbolicgpt-large JSONs are present for GP, DEAP, PySR, DSO, TPSR, E2E, LocalDiffusion, SymGPT-small, NeSymReS-small, HVAE-small, and NGGP-small, and the aggregate builder reports 55 paper rows.

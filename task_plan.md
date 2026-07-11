@@ -40,6 +40,10 @@ branch under the updated iterative semantic endpoint-corrected bridge FM theory:
 - [complete] Add graph Stage2 corrected-bridge runner and validate the new code path with tiny train-only/eval smoke runs.
 - [in_progress] Rerun full-data 8-epoch Stage1 with light eval to obtain a reusable clean full checkpoint and sample-level R2/structure evidence.
 - [pending] Run graph Stage2 corrected-bridge iterations from the clean full Stage1 checkpoint with bounded endpoint buffers and light eval.
+- [in_progress] R2-first recovery pass for one-step semantic Fisher cycle: stop wasting medium runs, align semantic objective/eval selection with coefficient-fitted R2, then validate with short population-level diagnostics before any medium/full rerun.
+- [superseded] Collapse the active experiment to a minimal supervised-flow baseline: this isolated the low-t/endpoint failure, but the source-conditioned bridge target is not yet a valid task-only Eulerian-flow construction.
+- [in_progress] Replace the routed/source-conditioned proposal with conditional Monge population Fisher flow: no route ID and no theta0 network condition; one expression per source rollout; one local semantic offspring per particle; expression-level Gibbs tilt; continuous sharp endpoint law; Fisher Monge assignment; one FM loss.
+- [complete] Monitor the detached external-baseline restoration job: it completed successfully and rebuilt the paper-complete aggregate with all configured external methods.
 
 ## Constraints
 - Main construction graph: `graph_dag_edge_simplex` (`fixed_symbol_node_edges` remains an alias).
@@ -50,3 +54,9 @@ branch under the updated iterative semantic endpoint-corrected bridge FM theory:
   where `theta1_plus` is obtained by terminal semantic tilt and graph endpoint
   projection. Residual-only/base-frozen correction is legacy ablation only.
 - Current runner uses GPU, but validation judgment must include samples/GT inspection, not only aggregate metrics.
+- The simplified recovery experiment must treat `R2 > 0.95` and visible recovery of the best expression as the primary gate. Auxiliary semantic/manifold statistics cannot substitute for that outcome.
+- Do not re-enable outer semantic proximal updates, Sinkhorn coupling, differentiable terminal consistency, or per-iteration eval until the minimal supervised flow can reproduce high-quality endpoints at acceptable runtime.
+- The active theoretical object must be a task-conditioned field `v(theta, D, t)`. `theta0` is an initial state, not a network condition; no route/source ID is allowed.
+- ODE-time semantic features must be continuous in theta. Hard decode, hard-prefix register execution, coefficient fitting, and discrete edits belong only to endpoint target construction.
+- Each sampled theta0 produces one rollout and one decoded expression. Exploration may add at most one locally edited offspring per particle; no per-endpoint multi-trace sampling.
+- Semantic improvement must be lifted to a continuous sharp endpoint law and then converted to velocity through Fisher Monge transport; direct block-marginal averaging and direct reward drift are not the mainline.
