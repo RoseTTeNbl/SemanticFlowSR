@@ -62,7 +62,7 @@ ARGS=(
   --symbolicgpt-train-limit "$SYMBOLICGPT_TRAIN_LIMIT" --symbolicgpt-eval-limit "$SYMBOLICGPT_EVAL_LIMIT"
   --num-vars 3 --num-layers 12 --num-registers 17
   --ops copy,add,sub,mul,protected_div,sin,cos,square,cube,protected_log,protected_sqrt,exp
-  --output-terms 1 --gt-traces-per-task 4
+  --output-terms 1 --gt-traces-per-task 1
   --hidden "$HIDDEN" --metadata-embedding-dim 16
   --max-train-points 64 --max-eval-points 64
   --epochs "$BOOTSTRAP_EPOCHS" --steps-per-epoch "$BOOTSTRAP_STEPS" --train-batch-size 4

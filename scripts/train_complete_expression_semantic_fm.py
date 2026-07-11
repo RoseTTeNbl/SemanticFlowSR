@@ -8520,11 +8520,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         _inherit_graph_architecture_from_checkpoint(args, loaded_ckpt)
     graph_family = canonical_construction_graph(str(args.construction_graph))
     template = make_construction_template(args, graph_family)
+    setup_started = time.perf_counter()
     train_raw, eval_raw, source_counts = load_all_task_sources(
         args,
         template.num_vars,
         device=torch.device("cpu"),
     )
+    print(
+        json.dumps(
+            {
+                "phase": "v5_task_sources_loaded",
+                "train_tasks": len(train_raw),
+                "eval_tasks": len(eval_raw),
+                "runtime_sec": time.perf_counter() - setup_started,
+            }
+        ),
+        flush=True,
+    )
+    compile_started = time.perf_counter()
     train_tasks = build_task_bundles(
         train_raw,
         template,
@@ -8546,6 +8559,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         seed=int(args.seed) + 12_345,
         split="eval",
         copy_assignment=str(args.trace_copy_assignment),
+    )
+    print(
+        json.dumps(
+            {
+                "phase": "v5_task_bundles_compiled",
+                "train_tasks": len(train_tasks),
+                "eval_tasks": len(eval_tasks),
+                "gt_traces_per_task": int(args.gt_traces_per_task),
+                "runtime_sec": time.perf_counter() - compile_started,
+            }
+        ),
+        flush=True,
     )
     runner = run_legacy_one_step_semantic_fisher_cycle if bool(getattr(args, "legacy_v2_eval", False)) else run_one_step_semantic_fisher_cycle
     return runner(
