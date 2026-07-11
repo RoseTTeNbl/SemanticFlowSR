@@ -4871,6 +4871,13 @@ def _train_semantic_base_flow(
                     if rng.random() < 0.20:
                         noise = torch.randn_like(theta_t) * 0.02
                         theta_t = center_theta(theta_t + noise, base.template)
+                    target = endpoint_attractor_velocity(
+                        theta_t,
+                        theta1,
+                        base.template,
+                        float(t),
+                        min_remaining=0.05,
+                    )
                     theta_rows.append(theta_t)
                     target_rows.append(target)
                 theta_batch = torch.stack(theta_rows)
