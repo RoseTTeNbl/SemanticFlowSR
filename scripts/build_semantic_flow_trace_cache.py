@@ -69,7 +69,7 @@ def main() -> None:
     failed = [task.task_id for task in bundles if not task.traces]
     if failed and not args.allow_incomplete:
         raise RuntimeError(f"cannot build strict trace cache; tasks without valid traces: {failed[:8]}")
-    records = [trace_record(task, template, task.traces, task.compile_failures) for task in bundles]
+    records = [trace_record(task, template, task.traces, task.compile_failures) for task in bundles if task.traces]
     manifest = write_trace_cache(Path(args.out), template, records)
     manifest["skipped_task_ids"] = failed
     manifest_path = Path(args.out) / "compiled_trace_families_v1.manifest.json"
