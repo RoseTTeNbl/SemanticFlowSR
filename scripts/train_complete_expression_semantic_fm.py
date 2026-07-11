@@ -4675,11 +4675,18 @@ def _train_semantic_base_flow(
     for stage_index, source_mass in enumerate(schedule, start=1):
       for epoch in range(stage_epochs):
         global_epoch += 1
-        losses: list[float] = []
-        zero_losses: list[float] = []
-        inactive_losses: list[float] = []
-        time_losses = {"low": [], "mid": [], "high": []}
-        relative_sums = {key: [0.0, 0.0] for key in ("global", "low", "mid", "high", "readout", "op", "arg")}
+        loss_sum = torch.zeros((), device=device)
+        loss_count = 0
+        zero_sum = torch.zeros((), device=device)
+        zero_count = 0
+        inactive_sum = torch.zeros((), device=device)
+        inactive_count = 0
+        time_sums = {key: torch.zeros((), device=device) for key in ("low", "mid", "high")}
+        time_counts = {key: 0 for key in ("low", "mid", "high")}
+        relative_sums = {
+            key: [torch.zeros((), device=device), torch.zeros((), device=device)]
+            for key in ("global", "low", "mid", "high", "readout", "op", "arg")
+        }
         kind_masks = {
             "readout": torch.tensor([str(block.kind) == "readout" for block in base.template.blocks], dtype=torch.bool, device=device),
             "op": torch.tensor([str(block.kind) == "reg_op" for block in base.template.blocks], dtype=torch.bool, device=device),
@@ -4729,30 +4736,35 @@ def _train_semantic_base_flow(
                     loss = active_loss + float(getattr(args, "bootstrap_inactive_weight", 0.20)) * inactive_loss
                     zero, _ = stage1_velocity_loss(theta_t, torch.zeros_like(target), target, base.template, weights, eps=float(args.fisher_eps))
                     task_losses.append(loss)
-                    zero_losses.append(float(zero.detach().cpu()))
-                    inactive_losses.append(float(inactive_loss.detach().cpu()))
+                    zero_sum = zero_sum + zero.detach()
+                    zero_count += 1
+                    inactive_sum = inactive_sum + inactive_loss.detach()
+                    inactive_count += 1
                     time_key = "low" if t < 0.1 else "high" if t >= 0.9 else "mid"
-                    time_losses[time_key].append(float(active_loss.detach().cpu()))
+                    time_sums[time_key] = time_sums[time_key] + active_loss.detach()
+                    time_counts[time_key] += 1
                     predicted_blocks = stage1_velocity_block_losses(theta_t, predicted, target, base.template, eps=float(args.fisher_eps)).detach()
                     zero_blocks = stage1_velocity_block_losses(theta_t, torch.zeros_like(predicted), target, base.template, eps=float(args.fisher_eps)).detach()
-                    predicted_active = float(predicted_blocks[active].sum().cpu())
-                    zero_active = float(zero_blocks[active].sum().cpu())
+                    predicted_active = predicted_blocks[active].sum()
+                    zero_active = zero_blocks[active].sum()
                     relative_sums["global"][0] += predicted_active
                     relative_sums["global"][1] += zero_active
                     relative_sums[time_key][0] += predicted_active
                     relative_sums[time_key][1] += zero_active
                     for kind, mask in kind_masks.items():
                         selected = active & mask
-                        if bool(selected.any().detach().cpu()):
-                            relative_sums[kind][0] += float(predicted_blocks[selected].sum().cpu())
-                            relative_sums[kind][1] += float(zero_blocks[selected].sum().cpu())
+                        relative_sums[kind][0] = relative_sums[kind][0] + predicted_blocks[selected].sum()
+                        relative_sums[kind][1] = relative_sums[kind][1] + zero_blocks[selected].sum()
                 batch.append(torch.stack(task_losses).mean())
             objective = torch.stack(batch).mean()
             objective.backward()
             torch.nn.utils.clip_grad_norm_(base.parameters(), float(args.grad_clip))
             optimizer.step()
-            losses.append(float(objective.detach().cpu()))
-        mean_loss = float(np.mean(losses)) if losses else 0.0
+            loss_sum = loss_sum + objective.detach()
+            loss_count += 1
+        mean_loss = float((loss_sum / max(loss_count, 1)).cpu())
+        mean_zero_loss = float((zero_sum / max(zero_count, 1)).cpu())
+        mean_inactive_loss = float((inactive_sum / max(inactive_count, 1)).cpu())
         if mean_loss < best:
             best = mean_loss
             best_state = {key: value.detach().cpu().clone() for key, value in base.state_dict().items()}
@@ -4762,17 +4774,18 @@ def _train_semantic_base_flow(
             "bootstrap_stage": int(stage_index),
             "bootstrap_source_mass": float(source_mass),
             "flow_fisher_velocity_loss": mean_loss,
-            "flow_zero_predictor_loss": float(np.mean(zero_losses)) if zero_losses else 0.0,
-            "flow_relative_fisher_loss": float(relative_sums["global"][0] / max(relative_sums["global"][1], 1.0e-12)),
-            "flow_inactive_fisher_loss": float(np.mean(inactive_losses)) if inactive_losses else 0.0,
-            "flow_inactive_relative_to_active_zero": float((np.mean(inactive_losses) if inactive_losses else 0.0) / max(float(np.mean(zero_losses)), 1.0e-12)),
-            "flow_low_fisher_loss": float(np.mean(time_losses["low"])) if time_losses["low"] else None,
-            "flow_mid_fisher_loss": float(np.mean(time_losses["mid"])) if time_losses["mid"] else None,
-            "flow_high_fisher_loss": float(np.mean(time_losses["high"])) if time_losses["high"] else None,
+            "flow_zero_predictor_loss": mean_zero_loss,
+            "flow_relative_fisher_loss": float((relative_sums["global"][0] / relative_sums["global"][1].clamp_min(1.0e-12)).cpu()),
+            "flow_inactive_fisher_loss": mean_inactive_loss,
+            "flow_inactive_relative_to_active_zero": mean_inactive_loss / max(mean_zero_loss, 1.0e-12),
+            "flow_low_fisher_loss": float((time_sums["low"] / time_counts["low"]).cpu()) if time_counts["low"] else None,
+            "flow_mid_fisher_loss": float((time_sums["mid"] / time_counts["mid"]).cpu()) if time_counts["mid"] else None,
+            "flow_high_fisher_loss": float((time_sums["high"] / time_counts["high"]).cpu()) if time_counts["high"] else None,
         }
         for key in ("low", "mid", "high", "readout", "op", "arg"):
             numerator, denominator = relative_sums[key]
-            row[f"flow_{key}_relative_fisher_loss"] = float(numerator / max(denominator, 1.0e-12)) if denominator > 0.0 else None
+            denominator_value = float(denominator.cpu())
+            row[f"flow_{key}_relative_fisher_loss"] = float((numerator / denominator.clamp_min(1.0e-12)).cpu()) if denominator_value > 0.0 else None
         curve.append(row)
         if bool(args.log_epochs):
             print(json.dumps(row), flush=True)
