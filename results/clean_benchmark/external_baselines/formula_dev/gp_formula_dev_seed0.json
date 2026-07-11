@@ -1,0 +1,1002 @@
+{
+  "constant/Constant-1": {
+    "r2": 0.9975884040482692,
+    "r2_raw": 0.9975884040482692,
+    "r2_affine_refit": 0.9979894508202338,
+    "nmse": 0.002411595951730271,
+    "nmse_affine_refit": 0.002010549179765739,
+    "expression": "add(add(sin(X0), X0), mul(mul(add(0.539, X0), add(X0, 0.167)), add(X0, add(add(X0, -0.084), X0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-1",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "3.39*x0**3 + 2.12*x0**2 + 1.78*x0",
+    "runtime_sec": 3.759923418983817
+  },
+  "constant/Constant-2": {
+    "r2": 0.9770555525601361,
+    "r2_raw": 0.9770555525601361,
+    "r2_affine_refit": 0.9818113911016141,
+    "nmse": 0.022944447438975495,
+    "nmse_affine_refit": 0.018188608897681608,
+    "expression": "mul(mul(sub(add(-0.488, 0.653), cos(sin(X0))), cos(X0)), cos(-0.488))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-2",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 0.75",
+    "runtime_sec": 3.0837363698519766
+  },
+  "constant/Constant-3": {
+    "r2": 0.9981019413231195,
+    "r2_raw": 0.9981019413231195,
+    "r2_affine_refit": 0.9984314777046949,
+    "nmse": 0.0018980586768596276,
+    "nmse_affine_refit": 0.0015685222952877757,
+    "expression": "sin(div(X0, cos(sin(cos(sin(sin(sin(X1))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-3",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sin(1.5*x0)*cos(0.5*x1)",
+    "runtime_sec": 2.9976408290676773
+  },
+  "constant/Constant-4": {
+    "r2": 0.9363467569139207,
+    "r2_raw": 0.9363467569139207,
+    "r2_affine_refit": 0.9412086185156168,
+    "nmse": 0.0636532430859614,
+    "nmse_affine_refit": 0.05879138148427434,
+    "expression": "add(mul(mul(sub(add(add(0.754, X0), add(0.128, X0)), sub(mul(sub(X1, X0), add(X1, cos(X1))), sub(X0, X1))), 0.565), cos(sin(mul(X0, 0.768)))), cos(sub(X1, X0)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-4",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "2.7*x0**x1",
+    "runtime_sec": 3.2224585507065058
+  },
+  "constant/Constant-5": {
+    "r2": 0.9855953903521623,
+    "r2_raw": 0.9855953903521623,
+    "r2_affine_refit": 0.9858634298536746,
+    "nmse": 0.014404609647783615,
+    "nmse_affine_refit": 0.014136570146272252,
+    "expression": "add(sin(add(div(0.013, X0), sin(0.934))), div(add(mul(X0, X0), sub(X0, 0.583)), add(add(X0, X0), add(X0, cos(sin(0.934))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-5",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sqrt(1.23*x0)",
+    "runtime_sec": 3.1314646541140974
+  },
+  "constant/Constant-6": {
+    "r2": 0.9524962188372685,
+    "r2_raw": 0.9524962188372685,
+    "r2_affine_refit": 0.9944053717462346,
+    "nmse": 0.047503781162173415,
+    "nmse_affine_refit": 0.0055946282536997564,
+    "expression": "div(sin(sin(X0)), sin(sin(sin(add(0.233, add(0.233, X0))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-6",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**0.426",
+    "runtime_sec": 2.997704165056348
+  },
+  "constant/Constant-7": {
+    "r2": 0.9928151102216621,
+    "r2_raw": 0.9928151102216621,
+    "r2_affine_refit": 0.9933529062048776,
+    "nmse": 0.007184889778312548,
+    "nmse_affine_refit": 0.006647093795098977,
+    "expression": "sub(sub(add(sub(sin(mul(X1, 0.254)), sin(sub(X1, X0))), div(sin(add(sub(sin(mul(X1, 0.254)), sin(sub(X1, X0))), div(sin(mul(X1, 0.028)), sin(sub(X1, X1))))), sin(sub(X1, X1)))), sub(mul(X1, add(sin(X0), sin(-0.749))), sin(div(X0, cos(0.821))))), cos(sub(cos(mul(X0, X1)), cos(add(mul(X0, 0.653), cos(0.790))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-7",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "2*sin(1.3*x0)*cos(x1)",
+    "runtime_sec": 3.0994320237077773
+  },
+  "constant/Constant-8": {
+    "r2": 0.9960962426720278,
+    "r2_raw": 0.9960962426720278,
+    "r2_affine_refit": 0.9987639133515221,
+    "nmse": 0.0039037573279637923,
+    "nmse_affine_refit": 0.001236086648475218,
+    "expression": "sub(sub(sub(X0, 0.211), -0.652), mul(-0.246, X0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-8",
+    "method": "gplearn",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "log(x0 + 1.4) + log(x0**2 + 1.3)",
+    "runtime_sec": 2.922983937896788
+  },
+  "jin/Jin-1": {
+    "r2": 0.9928333238699955,
+    "r2_raw": 0.9928333238699955,
+    "r2_affine_refit": 0.9943034965775469,
+    "nmse": 0.007166676130004527,
+    "nmse_affine_refit": 0.0056965034224531206,
+    "expression": "add(sub(mul(X0, X0), sub(mul(add(sin(0.908), mul(X0, X0)), sub(X0, cos(mul(div(X0, X0), sin(X0))))), mul(mul(X0, X0), add(sin(0.908), mul(X0, X0))))), mul(mul(X0, X0), add(sin(0.908), mul(X0, X0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-1",
+    "method": "gplearn",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "2.5*x0**4 - 1.3*x0**3 + 0.5*x1**2 - 1.7*x1",
+    "runtime_sec": 3.4314996167086065
+  },
+  "jin/Jin-2": {
+    "r2": 0.9275202335038267,
+    "r2_raw": 0.9275202335038267,
+    "r2_affine_refit": 0.9527585891201213,
+    "nmse": 0.07247976649617324,
+    "nmse_affine_refit": 0.047241410879878605,
+    "expression": "mul(add(cos(cos(X1)), sin(mul(X1, sin(sin(X1))))), mul(add(cos(cos(X1)), cos(cos(sin(mul(X1, sin(sin(X1))))))), div(mul(div(X1, 0.709), sub(X1, sub(cos(X0), add(X1, X1)))), sin(sin(X1)))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-2",
+    "method": "gplearn",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "8.0*x0**2 + 8.0*x1**3 - 15.0",
+    "runtime_sec": 3.4355656523257494
+  },
+  "jin/Jin-3": {
+    "r2": 0.9531082228556282,
+    "r2_raw": 0.9531082228556282,
+    "r2_affine_refit": 0.9528067088895271,
+    "nmse": 0.046891777144368034,
+    "nmse_affine_refit": 0.047193291110469125,
+    "expression": "add(sub(add(sin(mul(cos(X1), add(sub(X1, sin(X1)), X1))), sub(sin(div(X1, -0.700)), mul(cos(X1), add(X1, 0.107)))), sin(X0)), add(X0, X1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-3",
+    "method": "gplearn",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "0.2*x0**3 + 0.5*x1**3 - 1.2*x1 - 0.5*x0",
+    "runtime_sec": 3.1652826475910842
+  },
+  "jin/Jin-4": {
+    "r2": 0.9344507585452515,
+    "r2_raw": 0.9344507585452515,
+    "r2_affine_refit": 0.9566546654187488,
+    "nmse": 0.0655492414547474,
+    "nmse_affine_refit": 0.043345334581250526,
+    "expression": "add(add(add(cos(sub(X1, 0.201)), add(add(add(add(add(sub(add(X0, X0), sub(sin(X0), cos(X1))), cos(sub(X1, 0.201))), X0), mul(X0, X0)), cos(-0.394)), cos(sub(X1, 0.201)))), mul(X0, cos(add(X0, X0)))), X0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-4",
+    "method": "gplearn",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "1.5*exp(x0) + 5.0*cos(x1)",
+    "runtime_sec": 3.0475408332422376
+  },
+  "jin/Jin-5": {
+    "r2": 0.9760751905206545,
+    "r2_raw": 0.9760751905206545,
+    "r2_affine_refit": 0.9778685521250747,
+    "nmse": 0.02392480947934279,
+    "nmse_affine_refit": 0.02213144787492283,
+    "expression": "sub(sub(sin(sin(mul(cos(X1), X0))), sub(sub(sin(sub(X1, X0)), sin(sin(sin(add(X1, X0))))), sin(mul(cos(X1), X0)))), sub(sin(sub(X1, X0)), sin(add(X1, X0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-5",
+    "method": "gplearn",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "6.0*sin(x0)*cos(x1)",
+    "runtime_sec": 3.2683575581759214
+  },
+  "jin/Jin-6": {
+    "r2": 0.574180781122711,
+    "r2_raw": 0.574180781122711,
+    "r2_affine_refit": 0.574344162044089,
+    "nmse": 0.42581921887727686,
+    "nmse_affine_refit": 0.42565583795589884,
+    "expression": "sub(sub(add(cos(sub(X1, X0)), sub(add(cos(sub(X1, X0)), add(add(sin(sub(sin(cos(sub(X1, X0))), cos(X0))), sin(cos(sub(X1, X0)))), mul(X1, X0))), sin(mul(div(0.649, cos(cos(-0.384))), add(sub(mul(X1, X0), sin(-0.053)), sub(X1, X0)))))), sin(mul(X1, add(sub(mul(X0, X1), sin(-0.053)), sin(cos(cos(sub(X1, X0)))))))), sin(mul(div(0.649, cos(cos(-0.384))), mul(X1, X0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-6",
+    "method": "gplearn",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "1.35*x0*x1 + 5.5*sin((x0 - 1.0)*(x1 - 1.0))",
+    "runtime_sec": 3.530286754015833
+  },
+  "livermore/Livermore-1": {
+    "r2": 0.8794598662756096,
+    "r2_raw": 0.8794598662756096,
+    "r2_affine_refit": 0.8813645437370469,
+    "nmse": 0.12054013372435275,
+    "nmse_affine_refit": 0.11863545626291602,
+    "expression": "add(0.645, X0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-1",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "1.0/3.0 + x0 + sin(x0**2)",
+    "runtime_sec": 2.810168939176947
+  },
+  "livermore/Livermore-2": {
+    "r2": 0.8989540753672283,
+    "r2_raw": 0.8989540753672283,
+    "r2_affine_refit": 0.9398316633616502,
+    "nmse": 0.10104592462885899,
+    "nmse_affine_refit": 0.0601683366360199,
+    "expression": "sub(-0.909, cos(X0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-2",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 2",
+    "runtime_sec": 2.945366295054555
+  },
+  "livermore/Livermore-3": {
+    "r2": 0.8894108167861157,
+    "r2_raw": 0.8894108167861157,
+    "r2_affine_refit": 0.9126543601734319,
+    "nmse": 0.11058918321195514,
+    "nmse_affine_refit": 0.08734563982504435,
+    "expression": "sub(mul(0.472, X0), cos(-0.116))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-3",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**3)*cos(x0**2) - 1",
+    "runtime_sec": 2.9654481606557965
+  },
+  "livermore/Livermore-4": {
+    "r2": 0.9362643255619333,
+    "r2_raw": 0.9362643255619333,
+    "r2_affine_refit": 0.9405850576620439,
+    "nmse": 0.06373567443804627,
+    "nmse_affine_refit": 0.059414942337937086,
+    "expression": "sub(sub(sin(sub(sin(sin(X0)), sub(0.740, X0))), sub(0.740, X0)), sub(0.740, X0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-4",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1) + log(x0)",
+    "runtime_sec": 3.092580495867878
+  },
+  "livermore/Livermore-5": {
+    "r2": 0.947286389988192,
+    "r2_raw": 0.947286389988192,
+    "r2_affine_refit": 0.9476265796280616,
+    "nmse": 0.05271361001148872,
+    "nmse_affine_refit": 0.052373420371621265,
+    "expression": "sin(sub(sub(sub(X0, X1), 0.119), 0.119))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-5",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**4 - x0**3 + x0**2 - x1",
+    "runtime_sec": 2.949054046999663
+  },
+  "livermore/Livermore-6": {
+    "r2": 0.9957200557972518,
+    "r2_raw": 0.9957200557972518,
+    "r2_affine_refit": 0.996000686149478,
+    "nmse": 0.004279944202747335,
+    "nmse_affine_refit": 0.003999313850521151,
+    "expression": "sub(add(sub(mul(X0, div(sub(-0.147, X0), add(0.200, -0.642))), mul(add(0.678, 0.409), cos(X0))), cos(X0)), div(div(mul(mul(cos(0.628), sin(X0)), add(div(X0, X0), sub(X0, -0.506))), sub(sin(sub(X0, 0.623)), sin(cos(0.706)))), cos(sub(add(sin(X0), div(X0, X0)), div(sub(mul(sin(sin(X0)), div(sub(-0.147, X0), add(0.200, -0.642))), mul(add(0.678, 0.409), cos(X0))), sub(X0, X0))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-6",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "4*x0**4 + 3*x0**3 + 2*x0**2 + x0",
+    "runtime_sec": 3.910286577884108
+  },
+  "livermore/Livermore-7": {
+    "r2": 0.999094521508175,
+    "r2_raw": 0.999094521508175,
+    "r2_affine_refit": 0.9990708249541113,
+    "nmse": 0.0009054784918226905,
+    "nmse_affine_refit": 0.0009291750458863461,
+    "expression": "div(sin(sin(sin(X0))), cos(X0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-7",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "(exp(x0) - exp(-x0))/2",
+    "runtime_sec": 2.9793801587074995
+  },
+  "livermore/Livermore-8": {
+    "r2": 0.994523357863659,
+    "r2_raw": 0.994523357863659,
+    "r2_affine_refit": 0.9949843386581373,
+    "nmse": 0.005476642135827723,
+    "nmse_affine_refit": 0.005015661341392564,
+    "expression": "cos(sin(cos(div(X0, cos(sin(cos(mul(cos(mul(X0, X0)), cos(X0)))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-8",
+    "method": "gplearn",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "(exp(x0) + exp(-x0))/3",
+    "runtime_sec": 2.969388064928353
+  },
+  "nguyen/Nguyen-1": {
+    "r2": 0.9984258009936725,
+    "r2_raw": 0.9984258009936725,
+    "r2_affine_refit": 0.9988518595963327,
+    "nmse": 0.0015741990063257467,
+    "nmse_affine_refit": 0.0011481404036660294,
+    "expression": "add(mul(X0, X0), mul(add(0.839, mul(div(X0, 0.609), X0)), sin(X0)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-1",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**3 + x0**2 + x0",
+    "runtime_sec": 3.037195750977844
+  },
+  "nguyen/Nguyen-2": {
+    "r2": 0.9958539376330181,
+    "r2_raw": 0.9958539376330181,
+    "r2_affine_refit": 0.996543771067286,
+    "nmse": 0.004146062366977897,
+    "nmse_affine_refit": 0.0034562289327107424,
+    "expression": "mul(add(X0, X0), add(cos(add(cos(add(mul(X0, X0), add(sin(X0), 0.163))), mul(cos(X0), sin(X0)))), sin(X0)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-2",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 3.073491421993822
+  },
+  "nguyen/Nguyen-3": {
+    "r2": 0.980396192257529,
+    "r2_raw": 0.980396192257529,
+    "r2_affine_refit": 0.9802232086095984,
+    "nmse": 0.019603807742458353,
+    "nmse_affine_refit": 0.019776791390388928,
+    "expression": "mul(mul(cos(sin(-0.229)), sub(X0, -0.120)), div(cos(-0.385), cos(sub(X0, -0.414))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-3",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 3.1065291040576994
+  },
+  "nguyen/Nguyen-4": {
+    "r2": 0.9990885690206152,
+    "r2_raw": 0.9990885690206152,
+    "r2_affine_refit": 0.9994278540291323,
+    "nmse": 0.0009114309793843153,
+    "nmse_affine_refit": 0.0005721459708674733,
+    "expression": "add(X0, mul(X0, add(sin(X0), mul(mul(mul(sin(cos(0.230)), add(add(0.817, X0), mul(X0, X0))), add(mul(X0, X0), sin(X0))), X0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-4",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**6 + x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 3.1615954199805856
+  },
+  "nguyen/Nguyen-5": {
+    "r2": 0.9651384772244277,
+    "r2_raw": 0.9651384772244277,
+    "r2_affine_refit": 0.9805246994824217,
+    "nmse": 0.03486152277422244,
+    "nmse_affine_refit": 0.019475300516824112,
+    "expression": "sin(add(sub(sub(-0.615, -0.615), sub(X0, -0.452)), sub(sub(-0.864, -0.500), cos(sin(add(sub(sub(-0.615, -0.953), sub(X0, -0.452)), sub(-0.904, div(cos(X0), cos(sin(-0.904))))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-5",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 1",
+    "runtime_sec": 3.2444749320857227
+  },
+  "nguyen/Nguyen-6": {
+    "r2": 0.9986567082388362,
+    "r2_raw": 0.9986567082388362,
+    "r2_affine_refit": 0.9987140042580198,
+    "nmse": 0.0013432917611622664,
+    "nmse_affine_refit": 0.001285995741978735,
+    "expression": "add(sin(X0), mul(sin(sin(add(X0, sin(X0)))), sub(cos(0.878), mul(-0.617, X0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-6",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0) + sin(x0 + x0**2)",
+    "runtime_sec": 3.1235032719559968
+  },
+  "nguyen/Nguyen-7": {
+    "r2": 0.996964295349393,
+    "r2_raw": 0.996964295349393,
+    "r2_affine_refit": 0.9988911589876552,
+    "nmse": 0.003035704650602304,
+    "nmse_affine_refit": 0.00110884101234306,
+    "expression": "sub(add(X0, -0.088), mul(-0.418, X0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-7",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1)",
+    "runtime_sec": 2.9084222419187427
+  },
+  "nguyen/Nguyen-8": {
+    "r2": 0.962238793336951,
+    "r2_raw": 0.962238793336951,
+    "r2_affine_refit": 0.971235243389785,
+    "nmse": 0.037761206662874504,
+    "nmse_affine_refit": 0.028764756610082112,
+    "expression": "add(mul(X0, 0.405), cos(cos(div(sin(X0), sub(cos(mul(X0, mul(X0, 0.405))), sub(-0.443, X0))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-8",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sqrt(x0)",
+    "runtime_sec": 3.0715495529584587
+  },
+  "nguyen/Nguyen-9": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 5.029004544696779e-32,
+    "nmse_affine_refit": 1.2661192669707819e-31,
+    "expression": "add(sin(X0), sin(mul(X1, X1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-9",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0) + sin(x1**2)",
+    "runtime_sec": 2.897952469997108
+  },
+  "nguyen/Nguyen-10": {
+    "r2": 0.993372470205703,
+    "r2_raw": 0.993372470205703,
+    "r2_affine_refit": 0.9944363585625094,
+    "nmse": 0.006627529794264975,
+    "nmse_affine_refit": 0.005563641437463594,
+    "expression": "div(sin(sub(add(X0, X0), sin(sin(sub(add(X0, X0), sin(X0)))))), cos(cos(X1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-10",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "2*sin(x0)*cos(x1)",
+    "runtime_sec": 3.0191663140431046
+  },
+  "nguyen/Nguyen-11": {
+    "r2": 0.9568212195857517,
+    "r2_raw": 0.9568212195857517,
+    "r2_affine_refit": 0.9701670182389026,
+    "nmse": 0.04317878041366512,
+    "nmse_affine_refit": 0.02983298176069447,
+    "expression": "cos(sub(sin(cos(X1)), sub(X0, X1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-11",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**x1",
+    "runtime_sec": 2.8814551238901913
+  },
+  "nguyen/Nguyen-12": {
+    "r2": 0.9472115510533797,
+    "r2_raw": 0.9472115510533797,
+    "r2_affine_refit": 0.9639474247988133,
+    "nmse": 0.05278844894436434,
+    "nmse_affine_refit": 0.03605257519964596,
+    "expression": "sin(sin(mul(cos(X0), sin(mul(add(mul(X1, 0.408), sub(-0.886, X0)), X1)))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-12",
+    "method": "gplearn",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 12,
+      "population_size": 500
+    },
+    "ground_truth": "x0**4 - x0**3 + x1**2/2 - x1",
+    "runtime_sec": 3.0402997829951346
+  }
+}

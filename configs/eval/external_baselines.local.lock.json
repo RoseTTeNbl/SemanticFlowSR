@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "conda_exe": "/home/ywj/miniconda3/bin/conda",
+  "environments": [
+    "semflow",
+    "deap",
+    "pysr",
+    "dso37",
+    "tpsr"
+  ],
+  "required_paths": [
+    "data/benchmark_suites/benchmark_manifest.json",
+    "data/benchmark_suites/symbolicgpt_large_2000_200_200/symbolicgpt_large_test_compilable_manifest.json",
+    "data/generated/symbolicgpt_large_2000_200_200"
+  ],
+  "repositories": {
+    "external/TPSR": "bdff709f1bfabb9e1a98c25c63d4847f39c83020",
+    "external/symbolicgpt": "6aef07c285d4d61f161490d42c057f2f55d045a9",
+    "external/NeuralSymbolicRegressionThatScales": "09f5af4b0e142b23a9cca82e682d92229c986df1",
+    "external/HVAE": "fd282f2db65fcb93ff2dc3e3d3066e3c34020640",
+    "external/deep-symbolic-optimization-pytorch": "85f88faf3ff95636f0011764b30e13f7bb82b54c",
+    "external/Symbolic_Regression_With_Diffusion_Models": "3cad2a466d9d3805cbf52c45a58322e7d8497fd1",
+    "external/dso": "8348d5b08d1eef6170fdbfd222a492ded990ea12"
+  },
+  "files": {
+    "external/TPSR/symbolicregression/weights/model1.pt": "169569a0648ae1a4f1ac2bbb376fa5ebb70ebce4bfcf23d6666323596990ff91"
+  }
+}

@@ -4,9 +4,10 @@ set -euo pipefail
 CONDA_EXE="${CONDA_EXE:-/home/ywj/miniconda3/bin/conda}"
 PY_ENV="${PY_ENV:-semflow}"
 PYTHON=python
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-ROOT="${ROOT:-results/clean_benchmark_20260701/paper_complete_20260702}"
-CLEAN_ROOT="${CLEAN_ROOT:-results/clean_benchmark_20260701}"
+ROOT="${ROOT:-results/clean_benchmark/paper_complete}"
+CLEAN_ROOT="${CLEAN_ROOT:-results/clean_benchmark}"
 LOG_DIR="$ROOT/logs"
 mkdir -p "$LOG_DIR" "$CLEAN_ROOT/external_baselines/formula_dev" "$CLEAN_ROOT/external_baselines/symbolicgpt_large"
 
@@ -25,7 +26,7 @@ run_semflow() {
   local name="$1"
   shift
   echo "[paper-complete] $name"
-  "$CONDA_EXE" run -n "$PY_ENV" "$PYTHON" "$@" 2>&1 | tee "$LOG_DIR/$name.log"
+  PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" "$CONDA_EXE" run -n "$PY_ENV" "$PYTHON" "$@" 2>&1 | tee "$LOG_DIR/$name.log"
 }
 
 run_env() {
@@ -33,7 +34,7 @@ run_env() {
   local name="$2"
   shift 2
   echo "[paper-complete] $name"
-  "$CONDA_EXE" run -n "$env_name" "$PYTHON" "$@" 2>&1 | tee "$LOG_DIR/$name.log"
+  PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" "$CONDA_EXE" run -n "$env_name" "$PYTHON" "$@" 2>&1 | tee "$LOG_DIR/$name.log"
 }
 
 run_formula() {
@@ -68,7 +69,7 @@ run_small_pair() {
   run_symbolicgpt "$tag" "$script" --train_root "$TRAIN_ROOT" "$@"
 }
 
-METHODS="${METHODS:-localdiffusion symgpt nesymres hvae nggp}"
+METHODS="${METHODS:-gp deap dso tpsr pysr e2e localdiffusion symgpt nesymres hvae nggp}"
 for method in $METHODS; do
   case "$method" in
     gp)
@@ -78,6 +79,16 @@ for method in $METHODS; do
     deap)
       run_formula deap scripts/run_deap_baseline.py --generations "${DEAP_GENERATIONS:-20}" --population_size "${DEAP_POPULATION:-500}" --per_task_timeout_sec "${PER_TASK_TIMEOUT_SEC:-180}"
       run_symbolicgpt deap scripts/run_deap_baseline.py --generations "${DEAP_GENERATIONS:-20}" --population_size "${DEAP_POPULATION:-500}" --per_task_timeout_sec "${PER_TASK_TIMEOUT_SEC:-180}"
+      ;;
+    pysr)
+      run_env "${PYSR_ENV:-pysr}" pysr_formula_dev scripts/run_pysr_baseline.py \
+        --manifest "$FORMULA_MANIFEST" --suite nguyen constant livermore jin --root "$FORMULA_ROOT" \
+        --out "$CLEAN_ROOT/external_baselines/formula_dev" --tag pysr_formula_dev \
+        --niterations "${PYSR_NITERATIONS:-100}" "${MAX_TASKS_ARG[@]}"
+      run_env "${PYSR_ENV:-pysr}" pysr_symbolicgpt_large scripts/run_pysr_baseline.py \
+        --manifest "$SYMGPT_MANIFEST" --suite symbolicgpt_large --root "$SYMGPT_ROOT" \
+        --out "$CLEAN_ROOT/external_baselines/symbolicgpt_large" --tag pysr_symbolicgpt_large \
+        --niterations "${PYSR_NITERATIONS:-100}" "${MAX_TASKS_ARG[@]}"
       ;;
     dso)
       run_env "${DSO_ENV:-dso37}" dso_formula_dev scripts/run_dsr_baseline.py \
@@ -102,6 +113,20 @@ for method in $METHODS; do
         --mode mcts --beam_size "${TPSR_BEAM_SIZE:-2}" --n_trees_to_refine "${TPSR_REFINE:-2}" \
         --max_input_points "${TPSR_MAX_INPUT_POINTS:-64}" --max_number_bags "${TPSR_BAGS:-1}" \
         --per_task_timeout_sec "${PER_TASK_TIMEOUT_SEC:-300}" "${MAX_TASKS_ARG[@]}"
+      ;;
+    e2e)
+      run_env "${TPSR_ENV:-tpsr}" e2e_formula_dev scripts/run_e2e_baseline.py \
+        --manifest "$FORMULA_MANIFEST" --suite nguyen constant livermore jin --root "$FORMULA_ROOT" \
+        --out "$CLEAN_ROOT/external_baselines/formula_dev" --tag e2e_formula_dev \
+        --beam_size "${E2E_BEAM_SIZE:-1}" --n_trees_to_refine "${E2E_REFINE:-1}" \
+        --max_input_points "${E2E_MAX_INPUT_POINTS:-64}" --max_number_bags "${E2E_BAGS:-1}" \
+        "${MAX_TASKS_ARG[@]}"
+      run_env "${TPSR_ENV:-tpsr}" e2e_symbolicgpt_large scripts/run_e2e_baseline.py \
+        --manifest "$SYMGPT_MANIFEST" --suite symbolicgpt_large --root "$SYMGPT_ROOT" \
+        --out "$CLEAN_ROOT/external_baselines/symbolicgpt_large" --tag e2e_symbolicgpt_large \
+        --beam_size "${E2E_BEAM_SIZE:-1}" --n_trees_to_refine "${E2E_REFINE:-1}" \
+        --max_input_points "${E2E_MAX_INPUT_POINTS:-64}" --max_number_bags "${E2E_BAGS:-1}" \
+        "${MAX_TASKS_ARG[@]}"
       ;;
     localdiffusion)
       run_formula localdiffusion scripts/run_diffusion_sr_baseline.py --proposal_limit "${DIFFUSION_PROPOSAL_LIMIT:-2000}" --candidate_limit "${DIFFUSION_CANDIDATE_LIMIT:-512}" --per_task_timeout_sec "${PER_TASK_TIMEOUT_SEC:-180}"

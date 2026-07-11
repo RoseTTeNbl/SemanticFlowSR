@@ -41,8 +41,8 @@ FINAL_COLUMNS = [
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default="results/clean_benchmark_20260701/paper_complete_20260702")
-    ap.add_argument("--clean-root", default="results/clean_benchmark_20260701")
+    ap.add_argument("--root", default="results/clean_benchmark/paper_complete")
+    ap.add_argument("--clean-root", default="results/clean_benchmark")
     ap.add_argument("--include-sfsr", action="store_true")
     ap.add_argument("--archive-clutter", action="store_true")
     args = ap.parse_args()
@@ -211,6 +211,8 @@ def _method_name(path: Path) -> str:
         return ""
     if stem.startswith("e2e_"):
         return "E2E"
+    if stem.startswith("pysr_"):
+        return "PySR"
     if stem.startswith("gp_") or stem.startswith("gplearn_"):
         return "GP"
     if stem.startswith("deap_"):

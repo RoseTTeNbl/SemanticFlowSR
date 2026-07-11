@@ -1,0 +1,968 @@
+{
+  "constant/Constant-1": {
+    "r2": 0.9996279005794778,
+    "r2_raw": 0.9996279005794778,
+    "r2_affine_refit": 0.9997222415997002,
+    "nmse": 0.0003720994205220799,
+    "nmse_affine_refit": 0.00027775840029969364,
+    "expression": "                        \u239b         -6.127012861861193   \u239e\n                        \u239c        \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u239f\n                        \u239c        x\u2081 - 6.448639112186074\u239f\n                     cos\u239d2\u22c5x\u2081 - \u212f                      \u23a0\n4.56149131306512\u22c5x\u2081\u22c5\u212f                                   ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-1",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "3.39*x0**3 + 2.12*x0**2 + 1.78*x0",
+    "runtime_sec": 117.4640598022379
+  },
+  "constant/Constant-2": {
+    "r2": 0.9997741469955562,
+    "r2_raw": 0.9997741469955562,
+    "r2_affine_refit": 0.9997744212060007,
+    "nmse": 0.0002258530044350591,
+    "nmse_affine_refit": 0.000225578793990634,
+    "expression": "   \u239b                   2                     \u239e                     \nsin\u239d1.12665122259382\u22c5x\u2081  + 0.5790950288755347\u23a0 - 1.2944532803256217",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-2",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 0.75",
+    "runtime_sec": 119.17448254488409
+  },
+  "constant/Constant-3": {
+    "r2": 0.9996585186518936,
+    "r2_raw": 0.9996585186518936,
+    "r2_affine_refit": 0.9996952359421453,
+    "nmse": 0.00034148134810261756,
+    "nmse_affine_refit": 0.00030476405785134607,
+    "expression": "   \u239b   \u239b                        \u239b    x\u2082                    \u239e                  \nsin\u239dx\u2081\u22c5\u239d- 0.1080085031609772\u22c5x\u2081\u22c5\u239dx\u2082\u22c5\u212f   + 1.268049966706856\u23a0 + 0.1080085031609\n\n                                                 \u239e     \u239e\n772\u22c5x\u2081 - 0.1080085031609772\u22c5x\u2082 + 0.54477669996285\u23a0 + x\u2081\u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-3",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sin(1.5*x0)*cos(0.5*x1)",
+    "runtime_sec": 127.70266372617334
+  },
+  "constant/Constant-4": {
+    "r2": 0.9442943285443738,
+    "r2_raw": 0.9442943285443738,
+    "r2_affine_refit": 0.9491790678070396,
+    "nmse": 0.05570567145552302,
+    "nmse_affine_refit": 0.050820932192866194,
+    "expression": "    \u239b   \u239b                                               x\u2081\u239e                   \n sin\u239dlog\u239dx\u2081 - 24.40645468041023\u22c5x\u2082 + 24.40645468041023\u22c5\u212f  \u23a0 - 2.59794303258572\n\u212f                                                                             \n\n\u239e\n\u23a0\n ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-4",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "2.7*x0**x1",
+    "runtime_sec": 117.33248086087406
+  },
+  "constant/Constant-5": {
+    "r2": 0.9999998717932288,
+    "r2_raw": 0.9999998717932288,
+    "r2_affine_refit": 0.999999871868204,
+    "nmse": 1.2820677124509946e-07,
+    "nmse_affine_refit": 1.2813179592826197e-07,
+    "expression": " 12.001447957123286\u22c5cos(0.041694367540750413\u22c5log(x\u2081) - 1.5621776453822838)\n\u212f                                                                         ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-5",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sqrt(1.23*x0)",
+    "runtime_sec": 150.85426425142214
+  },
+  "constant/Constant-6": {
+    "r2": 0.9999999999999997,
+    "r2_raw": 0.9999999999999997,
+    "r2_affine_refit": 0.9999999999999999,
+    "nmse": 3.403422988995985e-16,
+    "nmse_affine_refit": 6.114871086626919e-17,
+    "expression": "  0.4259999978264834 \u239b                                              \u239b x\u2081\u239e\u239e\nx\u2081                  \u22c5\u239d1.0000000047231694 - 3.0431292931312975e-9\u22c5cos\u239d\u212f  \u23a0\u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-6",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**0.426",
+    "runtime_sec": 71.21469215722755
+  },
+  "constant/Constant-7": {
+    "r2": 0.9980483678328614,
+    "r2_raw": 0.9980483678328614,
+    "r2_affine_refit": 0.9986462113129759,
+    "nmse": 0.0019516321671316957,
+    "nmse_affine_refit": 0.0013537886870193237,
+    "expression": "                          \u239b cos(x\u2081\u22c5x\u2082)                                        \n0.00079032084884228399\u22c5x\u2081\u22c5\u239d\u212f           + 3139.1126548627008\u22c5cos(log(x\u2081 + 0.889\n\n               \u239e        \n8723702449007))\u23a0\u22c5cos(x\u2082)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-7",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "2*sin(1.3*x0)*cos(x1)",
+    "runtime_sec": 118.59799297712743
+  },
+  "constant/Constant-8": {
+    "r2": 0.9999358213986006,
+    "r2_raw": 0.9999358213986006,
+    "r2_affine_refit": 0.9999361218782717,
+    "nmse": 6.417860139929314e-05,
+    "nmse_affine_refit": 6.387812172806274e-05,
+    "expression": "   \u239b                     1.4692480017295348 - sin(x\u2081 + 2.0737536133218786)\u239e\nx\u2081\u22c5\u239c0.3009097128598552 + \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u239f\n   \u239d                                             x\u2081                       \u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-8",
+    "method": "DSO",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "log(x0 + 1.4) + log(x0**2 + 1.3)",
+    "runtime_sec": 163.72658493136987
+  },
+  "jin/Jin-1": {
+    "r2": 0.9787526668044908,
+    "r2_raw": 0.9787526668044908,
+    "r2_affine_refit": 0.979193375314701,
+    "nmse": 0.021247333195509185,
+    "nmse_affine_refit": 0.020806624685299056,
+    "expression": "                    -2.8392215616165966\u22c5cos(x\u2081 - 0.1341667056923738)\n10.881213090071437\u22c5\u212f                                                ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-1",
+    "method": "DSO",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "2.5*x0**4 - 1.3*x0**3 + 0.5*x1**2 - 1.7*x1",
+    "runtime_sec": 58.745831604115665
+  },
+  "jin/Jin-2": {
+    "r2": 0.9364096918179269,
+    "r2_raw": 0.9364096918179269,
+    "r2_affine_refit": 0.9368654387313498,
+    "nmse": 0.06359030818207313,
+    "nmse_affine_refit": 0.06313456126865019,
+    "expression": "11.65701507313868\u22c5x\u2081\u22c5sin(x\u2081 - 0.3015774607473986) + 67.31863841541384\u22c5x\u2082 - 67.\n31863841541384\u22c5sin(x\u2082)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-2",
+    "method": "DSO",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "8.0*x0**2 + 8.0*x1**3 - 15.0",
+    "runtime_sec": 56.52264774730429
+  },
+  "jin/Jin-3": {
+    "r2": 0.8978250820436257,
+    "r2_raw": 0.8978250820436257,
+    "r2_affine_refit": 0.8984977665473319,
+    "nmse": 0.10217491795636612,
+    "nmse_affine_refit": 0.10150223345265995,
+    "expression": "-1.17787574793128\u22c5x\u2081\u22c5sin(x\u2081 + 1.5013405682220669) + 2.6790088026830103\u22c5x\u2082 - 2.\n6790088026830103\u22c5sin(x\u2082)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-3",
+    "method": "DSO",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "0.2*x0**3 + 0.5*x1**3 - 1.2*x1 - 0.5*x0",
+    "runtime_sec": 63.38381171831861
+  },
+  "jin/Jin-4": {
+    "r2": 0.8782696801770998,
+    "r2_raw": 0.8782696801770998,
+    "r2_affine_refit": 0.8799796072372791,
+    "nmse": 0.12173031982289824,
+    "nmse_affine_refit": 0.12002039276271902,
+    "expression": "                             \u239b -0.11320864828053005\u22c5x\u2081\u239e                       \n x\u2081 + 0.59884611749615275\u22c5sin\u239d\u212f                       \u23a0                       \n\u212f                                                       + cos(x\u2082 + 0.005515417\n\n          \n          \n986177652)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-4",
+    "method": "DSO",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "1.5*exp(x0) + 5.0*cos(x1)",
+    "runtime_sec": 65.04367231810465
+  },
+  "jin/Jin-5": {
+    "r2": 0.9999999999999999,
+    "r2_raw": 0.9999999999999999,
+    "r2_affine_refit": 0.9999999999999999,
+    "nmse": 6.525508839567907e-17,
+    "nmse_affine_refit": 6.359169250969735e-17,
+    "expression": "5.999999988955528\u22c5sin(0.9999999953091152\u22c5x\u2081)\u22c5cos(x\u2082) - 4.167421513613011e-9",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-5",
+    "method": "DSO",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "6.0*sin(x0)*cos(x1)",
+    "runtime_sec": 26.085098087787628
+  },
+  "jin/Jin-6": {
+    "r2": 0.5367897766202826,
+    "r2_raw": 0.5367897766202826,
+    "r2_affine_refit": 0.5503244292850655,
+    "nmse": 0.4632102233797042,
+    "nmse_affine_refit": 0.44967557071492165,
+    "expression": "                        \u239b                        x\u2081                       \u239e\n397.2833155382502\u22c5x\u2082\u22c5sin\u239c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u239f\n                        \u239c x\u2082\u22c5(0.0957581316374062 - x\u2081)                    \u239f\n                        \u239d\u212f                             + 253.4152069394667\u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-6",
+    "method": "DSO",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "1.35*x0*x1 + 5.5*sin((x0 - 1.0)*(x1 - 1.0))",
+    "runtime_sec": 60.393652450758964
+  },
+  "livermore/Livermore-1": {
+    "r2": 0.9829897103852459,
+    "r2_raw": 0.9829897103852459,
+    "r2_affine_refit": 0.9845061041579576,
+    "nmse": 0.01701028961474882,
+    "nmse_affine_refit": 0.015493895842037557,
+    "expression": "         \u239b                     2\u239e                      \n      sin\u239d1.0069827617699866\u22c5x\u2081 \u23a0                      \nx\u2081 + \u212f                            - 0.91854162129186471",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-1",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "1.0/3.0 + x0 + sin(x0**2)",
+    "runtime_sec": 89.8716648761183
+  },
+  "livermore/Livermore-2": {
+    "r2": 0.9997740941656098,
+    "r2_raw": 0.9997740941656098,
+    "r2_affine_refit": 0.9997743934885743,
+    "nmse": 0.0002259058343814991,
+    "nmse_affine_refit": 0.00022560651141689,
+    "expression": "   \u239b                     2                     \u239e                     \ncos\u239d1.1266192901072126\u22c5x\u2081  + 5.2914877941136199\u23a0 - 2.5444525509743703",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-2",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 2",
+    "runtime_sec": 118.10456072632223
+  },
+  "livermore/Livermore-3": {
+    "r2": 0.9978251577226901,
+    "r2_raw": 0.9978251577226901,
+    "r2_affine_refit": 0.9978219947702109,
+    "nmse": 0.002174842277271921,
+    "nmse_affine_refit": 0.002178005229751119,
+    "expression": "        \u239b   \u239b                                          2\u239e\u239e                    \n- x\u2081\u22c5cos\u239dx\u2081\u22c5\u239d1.6749971318133223 - 0.6344842605092719\u22c5x\u2081 \u23a0\u23a0 + x\u2081 - 1.0003488039\n\n      \n279198",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-3",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sin(x0**3)*cos(x0**2) - 1",
+    "runtime_sec": 115.00534949684516
+  },
+  "livermore/Livermore-4": {
+    "r2": 0.9998494246662066,
+    "r2_raw": 0.9998494246662066,
+    "r2_affine_refit": 0.9998485440880265,
+    "nmse": 0.0001505753337933567,
+    "nmse_affine_refit": 0.00015145591197344852,
+    "expression": "x\u2081 + log(x\u2081) - sin(0.47172294655785607\u22c5x\u2081 + 3.146222247340324) - 0.07631313807\n89916",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-4",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1) + log(x0)",
+    "runtime_sec": 150.49029860459268
+  },
+  "livermore/Livermore-5": {
+    "r2": 0.9922769857787412,
+    "r2_raw": 0.9922769857787412,
+    "r2_affine_refit": 0.9943040194059783,
+    "nmse": 0.00772301422121203,
+    "nmse_affine_refit": 0.005695980593987157,
+    "expression": "    \u239b                           1.839494925000917\u22c5x\u2081                    \u239e\n    \u239c       0.1284749933625813\u22c5\u212f                                        \u239f\n-sin\u239d-x\u2082 + \u212f                                         + 1.930908002649422\u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-5",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**4 - x0**3 + x0**2 - x1",
+    "runtime_sec": 115.19560442492366
+  },
+  "livermore/Livermore-6": {
+    "r2": 0.9953935095649175,
+    "r2_raw": 0.9953935095649175,
+    "r2_affine_refit": 0.9963082967514256,
+    "nmse": 0.004606490435081605,
+    "nmse_affine_refit": 0.003691703248573546,
+    "expression": "   \u239b     \u239b                                                \u239b x\u2081\u239e\u239e              \n   \u239c     \u239c                                                \u239d\u212f  \u23a0\u239f              \nx\u2081\u22c5\u239dx\u2081 + \u239d0.031250779921812426\u22c5x\u2081 + 0.031250779921812426\u22c5\u212f     \u23a0\u22c5(x\u2081 + 18.7499\n\n                                           \u239e\n                                           \u239f\n79881301027) + cos(x\u2081) - 1.2300518086692191\u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-6",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "4*x0**4 + 3*x0**3 + 2*x0**2 + x0",
+    "runtime_sec": 104.23964746529236
+  },
+  "livermore/Livermore-7": {
+    "r2": 0.9999999850428791,
+    "r2_raw": 0.9999999850428791,
+    "r2_affine_refit": 0.9999999871376543,
+    "nmse": 1.4957120898926538e-08,
+    "nmse_affine_refit": 1.2862345794571226e-08,
+    "expression": "                                     2                    \n                1.4070349041407824\u22c5x\u2081                     \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 - x\u2081\n   \u239b                        -4.945558550657349e-5\u22c5x\u2081\u239e     \nsin\u239d0.70337381060019504\u22c5x\u2081\u22c5\u212f                        \u23a0     ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-7",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "(exp(x0) - exp(-x0))/2",
+    "runtime_sec": 115.43718321388587
+  },
+  "livermore/Livermore-8": {
+    "r2": 0.9999994345274817,
+    "r2_raw": 0.9999994345274817,
+    "r2_affine_refit": 0.9999994352788425,
+    "nmse": 5.654725181965432e-07,
+    "nmse_affine_refit": 5.647211574242429e-07,
+    "expression": "                            2.4026467865879955\u22c5x\u2081                     \n                            \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500                     \n                                 x\u2081 + sin(x\u2081)                         \n3.9100953645788279e-5\u22c5x\u2081 + \u212f                      - 2.6577774234326035",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-8",
+    "method": "DSO",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "(exp(x0) + exp(-x0))/3",
+    "runtime_sec": 116.10452185105532
+  },
+  "nguyen/Nguyen-1": {
+    "r2": 0.9999006649576442,
+    "r2_raw": 0.9999006649576442,
+    "r2_affine_refit": 0.9999114079951654,
+    "nmse": 9.933504235566478e-05,
+    "nmse_affine_refit": 8.859200483446405e-05,
+    "expression": "    \u239b                          \u239b                                   \u239b 1.1688480\n    \u239c                          \u239c                                   \u239d\u212f         \n  2 \u239c                       log\u239d-x\u2081\u22c5cos(x\u2081 + 1.727928226151575) + \u212f           \nx\u2081 \u22c5\u239c-0.21856140790679218 + \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n    \u239d                                                      x\u2081                 \n\n879400616\u22c5x\u2081\u239e\u239e\u239e\n            \u23a0\u239f\u239f\n             \u23a0\u239f\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u239f\n              \u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-1",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**3 + x0**2 + x0",
+    "runtime_sec": 116.69952927483246
+  },
+  "nguyen/Nguyen-2": {
+    "r2": 0.9996400057736268,
+    "r2_raw": 0.9996400057736268,
+    "r2_affine_refit": 0.9996398773516952,
+    "nmse": 0.0003599942263728556,
+    "nmse_affine_refit": 0.0003601226483044228,
+    "expression": "                                             x\u2081                               \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n                                                x\u2081\u22c5log(cos(x\u2081)) - x\u2081          \n                     (x\u2081 + 1.8987837279080766)\u22c5\u212f                              \n0.13125951771019195\u22c5\u212f                                                + 0.01534\n\n             \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n             \n             \n1400725351629",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-2",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 110.82928661396727
+  },
+  "nguyen/Nguyen-3": {
+    "r2": 0.9997012234510463,
+    "r2_raw": 0.9997012234510463,
+    "r2_affine_refit": 0.9997787639610491,
+    "nmse": 0.0002987765489535082,
+    "nmse_affine_refit": 0.0002212360389507136,
+    "expression": "   \u239b \u239b       -0.9325327922106222  \u239e                     \u239e\n   \u239c \u239c     \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u239f                     \u239f\n   \u239c \u239c     x\u2081 + 1.1583116466840808\u239f                     \u239f\n   \u239c \u239c x\u2081\u22c5\u212f                       \u239f                     \u239f\n   \u239c \u239d\u212f                           \u23a0                     \u239f\nx\u2081\u22c5\u239d\u212f                               - 1.7986957551742309\u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-3",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 118.30630085570738
+  },
+  "nguyen/Nguyen-4": {
+    "r2": 0.9994230869613547,
+    "r2_raw": 0.9994230869613547,
+    "r2_affine_refit": 0.999436949950451,
+    "nmse": 0.0005769130386449458,
+    "nmse_affine_refit": 0.0005630500495487633,
+    "expression": "                                            x\u2081                                \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n                                                x\u2081\u22c5log(cos(x\u2081)) - x\u2081          \n                     (x\u2081 + 1.7670573002389391)\u22c5\u212f                              \n0.17140685930675917\u22c5\u212f                                                - 0.13259\n\n            \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n            \n            \n565549994842",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-4",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**6 + x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 109.4731671619229
+  },
+  "nguyen/Nguyen-5": {
+    "r2": 0.999963488197035,
+    "r2_raw": 0.999963488197035,
+    "r2_affine_refit": 0.9999634021579871,
+    "nmse": 3.6511802963627436e-05,
+    "nmse_affine_refit": 3.659784201148379e-05,
+    "expression": "                       -0.22540197710788332\u22c5cos(3.253821443450671\u22c5x\u2081)\n-1.7966192285927818 + \u212f                                              ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-5",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 1",
+    "runtime_sec": 116.96278948709369
+  },
+  "nguyen/Nguyen-6": {
+    "r2": 0.9999933117122989,
+    "r2_raw": 0.9999933117122989,
+    "r2_affine_refit": 0.9999935800948333,
+    "nmse": 6.6882877010919735e-06,
+    "nmse_affine_refit": 6.41990516673603e-06,
+    "expression": "          x\u2081\u22c5(log(cos(x\u2081)) + 2.047269239729285)          \n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n                     sin(x\u2081\u22c5log(x\u2081 + 1.9808876771989403))\n1.7028428559526092 - \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n                                      x\u2081                 ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-6",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sin(x0) + sin(x0 + x0**2)",
+    "runtime_sec": 114.87522675888613
+  },
+  "nguyen/Nguyen-7": {
+    "r2": 0.9999981500396526,
+    "r2_raw": 0.9999981500396526,
+    "r2_affine_refit": 0.9999982262015683,
+    "nmse": 1.849960347373601e-06,
+    "nmse_affine_refit": 1.7737984316527043e-06,
+    "expression": "        \u239b                                         -0.7611671009243796\u22c5x\u2081\u239e\n        \u239c                  0.4258494902627285\u22c5x\u2081\u22c5\u212f                      \u239f\n    -cos\u239d1.55935710385415\u22c5\u212f                                             \u23a0\nx\u2081\u22c5\u212f                                                                     ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-7",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1)",
+    "runtime_sec": 153.47273115999997
+  },
+  "nguyen/Nguyen-8": {
+    "r2": 0.9999999999999991,
+    "r2_raw": 0.9999999999999991,
+    "r2_affine_refit": 0.9999999999999998,
+    "nmse": 8.429743231366934e-16,
+    "nmse_affine_refit": 2.048978288016827e-16,
+    "expression": "  0.499999999882702 \u239b                                             \u239b x\u2081\u239e\u239e\nx\u2081                 \u22c5\u239d1.0000000077141065 - 6.842808692305823e-9\u22c5cos\u239d\u212f  \u23a0\u23a0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-8",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sqrt(x0)",
+    "runtime_sec": 63.90449885092676
+  },
+  "nguyen/Nguyen-9": {
+    "r2": 0.9942510956167047,
+    "r2_raw": 0.9942510956167047,
+    "r2_affine_refit": 0.9953954320370361,
+    "nmse": 0.005748904383249555,
+    "nmse_affine_refit": 0.004604567962927355,
+    "expression": "                           \u239b       x\u2082                             \u239e        \nx\u2081 + 0.8044482139102733\u22c5log\u239d-x\u2081 + \u212f   + sin(1.4107697380453983\u22c5x\u2082)\u23a0\u22c5sin(x\u2082)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-9",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "sin(x0) + sin(x1**2)",
+    "runtime_sec": 114.78514510625973
+  },
+  "nguyen/Nguyen-10": {
+    "r2": 0.9999561082131191,
+    "r2_raw": 0.9999561082131191,
+    "r2_affine_refit": 0.9999677625245948,
+    "nmse": 4.389178688068822e-05,
+    "nmse_affine_refit": 3.2237475405041786e-05,
+    "expression": "                       \u239b cos(x\u2081\u22c5x\u2082)                                           \n0.00636581263476615\u22c5x\u2081\u22c5\u239d\u212f           + 306.1527004708257\u22c5cos(log(x\u2081 + 0.7275493\n\n           \u239e        \n035940079))\u23a0\u22c5cos(x\u2082)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-10",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "2*sin(x0)*cos(x1)",
+    "runtime_sec": 119.36564813926816
+  },
+  "nguyen/Nguyen-11": {
+    "r2": -318853327.5684979,
+    "r2_raw": -318853327.5684979,
+    "r2_affine_refit": -323140662.2947208,
+    "nmse": 318853328.5641917,
+    "nmse_affine_refit": 323140663.2903567,
+    "expression": "                         \u239b                        x\u2081                       \u239e\n -18.7030016954359\u22c5x\u2082\u22c5sin\u239c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u239f\n                         \u239c x\u2081\u22c5(6.013390156060409 - x\u2081)                     \u239f\n                         \u239d\u212f                            - 1.0224628364885997\u23a0\n\u212f                                                                           ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-11",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**x1",
+    "runtime_sec": 120.58676781505346
+  },
+  "nguyen/Nguyen-12": {
+    "r2": 0.9670485064921752,
+    "r2_raw": 0.9670485064921752,
+    "r2_affine_refit": 0.9670511198315137,
+    "nmse": 0.03295149350641661,
+    "nmse_affine_refit": 0.03294888016707821,
+    "expression": "                                                2.098231977358666\u22c5x\u2081\u22c5log(x\u2082)\u22c5c\n                          -0.90125432157817809\u22c5\u212f                              \n                      x\u2082\u22c5\u212f                                                    \n0.9304604989003286 - \u212f                                                        \n\nos(x\u2081)\n      \n      \n      ",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-12",
+    "method": "DSO",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "n_samples": 20000
+    },
+    "ground_truth": "x0**4 - x0**3 + x1**2/2 - x1",
+    "runtime_sec": 122.16212220815942
+  }
+}

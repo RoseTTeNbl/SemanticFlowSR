@@ -1,0 +1,968 @@
+{
+  "constant/Constant-1": {
+    "r2": 0.999999999999999,
+    "r2_raw": 0.999999999999999,
+    "r2_affine_refit": 0.9999999999999999,
+    "nmse": 1.0460860307129442e-15,
+    "nmse_affine_refit": 8.420005526310504e-17,
+    "expression": "x0*(x0*(x0 + 0.6253687)*3.39 + 1.7799999)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-1",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "3.39*x0**3 + 2.12*x0**2 + 1.78*x0",
+    "runtime_sec": 34.080913823097944
+  },
+  "constant/Constant-2": {
+    "r2": 0.9999900430493267,
+    "r2_raw": 0.9999900430493267,
+    "r2_affine_refit": 0.9999924325672734,
+    "nmse": 9.956950672908606e-06,
+    "nmse_affine_refit": 7.567432726321769e-06,
+    "expression": "cos(cos(x0/(cos(sqrt(cos(cos(x0/(cos(cos(cos(x0/cos(x0)) + 0.9893164)) - 0.3611077)))) - 0.81224525) - 0.35773838))) - 1.2912034",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-2",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 0.75",
+    "runtime_sec": 10.044546175282449
+  },
+  "constant/Constant-3": {
+    "r2": 0.9999999999999998,
+    "r2_raw": 0.9999999999999998,
+    "r2_affine_refit": 0.9999999999999999,
+    "nmse": 1.9418130790321385e-16,
+    "nmse_affine_refit": 9.696797142049426e-17,
+    "expression": "sin(x0*1.5)*cos(x1*0.49999997)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-3",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(1.5*x0)*cos(0.5*x1)",
+    "runtime_sec": 10.116834690794349
+  },
+  "constant/Constant-4": {
+    "r2": 0.9999626949729943,
+    "r2_raw": 0.9999626949729943,
+    "r2_affine_refit": 0.9999627032270001,
+    "nmse": 3.730502700567523e-05,
+    "nmse_affine_refit": 3.729677299985855e-05,
+    "expression": "2.69999899287242*exp(x1*(1.2760187 - 1.2774106*x0)/(-(x0**2*(x0 + exp(x0))**(1/4))**(1/4) - 0.17762512))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-4",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "2.7*x0**x1",
+    "runtime_sec": 8.746049183886498
+  },
+  "constant/Constant-5": {
+    "r2": 0.9999999999999968,
+    "r2_raw": 0.9999999999999968,
+    "r2_affine_refit": 1.0,
+    "nmse": 3.1781881021842707e-15,
+    "nmse_affine_refit": 5.941455755117321e-31,
+    "expression": "1.10905367115843*sqrt(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-5",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(1.23*x0)",
+    "runtime_sec": 9.082516167778522
+  },
+  "constant/Constant-6": {
+    "r2": 0.9999999999097808,
+    "r2_raw": 0.9999999999097808,
+    "r2_affine_refit": 0.9999999999909756,
+    "nmse": 9.021912947871807e-11,
+    "nmse_affine_refit": 9.024420917985696e-12,
+    "expression": "(x0*sqrt(x0*(x0*sqrt(x0*(x0**(135/128))**(1/4)))**(1/4)))**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-6",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**0.426",
+    "runtime_sec": 8.501919729169458
+  },
+  "constant/Constant-7": {
+    "r2": 0.9999999999996202,
+    "r2_raw": 0.9999999999996202,
+    "r2_affine_refit": 0.999999999999628,
+    "nmse": 3.797620232838252e-13,
+    "nmse_affine_refit": 3.719876426778922e-13,
+    "expression": "2*x0*(0.732541*cos(x0) - 0.00021522761*cos(x0*(x0**(1/4) + x0)) + 0.5676762)*cos(x1)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-7",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "2*sin(1.3*x0)*cos(x1)",
+    "runtime_sec": 9.535130555741489
+  },
+  "constant/Constant-8": {
+    "r2": 0.9999994953301674,
+    "r2_raw": 0.9999994953301674,
+    "r2_affine_refit": 0.9999994955253557,
+    "nmse": 5.04669832642553e-07,
+    "nmse_affine_refit": 5.044746442741204e-07,
+    "expression": "1.0509999*x0 + cos(cos(sin(cos(0.068146616*sqrt(x0)*cos(x0 + sin(x0**(3/2))) + x0 + 1.1930707)))) + 0.0041267825",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-8",
+    "method": "PySR",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(x0 + 1.4) + log(x0**2 + 1.3)",
+    "runtime_sec": 9.823528756853193
+  },
+  "jin/Jin-1": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 3.9690234008381577e-17,
+    "nmse_affine_refit": 3.825056387193924e-17,
+    "expression": "(x0 + x0 - 1.04)*x0*x0*x0*1.25 - 1.6999998*(x1*x1*(-0.2941177) + x1)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-1",
+    "method": "PySR",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "2.5*x0**4 - 1.3*x0**3 + 0.5*x1**2 - 1.7*x1",
+    "runtime_sec": 9.75183926615864
+  },
+  "jin/Jin-2": {
+    "r2": 0.9999999999999999,
+    "r2_raw": 0.9999999999999999,
+    "r2_affine_refit": 1.0,
+    "nmse": 1.3891514874535845e-16,
+    "nmse_affine_refit": 1.0131630856762247e-31,
+    "expression": "x0*x0*8.0 + x1*x1*x1*8.0 - 15.000001",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-2",
+    "method": "PySR",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "8.0*x0**2 + 8.0*x1**3 - 15.0",
+    "runtime_sec": 9.383173637092113
+  },
+  "jin/Jin-3": {
+    "r2": 0.9999961260601745,
+    "r2_raw": 0.9999961260601745,
+    "r2_affine_refit": 0.9999961294363803,
+    "nmse": 3.873939825494844e-06,
+    "nmse_affine_refit": 3.870563619735267e-06,
+    "expression": "(x0 + x0 + (x1 + sin(x0*(-0.5635446)))*4.4654756 + sin(x1) + sin(x1*(-0.60959625))*9.776194)*2.4163618 + sin(x0)*0.7481348",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-3",
+    "method": "PySR",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "0.2*x0**3 + 0.5*x1**3 - 1.2*x1 - 0.5*x0",
+    "runtime_sec": 11.107686452101916
+  },
+  "jin/Jin-4": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 4.061936357204614e-32,
+    "nmse_affine_refit": 9.526558144255519e-32,
+    "expression": "exp(x0)*1.5 - (-5.0)*cos(x1)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-4",
+    "method": "PySR",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.5*exp(x0) + 5.0*cos(x1)",
+    "runtime_sec": 10.178433906286955
+  },
+  "jin/Jin-5": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 2.792104510871933e-32,
+    "nmse_affine_refit": 5.827700522014611e-32,
+    "expression": "cos(x1)*sin(x0)*6.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-5",
+    "method": "PySR",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "6.0*sin(x0)*cos(x1)",
+    "runtime_sec": 10.5451296325773
+  },
+  "jin/Jin-6": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 7.092148279561556e-32,
+    "nmse_affine_refit": 9.337743314497081e-32,
+    "expression": "x1*1.35*x0 + sin((-x0 + x0/x0)*(-x1 + x0/x0))*5.5",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-6",
+    "method": "PySR",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.35*x0*x1 + 5.5*sin((x0 - 1.0)*(x1 - 1.0))",
+    "runtime_sec": 8.329925291705877
+  },
+  "livermore/Livermore-1": {
+    "r2": 0.9999999999999997,
+    "r2_raw": 0.9999999999999997,
+    "r2_affine_refit": 1.0,
+    "nmse": 3.4764546706525705e-16,
+    "nmse_affine_refit": 4.316234822997011e-32,
+    "expression": "x0 + sin(x0*x0) + 0.3333333",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-1",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0/3.0 + x0 + sin(x0**2)",
+    "runtime_sec": 9.412607422098517
+  },
+  "livermore/Livermore-2": {
+    "r2": 0.9999998146047903,
+    "r2_raw": 0.9999998146047903,
+    "r2_affine_refit": 0.9999998243276125,
+    "nmse": 1.8539520975114682e-07,
+    "nmse_affine_refit": 1.756723874957458e-07,
+    "expression": "cos(cos(x0*(cos(x0*(cos(0.34634966 - cos(x0)) + 0.018245729))*0.19338097 - 1*1.73834))/1.0035081) - 2.5431328",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-2",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 2",
+    "runtime_sec": 9.2226951722987
+  },
+  "livermore/Livermore-3": {
+    "r2": 0.9999997006409156,
+    "r2_raw": 0.9999997006409156,
+    "r2_affine_refit": 0.9999997011733097,
+    "nmse": 2.9935908445712575e-07,
+    "nmse_affine_refit": 2.988266902777568e-07,
+    "expression": "(sin(sin(sin(sin(x0)*sin(x0*x0*x0/0.5656805)*1.3060242/(x0/0.28900722)))) - 0.62700874)*1.5279931 - 0.04193515",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-3",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0**3)*cos(x0**2) - 1",
+    "runtime_sec": 8.905396373942494
+  },
+  "livermore/Livermore-4": {
+    "r2": 0.9351325509658378,
+    "r2_raw": 0.9351325509658378,
+    "r2_affine_refit": 0.9351331564249489,
+    "nmse": 0.06486744903414148,
+    "nmse_affine_refit": 0.06486684357503035,
+    "expression": "(x0 - 0.3875539/sin(sqrt(sin(x0)) + 0.14016964))*(exp(exp(-0.16901636*x0*sin(sqrt(x0/sin(x0 - 0.005059042))))) + 0.13200636)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-4",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1) + log(x0)",
+    "runtime_sec": 9.70324311684817
+  },
+  "livermore/Livermore-5": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 5.789011073271358e-32,
+    "nmse_affine_refit": 1.0256644363846617e-31,
+    "expression": "x0*(x0*x0*(x0 - 1.0) + x0) - x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-5",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**4 - x0**3 + x0**2 - x1",
+    "runtime_sec": 7.892440570984036
+  },
+  "livermore/Livermore-6": {
+    "r2": 0.9999999999999998,
+    "r2_raw": 0.9999999999999998,
+    "r2_affine_refit": 0.9999999999999998,
+    "nmse": 2.0479543044837641e-16,
+    "nmse_affine_refit": 1.8517047895392616e-16,
+    "expression": "x0*((x0 + x0)*(x0*(x0 + x0 + 1.4999999) + 1.0) + 1.0000001)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-6",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "4*x0**4 + 3*x0**3 + 2*x0**2 + x0",
+    "runtime_sec": 9.24374180007726
+  },
+  "livermore/Livermore-7": {
+    "r2": 0.9999999999807399,
+    "r2_raw": 0.9999999999807399,
+    "r2_affine_refit": 0.9999999999809478,
+    "nmse": 1.9260094778822014e-11,
+    "nmse_affine_refit": 1.90521599114323e-11,
+    "expression": "x0*exp(x0*x0*(x0*exp(-0.005050094/sin(x0*x0*x0*x0))*(-0.0050501055)*x0 + 0.16644648))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-7",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(exp(x0) - exp(-x0))/2",
+    "runtime_sec": 9.109482548665255
+  },
+  "livermore/Livermore-8": {
+    "r2": 0.9999999998933643,
+    "r2_raw": 0.9999999998933643,
+    "r2_affine_refit": 0.999999999893563,
+    "nmse": 1.0663572290069817e-10,
+    "nmse_affine_refit": 1.0643692538771325e-10,
+    "expression": "x0*x0*0.78354514 - (x0*sin(sin(x0))*(-0.06559157) + x0*sin(sin(sin(x0)))*0.01577991 + 0.42850995) + cos(x0) + 0.095176",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-8",
+    "method": "PySR",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(exp(x0) + exp(-x0))/3",
+    "runtime_sec": 9.419008030090481
+  },
+  "nguyen/Nguyen-1": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 2.0072475466231196e-32,
+    "nmse_affine_refit": 5.936020222530646e-32,
+    "expression": "x0*x0*(x0 + 1.0) + x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-1",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**3 + x0**2 + x0",
+    "runtime_sec": 10.699174517765641
+  },
+  "nguyen/Nguyen-2": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 9.527427933506083e-19,
+    "nmse_affine_refit": 8.839154352477615e-32,
+    "expression": "x0*(x0 + x0*x0 + x0*x0*x0 + 1.0 - 0.02933335/x0) + 0.029333351",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-2",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 8.850507624447346
+  },
+  "nguyen/Nguyen-3": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 3.362111273553842e-32,
+    "nmse_affine_refit": 2.470234068164618e-31,
+    "expression": "x0*(x0 + 1.0)*(x0 + x0*x0*x0) + x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-3",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 8.271058932878077
+  },
+  "nguyen/Nguyen-4": {
+    "r2": 0.9999988469498725,
+    "r2_raw": 0.9999988469498725,
+    "r2_affine_refit": 0.9999988415025461,
+    "nmse": 1.1530501274497307e-06,
+    "nmse_affine_refit": 1.1584974538665685e-06,
+    "expression": "x0*(x0 - 1*(-1.0000452))*(exp((x0/((1.1250616/sin(x0))) - 1*0.20130809)*1.8236223) + 0.29267162)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-4",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**6 + x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 10.180367694702
+  },
+  "nguyen/Nguyen-5": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 9.927975792032515e-32,
+    "nmse_affine_refit": 3.457545747666535e-30,
+    "expression": "sin(x0*x0)*cos(x0) - 1.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-5",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 1",
+    "runtime_sec": 9.713356208056211
+  },
+  "nguyen/Nguyen-6": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 7.296708334557529e-33,
+    "nmse_affine_refit": 5.795027845974769e-32,
+    "expression": "sin(x0) + sin(x0*x0 + x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-6",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0) + sin(x0 + x0**2)",
+    "runtime_sec": 8.48962473217398
+  },
+  "nguyen/Nguyen-7": {
+    "r2": 0.9999995308555086,
+    "r2_raw": 0.9999995308555086,
+    "r2_affine_refit": 0.9999995332516127,
+    "nmse": 4.691444913802415e-07,
+    "nmse_affine_refit": 4.6674838722923093e-07,
+    "expression": "(x0*(-x0 + x0*0.88620627 + cos(x0)*(-0.08255513)) + x0 + cos((x0 + 0.06711118)*0.85194844))*(x0 + 0.00170812)*0.95006263",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-7",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1)",
+    "runtime_sec": 10.025140709243715
+  },
+  "nguyen/Nguyen-8": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 7.597245774704484e-32,
+    "nmse_affine_refit": 8.899796318160724e-31,
+    "expression": "sqrt(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-8",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(x0)",
+    "runtime_sec": 8.23256406094879
+  },
+  "nguyen/Nguyen-9": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 5.029004544696779e-32,
+    "nmse_affine_refit": 1.2661192669707819e-31,
+    "expression": "sin(x0) + sin(x1*x1)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-9",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0) + sin(x1**2)",
+    "runtime_sec": 10.056756048928946
+  },
+  "nguyen/Nguyen-10": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 3.6747788016231644e-32,
+    "nmse_affine_refit": 1.6606234050547401e-31,
+    "expression": "sin(x0)*cos(x1)*2.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-10",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "2*sin(x0)*cos(x1)",
+    "runtime_sec": 11.04891437990591
+  },
+  "nguyen/Nguyen-11": {
+    "r2": 0.9999952169516833,
+    "r2_raw": 0.9999952169516833,
+    "r2_affine_refit": 0.999995349107739,
+    "nmse": 4.78304831668745e-06,
+    "nmse_affine_refit": 4.650892260879463e-06,
+    "expression": "exp(x1*(x0 - 1.0001806)/sqrt(x0 + 0.05243133*sin(x0**(1/4)*(exp(sin(1.32891561056374*sqrt(x0))) + 1.3416897) - x0**2)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-11",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**x1",
+    "runtime_sec": 10.354276126250625
+  },
+  "nguyen/Nguyen-12": {
+    "r2": 0.9972358367128218,
+    "r2_raw": 0.9972358367128218,
+    "r2_affine_refit": 0.99741831652828,
+    "nmse": 0.0027641632870600533,
+    "nmse_affine_refit": 0.002581683471609772,
+    "expression": "-sin(sin(0.753642940404253*sqrt(x1)))*cos(sin(sin(x0**2 - 0.5385839))/sin(cos(x1 - 1.1849428)))*cos(x1 - 0.67585236)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-12",
+    "method": "PySR",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**4 - x0**3 + x1**2/2 - x1",
+    "runtime_sec": 12.267381531186402
+  }
+}

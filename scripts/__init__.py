@@ -1,1 +1,1 @@
-"""Utility scripts exposed for lightweight tests."""
+"""Executable entrypoints with importable validation helpers."""

@@ -23,6 +23,18 @@ venv/
 !/results/edge_flow_smoke/README.md
 !/results/edge_flow_smoke/*_summary.json
 !/results/edge_flow_smoke/*_samples.jsonl
+!/results/clean_benchmark/
+/results/clean_benchmark/*
+!/results/clean_benchmark/external_baselines/
+/results/clean_benchmark/external_baselines/*
+!/results/clean_benchmark/external_baselines/PROVENANCE.md
+!/results/clean_benchmark/external_baselines/baseline_results.lock.json
+!/results/clean_benchmark/external_baselines/formula_dev/
+/results/clean_benchmark/external_baselines/formula_dev/*
+!/results/clean_benchmark/external_baselines/formula_dev/*.json
+!/results/clean_benchmark/external_baselines/symbolicgpt_large/
+/results/clean_benchmark/external_baselines/symbolicgpt_large/*
+!/results/clean_benchmark/external_baselines/symbolicgpt_large/*.json
 *.pt
 *.ckpt
 
@@ -52,6 +64,9 @@ venv/
 !/tests/test_run_experiment_adaptation.py
 !/tests/test_semantic_fisher_low_rank.py
 !/tests/test_train_curve_outputs.py
+!/tests/test_semantic_poisson_flow.py
+!/tests/test_semantic_poisson_v5_integration.py
+!/tests/test_external_baseline_results_lock.py
 
 # External clones (reference / large data; keep code-tracking out)
 /external/

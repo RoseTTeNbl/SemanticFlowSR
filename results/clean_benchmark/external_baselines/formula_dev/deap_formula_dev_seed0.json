@@ -1,0 +1,1002 @@
+{
+  "constant/Constant-1": {
+    "r2": 0.979311477687831,
+    "r2_raw": 0.979311477687831,
+    "r2_affine_refit": 0.9879495330223406,
+    "nmse": 0.020688522312164833,
+    "nmse_affine_refit": 0.012050466977657026,
+    "expression": "add(add(add(ARG0, ARG0), ARG0), mul(sub(ARG0, div(ARG0, -0.9501250688425298)), add(mul(ARG0, ARG0), ARG0)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-1",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "3.39*x0**3 + 2.12*x0**2 + 1.78*x0",
+    "runtime_sec": 3.5824950197711587
+  },
+  "constant/Constant-2": {
+    "r2": 0.96995945246891,
+    "r2_raw": 0.96995945246891,
+    "r2_affine_refit": 0.97081709231769,
+    "nmse": 0.030040547529926714,
+    "nmse_affine_refit": 0.029182907681179964,
+    "expression": "mul(mul(sin(sin(-0.9580689965489935)), cos(ARG0)), cos(ARG0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-2",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 0.75",
+    "runtime_sec": 3.171191778033972
+  },
+  "constant/Constant-3": {
+    "r2": 0.9888010839573764,
+    "r2_raw": 0.9888010839573764,
+    "r2_affine_refit": 0.9917730245073928,
+    "nmse": 0.01119891604250005,
+    "nmse_affine_refit": 0.008226975492516388,
+    "expression": "mul(sub(cos(sin(ARG0)), div(-0.47901537921608117, add(0.5882903159426149, ARG0))), ARG0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-3",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sin(1.5*x0)*cos(0.5*x1)",
+    "runtime_sec": 3.5265663880854845
+  },
+  "constant/Constant-4": {
+    "r2": 0.8505382446140788,
+    "r2_raw": 0.8505382446140788,
+    "r2_affine_refit": 0.9117525667186122,
+    "nmse": 0.14946175538564427,
+    "nmse_affine_refit": 0.08824743328122442,
+    "expression": "add(add(ARG0, cos(ARG1)), sin(add(sub(ARG0, ARG1), 0.8175486504440141)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-4",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "2.7*x0**x1",
+    "runtime_sec": 3.3363924850709736
+  },
+  "constant/Constant-5": {
+    "r2": 0.9788831445352068,
+    "r2_raw": 0.9788831445352068,
+    "r2_affine_refit": 0.9936817559836244,
+    "nmse": 0.02111685546471386,
+    "nmse_affine_refit": 0.006318244016351869,
+    "expression": "div(add(ARG0, cos(sub(0.7047285424313716, mul(ARG0, 0.6121093078497586)))), add(0.8837415818415093, cos(-0.2561854123738265)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-5",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sqrt(1.23*x0)",
+    "runtime_sec": 3.2413044841960073
+  },
+  "constant/Constant-6": {
+    "r2": 0.9708051555635264,
+    "r2_raw": 0.9708051555635264,
+    "r2_affine_refit": 0.9750282772297884,
+    "nmse": 0.02919484443613058,
+    "nmse_affine_refit": 0.024971722769918304,
+    "expression": "add(sin(mul(ARG0, 0.8825798230422812)), 0.2583120692894536)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-6",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**0.426",
+    "runtime_sec": 3.0157180661335588
+  },
+  "constant/Constant-7": {
+    "r2": 0.9315655952718662,
+    "r2_raw": 0.9315655952718662,
+    "r2_affine_refit": 0.973200177816137,
+    "nmse": 0.06843440472789311,
+    "nmse_affine_refit": 0.026799822183768824,
+    "expression": "add(mul(cos(sub(ARG1, -0.27857701295984905)), ARG0), ARG0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-7",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "2*sin(1.3*x0)*cos(x1)",
+    "runtime_sec": 2.9548051580786705
+  },
+  "constant/Constant-8": {
+    "r2": 0.9988834013984996,
+    "r2_raw": 0.9988834013984996,
+    "r2_affine_refit": 0.9993720040795617,
+    "nmse": 0.001116598601497937,
+    "nmse_affine_refit": 0.0006279959204369691,
+    "expression": "add(cos(cos(mul(-0.6038912009070403, ARG0))), ARG0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "constant/Constant-8",
+    "method": "DEAP",
+    "suite": "constant",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "log(x0 + 1.4) + log(x0**2 + 1.3)",
+    "runtime_sec": 3.1406229031272233
+  },
+  "jin/Jin-1": {
+    "r2": 0.8224887605397547,
+    "r2_raw": 0.8224887605397547,
+    "r2_affine_refit": 0.871687104208763,
+    "nmse": 0.1775112394602452,
+    "nmse_affine_refit": 0.1283128957912369,
+    "expression": "mul(add(add(ARG0, -0.15588696415900327), add(ARG0, ARG0)), add(add(ARG0, ARG0), add(ARG0, add(ARG0, ARG0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-1",
+    "method": "DEAP",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "2.5*x0**4 - 1.3*x0**3 + 0.5*x1**2 - 1.7*x1",
+    "runtime_sec": 3.682163455989212
+  },
+  "jin/Jin-2": {
+    "r2": 0.9262670181423787,
+    "r2_raw": 0.9262670181423787,
+    "r2_affine_refit": 0.9330126768255004,
+    "nmse": 0.07373298185762135,
+    "nmse_affine_refit": 0.06698732317449965,
+    "expression": "mul(add(mul(div(ARG1, 0.7833213196413649), div(ARG1, 0.25128498186284953)), mul(add(ARG1, 0.7833213196413649), ARG1)), div(ARG1, 0.7833213196413649))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-2",
+    "method": "DEAP",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "8.0*x0**2 + 8.0*x1**3 - 15.0",
+    "runtime_sec": 3.7014697841368616
+  },
+  "jin/Jin-3": {
+    "r2": 0.8499900415057093,
+    "r2_raw": 0.8499900415057093,
+    "r2_affine_refit": 0.8769743788401894,
+    "nmse": 0.1500099584942786,
+    "nmse_affine_refit": 0.12302562115980077,
+    "expression": "add(sub(add(ARG0, sub(ARG1, sin(sin(ARG0)))), sin(ARG1)), sub(ARG1, sin(ARG1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-3",
+    "method": "DEAP",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "0.2*x0**3 + 0.5*x1**3 - 1.2*x1 - 0.5*x0",
+    "runtime_sec": 3.126263120211661
+  },
+  "jin/Jin-4": {
+    "r2": 0.7847839192093853,
+    "r2_raw": 0.7847839192093853,
+    "r2_affine_refit": 0.8421477169606109,
+    "nmse": 0.2152160807906113,
+    "nmse_affine_refit": 0.1578522830393866,
+    "expression": "add(add(add(ARG0, 0.6368957936455137), add(ARG0, 0.25112199280483183)), add(cos(ARG1), add(mul(ARG0, ARG0), ARG0)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-4",
+    "method": "DEAP",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "1.5*exp(x0) + 5.0*cos(x1)",
+    "runtime_sec": 3.4510658592917025
+  },
+  "jin/Jin-5": {
+    "r2": 0.675410493256733,
+    "r2_raw": 0.675410493256733,
+    "r2_affine_refit": 0.6769750276882947,
+    "nmse": 0.32458950674323067,
+    "nmse_affine_refit": 0.32302497231166905,
+    "expression": "mul(cos(ARG1), sub(sub(ARG0, mul(ARG0, -0.45259906978251685)), mul(ARG0, -0.45259906978251685)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-5",
+    "method": "DEAP",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "6.0*sin(x0)*cos(x1)",
+    "runtime_sec": 3.2518677269108593
+  },
+  "jin/Jin-6": {
+    "r2": 0.635675388289425,
+    "r2_raw": 0.635675388289425,
+    "r2_affine_refit": 0.6391278301975845,
+    "nmse": 0.36432461171056457,
+    "nmse_affine_refit": 0.3608721698024052,
+    "expression": "add(div(mul(ARG0, ARG1), cos(sin(cos(sub(ARG0, ARG1))))), sin(cos(sub(ARG0, ARG1))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "jin/Jin-6",
+    "method": "DEAP",
+    "suite": "jin",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "1.35*x0*x1 + 5.5*sin((x0 - 1.0)*(x1 - 1.0))",
+    "runtime_sec": 3.6330993147566915
+  },
+  "livermore/Livermore-1": {
+    "r2": 0.9660255034943711,
+    "r2_raw": 0.9660255034943711,
+    "r2_affine_refit": 0.9667385397595272,
+    "nmse": 0.033974496505618235,
+    "nmse_affine_refit": 0.03326146024046237,
+    "expression": "add(ARG0, add(sub(0.8314923659584323, 0.5547434054902702), sin(sin(mul(add(ARG0, ARG0), sin(ARG0))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-1",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "1.0/3.0 + x0 + sin(x0**2)",
+    "runtime_sec": 3.0267186742275953
+  },
+  "livermore/Livermore-2": {
+    "r2": 0.9500004231665664,
+    "r2_raw": 0.9500004231665664,
+    "r2_affine_refit": 0.990210453422582,
+    "nmse": 0.04999957683149747,
+    "nmse_affine_refit": 0.009789546577038932,
+    "expression": "sub(sub(-0.48926294875004417, 0.472818160871489), cos(sin(mul(0.5716908870073658, div(div(ARG0, 0.7282333825349414), cos(-0.8669098046279424))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-2",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 2",
+    "runtime_sec": 3.3139737299643457
+  },
+  "livermore/Livermore-3": {
+    "r2": 0.9030660586021866,
+    "r2_raw": 0.9030660586021866,
+    "r2_affine_refit": 0.9847350092495365,
+    "nmse": 0.09693394139612248,
+    "nmse_affine_refit": 0.015264990750197207,
+    "expression": "add(-0.7350270813663533, add(-0.18660917275069555, mul(mul(sin(sin(sin(ARG0))), ARG0), sin(add(-0.7865357348066202, add(0.74095317376126, ARG0))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-3",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**3)*cos(x0**2) - 1",
+    "runtime_sec": 3.3438789541833103
+  },
+  "livermore/Livermore-4": {
+    "r2": 0.8996712810977447,
+    "r2_raw": 0.8996712810977447,
+    "r2_affine_refit": 0.9257694963603086,
+    "nmse": 0.10032871890222311,
+    "nmse_affine_refit": 0.07423050363966761,
+    "expression": "sub(sin(ARG0), sub(sub(0.6342361066846427, add(ARG0, -0.9858551577539745)), ARG0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-4",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1) + log(x0)",
+    "runtime_sec": 3.121434169821441
+  },
+  "livermore/Livermore-5": {
+    "r2": 0.9940009375327469,
+    "r2_raw": 0.9940009375327469,
+    "r2_affine_refit": 0.9965358543592588,
+    "nmse": 0.005999062467216813,
+    "nmse_affine_refit": 0.003464145640720141,
+    "expression": "sub(mul(ARG0, ARG0), add(mul(mul(ARG0, cos(cos(cos(ARG1)))), 0.1683604801232017), ARG1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-5",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**4 - x0**3 + x0**2 - x1",
+    "runtime_sec": 3.3044964782893658
+  },
+  "livermore/Livermore-6": {
+    "r2": 0.9622807679543736,
+    "r2_raw": 0.9622807679543736,
+    "r2_affine_refit": 0.9802295744155407,
+    "nmse": 0.03771923204561849,
+    "nmse_affine_refit": 0.01977042558445509,
+    "expression": "mul(add(0.5570624320335369, sin(ARG0)), div(mul(sub(mul(sin(ARG0), sub(ARG0, -0.664380350991842)), -0.5195723173901694), ARG0), 0.26431895667107885))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-6",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "4*x0**4 + 3*x0**3 + 2*x0**2 + x0",
+    "runtime_sec": 3.5852228589355946
+  },
+  "livermore/Livermore-7": {
+    "r2": 0.9999650460755756,
+    "r2_raw": 0.9999650460755756,
+    "r2_affine_refit": 0.9999880179127497,
+    "nmse": 3.495392442438146e-05,
+    "nmse_affine_refit": 1.1982087250291527e-05,
+    "expression": "div(mul(ARG0, ARG0), sin(ARG0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-7",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "(exp(x0) - exp(-x0))/2",
+    "runtime_sec": 3.050991608761251
+  },
+  "livermore/Livermore-8": {
+    "r2": 0.9906552966842672,
+    "r2_raw": 0.9906552966842672,
+    "r2_affine_refit": 0.9954360148345629,
+    "nmse": 0.009344703314856874,
+    "nmse_affine_refit": 0.004563985165009285,
+    "expression": "cos(sin(cos(mul(sin(cos(cos(sin(ARG0)))), add(ARG0, ARG0)))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "livermore/Livermore-8",
+    "method": "DEAP",
+    "suite": "livermore",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "(exp(x0) + exp(-x0))/3",
+    "runtime_sec": 3.1205006260424852
+  },
+  "nguyen/Nguyen-1": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 2.232649643116548e-32,
+    "nmse_affine_refit": 6.28017471830003e-32,
+    "expression": "add(mul(ARG0, add(ARG0, mul(ARG0, ARG0))), ARG0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-1",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**3 + x0**2 + x0",
+    "runtime_sec": 3.339597276877612
+  },
+  "nguyen/Nguyen-2": {
+    "r2": 0.9950514201797412,
+    "r2_raw": 0.9950514201797412,
+    "r2_affine_refit": 0.9975532286280318,
+    "nmse": 0.004948579820253995,
+    "nmse_affine_refit": 0.002446771371965868,
+    "expression": "mul(add(ARG0, mul(ARG0, sin(mul(ARG0, add(ARG0, 0.23754482839712776))))), add(0.9171501511962301, ARG0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-2",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 3.461751841008663
+  },
+  "nguyen/Nguyen-3": {
+    "r2": 0.9998135946903965,
+    "r2_raw": 0.9998135946903965,
+    "r2_affine_refit": 0.9998134493067755,
+    "nmse": 0.00018640530960332754,
+    "nmse_affine_refit": 0.00018655069322441657,
+    "expression": "add(mul(div(add(ARG0, mul(ARG0, ARG0)), cos(0.4695019824372304)), div(ARG0, cos(ARG0))), ARG0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-3",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 3.5900024962611496
+  },
+  "nguyen/Nguyen-4": {
+    "r2": 0.9836158432806714,
+    "r2_raw": 0.9836158432806714,
+    "r2_affine_refit": 0.9889703812379581,
+    "nmse": 0.01638415671931946,
+    "nmse_affine_refit": 0.01102961876203571,
+    "expression": "add(mul(add(mul(add(0.6240287716206914, add(ARG0, add(mul(ARG0, ARG0), ARG0))), ARG0), ARG0), ARG0), ARG0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-4",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**6 + x0**5 + x0**4 + x0**3 + x0**2 + x0",
+    "runtime_sec": 3.5100162639282644
+  },
+  "nguyen/Nguyen-5": {
+    "r2": 0.9036448872972436,
+    "r2_raw": 0.9036448872972436,
+    "r2_affine_refit": 0.9474433579131215,
+    "nmse": 0.09635511269902529,
+    "nmse_affine_refit": 0.05255664208484338,
+    "expression": "sin(sub(add(ARG0, add(mul(-0.10224546933237266, sin(div(ARG0, -0.8342712576638276))), -0.8342712576638276)), 0.7259808281175708))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-5",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0**2)*cos(x0) - 1",
+    "runtime_sec": 3.116530721075833
+  },
+  "nguyen/Nguyen-6": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 7.296708334557529e-33,
+    "nmse_affine_refit": 5.795027845974769e-32,
+    "expression": "add(sin(ARG0), sin(add(mul(ARG0, ARG0), ARG0)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-6",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0) + sin(x0 + x0**2)",
+    "runtime_sec": 3.236493231728673
+  },
+  "nguyen/Nguyen-7": {
+    "r2": 0.997983516649941,
+    "r2_raw": 0.997983516649941,
+    "r2_affine_refit": 0.9988911589876552,
+    "nmse": 0.00201648335005586,
+    "nmse_affine_refit": 0.0011088410123430497,
+    "expression": "mul(add(add(0.8925079145757966, sub(0.6055309904874164, cos(-0.5618296849869759))), cos(0.7545695255824254)), ARG0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-7",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "log(x0 + 1) + log(x0**2 + 1)",
+    "runtime_sec": 3.2667367667891085
+  },
+  "nguyen/Nguyen-8": {
+    "r2": 0.9618442006227265,
+    "r2_raw": 0.9618442006227265,
+    "r2_affine_refit": 0.9825657855566761,
+    "nmse": 0.03815579937709714,
+    "nmse_affine_refit": 0.01743421444324331,
+    "expression": "mul(add(cos(mul(sin(sin(0.45834307846501043)), sub(-0.0525645666336485, ARG0))), ARG0), sin(sin(0.6122369911456185)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-8",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 1,
+    "variable_names": [
+      "x0"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sqrt(x0)",
+    "runtime_sec": 3.283943882212043
+  },
+  "nguyen/Nguyen-9": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 5.029004544696779e-32,
+    "nmse_affine_refit": 1.2661192669707819e-31,
+    "expression": "add(sin(ARG0), sin(mul(ARG1, ARG1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-9",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "sin(x0) + sin(x1**2)",
+    "runtime_sec": 3.1764326323755085
+  },
+  "nguyen/Nguyen-10": {
+    "r2": 0.9922524103274636,
+    "r2_raw": 0.9922524103274636,
+    "r2_affine_refit": 0.9935906674064936,
+    "nmse": 0.0077475896724988665,
+    "nmse_affine_refit": 0.0064093325934753516,
+    "expression": "div(sin(ARG0), cos(cos(mul(ARG1, ARG1))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-10",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "2*sin(x0)*cos(x1)",
+    "runtime_sec": 3.2852635928429663
+  },
+  "nguyen/Nguyen-11": {
+    "r2": 0.9239915435283215,
+    "r2_raw": 0.9239915435283215,
+    "r2_affine_refit": 0.9228855426728195,
+    "nmse": 0.076008456470652,
+    "nmse_affine_refit": 0.07711445732613904,
+    "expression": "cos(sub(cos(-0.7712880985957433), mul(sub(ARG0, ARG1), cos(ARG0))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-11",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**x1",
+    "runtime_sec": 3.284269340801984
+  },
+  "nguyen/Nguyen-12": {
+    "r2": 0.9656559233834264,
+    "r2_raw": 0.9656559233834264,
+    "r2_affine_refit": 0.9727984753189198,
+    "nmse": 0.03434407661510589,
+    "nmse_affine_refit": 0.027201524679917658,
+    "expression": "mul(sin(cos(ARG1)), sub(mul(mul(0.4654379096108321, sin(ARG0)), add(-0.40207746097359287, mul(0.1429748480299935, ARG0))), ARG1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "nguyen/Nguyen-12",
+    "method": "DEAP",
+    "suite": "nguyen",
+    "domain": "formula",
+    "split": "dev",
+    "has_dummy_vars": false,
+    "n_train": 256,
+    "n_test": 1024,
+    "n_vars": 2,
+    "variable_names": [
+      "x0",
+      "x1"
+    ],
+    "budget": {
+      "generations": 20,
+      "population_size": 500
+    },
+    "ground_truth": "x0**4 - x0**3 + x1**2/2 - x1",
+    "runtime_sec": 3.4019932909868658
+  }
+}

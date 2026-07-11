@@ -1,0 +1,163 @@
+{
+  "created_at": "2026-07-11",
+  "expected_files": 22,
+  "files": {
+    "formula_dev/deap_formula_dev_seed0.json": {
+      "bytes": 27430,
+      "method": "DEAP",
+      "records": 34,
+      "sha256": "aa35bcbfab7458b30dc4b7fd5be65750caf90dd5e23f5edd89d29ee6d07afb26",
+      "suite": "mixed"
+    },
+    "formula_dev/dso_formula_dev_seed0.json": {
+      "bytes": 36883,
+      "method": "DSO",
+      "records": 34,
+      "sha256": "b7733fb6a49f9306e30b915178d1cba036ed11ea81266dbda305087db586f1e6",
+      "suite": "mixed"
+    },
+    "formula_dev/e2e_formula_dev_seed0.json": {
+      "bytes": 42572,
+      "method": "E2E",
+      "records": 34,
+      "sha256": "9e5610e43225716dc4b001ea6414a02eac18c2a0de700ffcc3c55b0662334b17",
+      "suite": "mixed"
+    },
+    "formula_dev/gp_formula_dev_seed0.json": {
+      "bytes": 28364,
+      "method": "gplearn",
+      "records": 34,
+      "sha256": "ba6a313407d131d9fcde94fa4d9c366e41921c74d1fdd212f2a7a7867273c8e4",
+      "suite": "mixed"
+    },
+    "formula_dev/hvae_formula_dev_seed0.json": {
+      "bytes": 52999,
+      "method": "HVAE-small",
+      "records": 34,
+      "sha256": "7c6e03dd7d3d0f4496720f3aa1b40accdba7536f294693b6f473401ade9f3731",
+      "suite": "mixed"
+    },
+    "formula_dev/localdiffusion_formula_dev_seed0.json": {
+      "bytes": 41220,
+      "method": "LocalDiffusionProposal",
+      "records": 34,
+      "sha256": "ee73b5b3d3be7a6223371ddb34f81d89ea2b55d303c35a11c9bee2b6036f0efd",
+      "suite": "mixed"
+    },
+    "formula_dev/nesymres_formula_dev_seed0.json": {
+      "bytes": 54701,
+      "method": "NeSymReS-small",
+      "records": 34,
+      "sha256": "5d331fe399d23afac398b4474e2b45df2f30632d48f1f81f192e9e3cf339c306",
+      "suite": "mixed"
+    },
+    "formula_dev/nggp_formula_dev_seed0.json": {
+      "bytes": 53951,
+      "method": "NGGP-small",
+      "records": 34,
+      "sha256": "4a39b69fcef116567fda922a8fe0a90019a6abe9961c9e97feb7a30fafaf71b9",
+      "suite": "mixed"
+    },
+    "formula_dev/pysr_formula_dev_seed0.json": {
+      "bytes": 25188,
+      "method": "PySR",
+      "records": 34,
+      "sha256": "6717b80ed188a241c6cdba7e78b3d7be026016814b980c763a92001e34a7c158",
+      "suite": "mixed"
+    },
+    "formula_dev/symgpt_formula_dev_seed0.json": {
+      "bytes": 53071,
+      "method": "SymGPT-small",
+      "records": 34,
+      "sha256": "04ba43153662fa9afc4244014a60e408ea985411b073220255f17ff0b7b3e07b",
+      "suite": "mixed"
+    },
+    "formula_dev/tpsr_mcts_formula_dev_seed0.json": {
+      "bytes": 38978,
+      "method": "TPSR",
+      "records": 34,
+      "sha256": "3f8b0e7fa722f35a003169f4ba5c793e083ef2397c0bd44e64922e750fc878d9",
+      "suite": "mixed"
+    },
+    "symbolicgpt_large/deap_symbolicgpt_large_seed0.json": {
+      "bytes": 151397,
+      "method": "DEAP",
+      "records": 178,
+      "sha256": "5e94977de11ac7aacb5460d463d44534e5121e1256d211b3396239dde670041a",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/dso_symbolicgpt_large_seed0.json": {
+      "bytes": 191276,
+      "method": "DSO",
+      "records": 178,
+      "sha256": "f4ad1bcb59ddb1062c86d2a2a416987ea5379a0081bc0724d5b17863e7440a13",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/e2e_symbolicgpt_large_seed0.json": {
+      "bytes": 270589,
+      "method": "E2E",
+      "records": 178,
+      "sha256": "3f5ff85a8082bc394cacc1ad72b390eac1d63cf80152c627af6e771b4aa1b9ae",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/gp_symbolicgpt_large_seed0.json": {
+      "bytes": 156921,
+      "method": "gplearn",
+      "records": 178,
+      "sha256": "59b773812427dae96622f8f3679e3a17dab535debc4f730088ea8a16ee1bab08",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/hvae_symbolicgpt_large_seed0.json": {
+      "bytes": 281190,
+      "method": "HVAE-small",
+      "records": 178,
+      "sha256": "3410721a5d694b078de5a75c10391638c7ac6a1df206ed755640bccd2d0fa578",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/localdiffusion_symbolicgpt_large_seed0.json": {
+      "bytes": 225137,
+      "method": "LocalDiffusionProposal",
+      "records": 178,
+      "sha256": "8ceb8231b2f9cdffdee1a9627e1259acb3b30324b1ba7bb0f570521a393a55f3",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/nesymres_symbolicgpt_large_seed0.json": {
+      "bytes": 289556,
+      "method": "NeSymReS-small",
+      "records": 178,
+      "sha256": "04b27fae8a5a7fd627213b1f721eaded171114481acae18bdf03342d5264ea24",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/nggp_symbolicgpt_large_seed0.json": {
+      "bytes": 285748,
+      "method": "NGGP-small",
+      "records": 178,
+      "sha256": "7c2ed1baf6a920dbd11631694351b908351b42d5bbe3e2996d83732adc606249",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/pysr_symbolicgpt_large_seed0.json": {
+      "bytes": 145230,
+      "method": "PySR",
+      "records": 178,
+      "sha256": "f2bd18372319b1fea98ef14b421219f5c8ee69ad6bf6721820a18864a4af993d",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/symgpt_symbolicgpt_large_seed0.json": {
+      "bytes": 282606,
+      "method": "SymGPT-small",
+      "records": 178,
+      "sha256": "344151087cad44fc7c3c00bda656b669105dd539a4dc4c3f63be0d8ab7e7ebaf",
+      "suite": "symbolicgpt_large"
+    },
+    "symbolicgpt_large/tpsr_mcts_symbolicgpt_large_seed0.json": {
+      "bytes": 236908,
+      "method": "TPSR",
+      "records": 178,
+      "sha256": "177884cdb2735033f23c19b48588bd3aa85475b5dda5090ba0205bdbda752bd4",
+      "suite": "symbolicgpt_large"
+    }
+  },
+  "raw_files_immutable": true,
+  "schema_version": 1,
+  "source_revision": null
+}

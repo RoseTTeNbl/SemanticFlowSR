@@ -1,0 +1,5342 @@
+{
+  "symbolicgpt_large/test/task_000002": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 4.670230716212267e-32,
+    "expression": "x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000002",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0",
+    "runtime_sec": 31.608873683959246
+  },
+  "symbolicgpt_large/test/task_000003": {
+    "r2": 0.9999999999999993,
+    "r2_raw": 0.9999999999999993,
+    "r2_affine_refit": 0.9999999999999987,
+    "nmse": 6.256266032436039e-16,
+    "nmse_affine_refit": 1.344097858449419e-15,
+    "expression": "exp(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000003",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0)",
+    "runtime_sec": 7.081076486967504
+  },
+  "symbolicgpt_large/test/task_000004": {
+    "r2": 0.9823188434886799,
+    "r2_raw": 0.9823188434886799,
+    "r2_affine_refit": 0.9822999499787178,
+    "nmse": 0.017681156511292127,
+    "nmse_affine_refit": 0.01770005002125418,
+    "expression": "(cos(x0*0.7676324 + sin(sin(x0 + sin(x0)*0.65655583 - 1*(-0.09316963)) - 1*(-0.100931235))) + 0.043917704/x0)/0.6506847",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000004",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(1/Abs(x0))",
+    "runtime_sec": 9.208933445159346
+  },
+  "symbolicgpt_large/test/task_000005": {
+    "r2": 0.9999999999999911,
+    "r2_raw": 0.9999999999999911,
+    "r2_affine_refit": 0.9999999999999888,
+    "nmse": 8.889681044912634e-15,
+    "nmse_affine_refit": 1.1234805883238644e-14,
+    "expression": "exp(x0 - cos(x2 + 1.0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000005",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0 - cos(x2 + 1.0))",
+    "runtime_sec": 7.2387588121928275
+  },
+  "symbolicgpt_large/test/task_000006": {
+    "r2": 0.9999995591042127,
+    "r2_raw": 0.9999995591042127,
+    "r2_affine_refit": 0.999999580873951,
+    "nmse": 4.4089578734619306e-07,
+    "nmse_affine_refit": 4.1912604899813413e-07,
+    "expression": "0.722000761772451*sqrt(x2*sin(0.34223598*x2 - (-0.0194146*exp(cos(x2/sin(cos(sin(sin(cos(sin(0.4587097*x2)))))))) - 0.06756585)*sin(x2)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000006",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0 - 1.0*cos(sqrt(Abs(x2)))",
+    "runtime_sec": 9.686283797957003
+  },
+  "symbolicgpt_large/test/task_000007": {
+    "r2": 0.9972851728185599,
+    "r2_raw": 0.9972851728185599,
+    "r2_affine_refit": 0.9980713955853869,
+    "nmse": 0.002714827181399794,
+    "nmse_affine_refit": 0.0019286044145844635,
+    "expression": "cos(cos(2.12525681337676*sin(sin(0.5734683*x1*sin(x0)))) + 0.5707235)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000007",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(sqrt(Abs(x1*sin(x0))))",
+    "runtime_sec": 8.173284096177667
+  },
+  "symbolicgpt_large/test/task_000008": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 8.15575036132572e-36,
+    "expression": "x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000008",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0",
+    "runtime_sec": 8.424764547962695
+  },
+  "symbolicgpt_large/test/task_000009": {
+    "r2": 0.5335080587263588,
+    "r2_raw": 0.5335080587263588,
+    "r2_affine_refit": 0.5483889603679222,
+    "nmse": 0.46649194127233434,
+    "nmse_affine_refit": 0.45161103963081267,
+    "expression": "cos(0.17956035 + (cos(0.7959973/x1) - 1.5642072)/(x0*0.7473585 - 1*0.11206322))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000009",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(log(Abs(x0*sqrt(x1))))",
+    "runtime_sec": 8.386874758638442
+  },
+  "symbolicgpt_large/test/task_000010": {
+    "r2": 0.9999999999999992,
+    "r2_raw": 0.9999999999999992,
+    "r2_affine_refit": 0.9999999999999984,
+    "nmse": 7.6133489387028e-16,
+    "nmse_affine_refit": 1.5329746597794225e-15,
+    "expression": "1.0/x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000010",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0/x2",
+    "runtime_sec": 8.354195473250002
+  },
+  "symbolicgpt_large/test/task_000011": {
+    "r2": 0.999999999999969,
+    "r2_raw": 0.999999999999969,
+    "r2_affine_refit": 0.9999999999999458,
+    "nmse": 3.095955534229849e-14,
+    "nmse_affine_refit": 5.414095972870685e-14,
+    "expression": "1.00000002793092*x2**2*sqrt(x2**2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000011",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "Abs(x2)**3",
+    "runtime_sec": 10.023888694122434
+  },
+  "symbolicgpt_large/test/task_000012": {
+    "r2": 0.9999999999999961,
+    "r2_raw": 0.9999999999999961,
+    "r2_affine_refit": 0.9999999999999957,
+    "nmse": 3.858529276044919e-15,
+    "nmse_affine_refit": 4.327405594430396e-15,
+    "expression": "(x2**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000012",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x2))",
+    "runtime_sec": 8.045136323664337
+  },
+  "symbolicgpt_large/test/task_000013": {
+    "r2": 0.9470687409070391,
+    "r2_raw": 0.9470687409070391,
+    "r2_affine_refit": 0.9479293899263005,
+    "nmse": 0.05293125909280424,
+    "nmse_affine_refit": 0.052070610073545354,
+    "expression": "sin(sin(x1 + cos(0.8268502/(x1*(x1 - 1.3749323) - 1*(-0.039643463)))/0.6235668 - 1*0.18556793)/cos(sin(-1.3749323/x1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000013",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(log(Abs(x1**2*(x1 - 1.0))))",
+    "runtime_sec": 7.687126277014613
+  },
+  "symbolicgpt_large/test/task_000014": {
+    "r2": 0.9999999999999025,
+    "r2_raw": 0.9999999999999025,
+    "r2_affine_refit": 0.9999999999999107,
+    "nmse": 9.742928235818338e-14,
+    "nmse_affine_refit": 8.926632484471705e-14,
+    "expression": "cos(-exp(x1) + cos((x1 + 1.2794453)/(45518.69*(-exp(x0) + sin(x1)))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000014",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(exp(x1) - 1.0)",
+    "runtime_sec": 8.747407377231866
+  },
+  "symbolicgpt_large/test/task_000015": {
+    "r2": 0.9995042490675451,
+    "r2_raw": 0.9995042490675451,
+    "r2_affine_refit": 0.9891683149040855,
+    "nmse": 0.0004957509324530004,
+    "nmse_affine_refit": 0.010831685095871811,
+    "expression": "sin(cos(exp(x2*(x1*x1 - 4.9637384e-7)/x1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000015",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(cos(exp(x1*x2)))",
+    "runtime_sec": 7.122320210095495
+  },
+  "symbolicgpt_large/test/task_000016": {
+    "r2": 0.9999999999999994,
+    "r2_raw": 0.9999999999999994,
+    "r2_affine_refit": 0.9999999999999994,
+    "nmse": 5.88290409706362e-16,
+    "nmse_affine_refit": 5.631317233756923e-16,
+    "expression": "exp(x2)*exp(7.714614e-10/(x1 - 1*(-2.633299)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000016",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x2)",
+    "runtime_sec": 9.198186608962715
+  },
+  "symbolicgpt_large/test/task_000017": {
+    "r2": 0.9148328539881025,
+    "r2_raw": 0.9148328539881025,
+    "r2_affine_refit": 0.9148832897887788,
+    "nmse": 0.08516714601188148,
+    "nmse_affine_refit": 0.08511671021120527,
+    "expression": "exp(exp(cos(x0 + sin(sin(sin(x0 + sin(x0*3.3463242)))))) - cos(x2*(-0.58365476)) + 0.212439) - cos(x2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000017",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x2**3/x0))",
+    "runtime_sec": 8.119297351688147
+  },
+  "symbolicgpt_large/test/task_000018": {
+    "r2": 0.9999999999999988,
+    "r2_raw": 0.9999999999999988,
+    "r2_affine_refit": 0.9999999999999984,
+    "nmse": 1.192376404356067e-15,
+    "nmse_affine_refit": 1.5694757784277984e-15,
+    "expression": "-(-x1 - x1 + x1 + x1 - exp(x0) + 0.91884524 - 9.060804e-9/cos(x2 + 0.5503843)) + 0.91884524 - 9.060804e-9/cos(x2 + sin(-1.4404277))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000018",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0)",
+    "runtime_sec": 7.964221188798547
+  },
+  "symbolicgpt_large/test/task_000019": {
+    "r2": 0.9999999999999927,
+    "r2_raw": 0.9999999999999927,
+    "r2_affine_refit": 0.9999999999999928,
+    "nmse": 7.306292934334517e-15,
+    "nmse_affine_refit": 7.246374073529681e-15,
+    "expression": "sin(x1 - x2 - (-1)*6.376455e-9/(x1/0.29626578 + 1.1446164/exp(x1) - 0.1907409/x0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000019",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1 - x2)",
+    "runtime_sec": 7.4235075931064785
+  },
+  "symbolicgpt_large/test/task_000020": {
+    "r2": 0.9999999999999997,
+    "r2_raw": 0.9999999999999997,
+    "r2_affine_refit": 0.9999999999999998,
+    "nmse": 3.127094427539971e-16,
+    "nmse_affine_refit": 2.7726659927967123e-16,
+    "expression": "sin(x0) + 1.2093021e-11/sin(x1 + 1.4832486)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000020",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0)",
+    "runtime_sec": 8.137620670255274
+  },
+  "symbolicgpt_large/test/task_000021": {
+    "r2": 0.9999999999999992,
+    "r2_raw": 0.9999999999999992,
+    "r2_affine_refit": 0.999999999999999,
+    "nmse": 8.289871721924898e-16,
+    "nmse_affine_refit": 9.968047809390938e-16,
+    "expression": "x2*x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000021",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2**2",
+    "runtime_sec": 8.697331346105784
+  },
+  "symbolicgpt_large/test/task_000022": {
+    "r2": 0.9999992606456602,
+    "r2_raw": 0.9999992606456602,
+    "r2_affine_refit": 0.9999992652434698,
+    "nmse": 7.39354339732877e-07,
+    "nmse_affine_refit": 7.347565301920569e-07,
+    "expression": "(x2*x2/3.3952184 + cos(x2*0.5496054) - 0.969251)*39.28724 + cos(sin(sin(sin(x2)/(-0.28336623)))*0.4299374/x2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000022",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(Abs(x2) + 1.0)**3",
+    "runtime_sec": 9.17496547382325
+  },
+  "symbolicgpt_large/test/task_000023": {
+    "r2": 0.9999999999999987,
+    "r2_raw": 0.9999999999999987,
+    "r2_affine_refit": 0.9999999999999986,
+    "nmse": 1.3187343475610344e-15,
+    "nmse_affine_refit": 1.426360446363686e-15,
+    "expression": "x2*x2*x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000023",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2**3",
+    "runtime_sec": 8.240952269174159
+  },
+  "symbolicgpt_large/test/task_000024": {
+    "r2": 0.9999880358712824,
+    "r2_raw": 0.9999880358712824,
+    "r2_affine_refit": 0.9999878408331799,
+    "nmse": 1.1964128717641817e-05,
+    "nmse_affine_refit": 1.2159166820091178e-05,
+    "expression": "x0 + (x0 - x1)*(x0 - (sin(x0/1.8889139) + 0.95098424/(x0 + 0.87642515/x0)))/(0.014818438*cos(x0) + 0.5353821)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000024",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0*((x0 - 1.0*x1)*log(Abs(x0)) + 1)",
+    "runtime_sec": 7.800440470222384
+  },
+  "symbolicgpt_large/test/task_000025": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 2.896522489056177e-19,
+    "nmse_affine_refit": 3.522674879306644e-31,
+    "expression": "x1 - 1.5279511e-9",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000025",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1",
+    "runtime_sec": 8.506925934925675
+  },
+  "symbolicgpt_large/test/task_000026": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 4.5320009873129564e-32,
+    "expression": "x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000026",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1",
+    "runtime_sec": 7.503533945884556
+  },
+  "symbolicgpt_large/test/task_000027": {
+    "r2": 0.9997848964729421,
+    "r2_raw": 0.9997848964729421,
+    "r2_affine_refit": 0.9997922047608245,
+    "nmse": 0.0002151035270579421,
+    "nmse_affine_refit": 0.0002077952391755131,
+    "expression": "x0/0.020336749 + (x0 + 0.9241604)/exp(x0 - 3.2973268) + (x0 + cos(x0 + 0.77564037))*(exp(x0)*(-17.664055) - 113.14077) + 85.147736",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000027",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "-x0**6 + x0",
+    "runtime_sec": 9.804945825599134
+  },
+  "symbolicgpt_large/test/task_000028": {
+    "r2": 0.9999999999999994,
+    "r2_raw": 0.9999999999999994,
+    "r2_affine_refit": 0.9999999999999994,
+    "nmse": 5.451384279960122e-16,
+    "nmse_affine_refit": 5.555857503200192e-16,
+    "expression": "cos(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000028",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(x0)",
+    "runtime_sec": 7.704565653111786
+  },
+  "symbolicgpt_large/test/task_000029": {
+    "r2": 0.3182468001711969,
+    "r2_raw": 0.3182468001711969,
+    "r2_affine_refit": 0.28791001073782485,
+    "nmse": 0.6817531998238309,
+    "nmse_affine_refit": 0.7120899892569816,
+    "expression": "cos(cos(exp(x0)*0.6802903))/0.7469477",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000029",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(sin(x0**3) + 1.0))",
+    "runtime_sec": 9.121970466338098
+  },
+  "symbolicgpt_large/test/task_000030": {
+    "r2": 0.9999787623883255,
+    "r2_raw": 0.9999787623883255,
+    "r2_affine_refit": 0.9999788285181976,
+    "nmse": 2.1237611674520205e-05,
+    "nmse_affine_refit": 2.1171481802332112e-05,
+    "expression": "x1*(-0.54445976)*(-x0 + sin(sin(-x0 + sin(-1.0427642*x0 - 0.24452974/x0)*0.58270633)) - 1*(-1.8355218))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000030",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0*x1/Abs(sqrt(x0)) - x1",
+    "runtime_sec": 9.433374269399792
+  },
+  "symbolicgpt_large/test/task_000031": {
+    "r2": 0.9991714280176238,
+    "r2_raw": 0.9991714280176238,
+    "r2_affine_refit": 0.9991622682411248,
+    "nmse": 0.0008285719823761554,
+    "nmse_affine_refit": 0.0008377317588752888,
+    "expression": "2.051305 - (-1)*0.214076/(x0 + x0 - x1) - 0.2439833/((x0 + x1 - 2.4083626)/x0) - x1/x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000031",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1/(x1 - sin(x0) + 1.0) + 1.0 - x1/x0",
+    "runtime_sec": 8.574141339864582
+  },
+  "symbolicgpt_large/test/task_000032": {
+    "r2": 0.9999999999999944,
+    "r2_raw": 0.9999999999999944,
+    "r2_affine_refit": 0.9999999999999947,
+    "nmse": 5.599214363350217e-15,
+    "nmse_affine_refit": 5.337147263943241e-15,
+    "expression": "-x1*x1 + x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000032",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "-x1**2 + x2",
+    "runtime_sec": 7.631551587022841
+  },
+  "symbolicgpt_large/test/task_000033": {
+    "r2": 0.9999999999999696,
+    "r2_raw": 0.9999999999999696,
+    "r2_affine_refit": 0.9999999999999691,
+    "nmse": 3.0380368194214446e-14,
+    "nmse_affine_refit": 3.084175891384418e-14,
+    "expression": "cos(-4.995314e-9*(x1/(-x0 + x1) - x2) + cos(x1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000033",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(cos(x1))",
+    "runtime_sec": 8.132706669624895
+  },
+  "symbolicgpt_large/test/task_000034": {
+    "r2": 0.9999490535190189,
+    "r2_raw": 0.9999490535190189,
+    "r2_affine_refit": 0.9999487664397345,
+    "nmse": 5.09464809808693e-05,
+    "nmse_affine_refit": 5.123356026516861e-05,
+    "expression": "(cos(sin(sin(sin(sin(sin(sin(x1*0.562576)))))*(-1.8428817))) - 0.13114744)*cos(x1*0.6929882) + 0.069281295",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000034",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(sqrt(Abs(x1)))",
+    "runtime_sec": 10.793170026969165
+  },
+  "symbolicgpt_large/test/task_000035": {
+    "r2": 0.9998653845749129,
+    "r2_raw": 0.9998653845749129,
+    "r2_affine_refit": 0.9998655180361697,
+    "nmse": 0.0001346154250870869,
+    "nmse_affine_refit": 0.00013448196383030863,
+    "expression": "x0*x0*(-1750.5887) + exp(5.9997325 - 1.3904008*x0) + exp(x0*1.3815734 + 6.0359354)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000035",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x0**2 - cos(x0))**4",
+    "runtime_sec": 8.929717313032597
+  },
+  "symbolicgpt_large/test/task_000036": {
+    "r2": 0.9963660264810815,
+    "r2_raw": 0.9963660264810815,
+    "r2_affine_refit": 0.9959108488439316,
+    "nmse": 0.0036339735189158877,
+    "nmse_affine_refit": 0.004089151156065566,
+    "expression": "(cos((x0 - cos(cos(x0/(-0.19444408)))/x0)*0.2905237) - 1.9399924)*(cos((x0 + sin(x0))*0.86732614) - 1*(-0.061808534))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000036",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x0))",
+    "runtime_sec": 7.894692456815392
+  },
+  "symbolicgpt_large/test/task_000038": {
+    "r2": 0.9999999999999971,
+    "r2_raw": 0.9999999999999971,
+    "r2_affine_refit": 0.9999999999999967,
+    "nmse": 2.933462477560645e-15,
+    "nmse_affine_refit": 3.292568183708577e-15,
+    "expression": "(x2 + 1.0)*(x2 + 1.0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000038",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x2 + 1)**2",
+    "runtime_sec": 8.35050183488056
+  },
+  "symbolicgpt_large/test/task_000039": {
+    "r2": 0.9999999999998685,
+    "r2_raw": 0.9999999999998685,
+    "r2_affine_refit": 0.9999999999994416,
+    "nmse": 1.3147298061785657e-13,
+    "nmse_affine_refit": 5.584780224535199e-13,
+    "expression": "sin(x0*(-0.99999994)/(x0*(-x0 + x0/x1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000039",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1/(x0*(x1 - 1)))",
+    "runtime_sec": 9.207789555191994
+  },
+  "symbolicgpt_large/test/task_000041": {
+    "r2": 0.9999999999999944,
+    "r2_raw": 0.9999999999999944,
+    "r2_affine_refit": 0.999999999999995,
+    "nmse": 5.594398637139063e-15,
+    "nmse_affine_refit": 4.958267598208565e-15,
+    "expression": "(x1**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000041",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x1))",
+    "runtime_sec": 7.273449815809727
+  },
+  "symbolicgpt_large/test/task_000043": {
+    "r2": 0.698131632628382,
+    "r2_raw": 0.698131632628382,
+    "r2_affine_refit": 0.6975820401642814,
+    "nmse": 0.30186836737157435,
+    "nmse_affine_refit": 0.30241795983567477,
+    "expression": "x0*sin(sin(-exp(x1*0.27783403) + cos(cos(x2*0.40397218))) + 0.5818906)/0.460386",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000043",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0*log(Abs(-x1 + sqrt(Abs(x2)) + 1.0))",
+    "runtime_sec": 7.465061674825847
+  },
+  "symbolicgpt_large/test/task_000044": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 1.578885341650913e-33,
+    "nmse_affine_refit": 6.274628644247005e-32,
+    "expression": "x1 + 1.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000044",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1 + 1.0",
+    "runtime_sec": 7.545138541143388
+  },
+  "symbolicgpt_large/test/task_000045": {
+    "r2": 0.9999999999999983,
+    "r2_raw": 0.9999999999999983,
+    "r2_affine_refit": 0.9999999999999981,
+    "nmse": 1.7104325998153166e-15,
+    "nmse_affine_refit": 1.843581731833705e-15,
+    "expression": "exp(x0)*x1*4.3181972e-11/sin(sin(x2) + x2/x1) + sin(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000045",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0)",
+    "runtime_sec": 9.447421847842634
+  },
+  "symbolicgpt_large/test/task_000046": {
+    "r2": 0.9999999999999996,
+    "r2_raw": 0.9999999999999996,
+    "r2_affine_refit": 0.9999999999999996,
+    "nmse": 4.2575785127714414e-16,
+    "nmse_affine_refit": 4.842839970397803e-16,
+    "expression": "cos(x0 + 1.954705e-9/sin(x0/x2))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000046",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(x0)",
+    "runtime_sec": 8.410669836681336
+  },
+  "symbolicgpt_large/test/task_000047": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 1.3854949338277297e-31,
+    "expression": "x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000047",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0*x1",
+    "runtime_sec": 10.107702644076198
+  },
+  "symbolicgpt_large/test/task_000048": {
+    "r2": 0.999999999999999,
+    "r2_raw": 0.999999999999999,
+    "r2_affine_refit": 0.9999999999999991,
+    "nmse": 1.0469344573914666e-15,
+    "nmse_affine_refit": 8.943974266583171e-16,
+    "expression": "x0 - x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000048",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0 - x2",
+    "runtime_sec": 7.275824453681707
+  },
+  "symbolicgpt_large/test/task_000049": {
+    "r2": 0.9997282526717272,
+    "r2_raw": 0.9997282526717272,
+    "r2_affine_refit": 0.9997295760604825,
+    "nmse": 0.0002717473282719741,
+    "nmse_affine_refit": 0.00027042393951661717,
+    "expression": "2.0018115 + sin(sin(sin(sin(sin(x2*(-0.55795825))/cos(sin(sin(sin(-0.1877027/sin(x2*(-0.6069748))))*1.1887382))))))*4.2782574/x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000049",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x2))",
+    "runtime_sec": 8.789458516985178
+  },
+  "symbolicgpt_large/test/task_000050": {
+    "r2": 0.9944619777608443,
+    "r2_raw": 0.9944619777608443,
+    "r2_affine_refit": 0.9944183187058495,
+    "nmse": 0.005538022239155636,
+    "nmse_affine_refit": 0.005581681294150502,
+    "expression": "x1*(x0 - x1)*(x0*(x0 - x1)*(-(-12.30839)*x0*x1 - 60.025364) - exp(1.4973134 - x1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000050",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x0 - x1)**6",
+    "runtime_sec": 9.262735809199512
+  },
+  "symbolicgpt_large/test/task_000051": {
+    "r2": 0.9999999999999988,
+    "r2_raw": 0.9999999999999988,
+    "r2_affine_refit": 0.9999999999999988,
+    "nmse": 1.2024894124991836e-15,
+    "nmse_affine_refit": 1.2574446970775722e-15,
+    "expression": "x1*x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000051",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1**2",
+    "runtime_sec": 7.896091823000461
+  },
+  "symbolicgpt_large/test/task_000052": {
+    "r2": 0.9999788132684965,
+    "r2_raw": 0.9999788132684965,
+    "r2_affine_refit": 0.9999792202659873,
+    "nmse": 2.1186731503348455e-05,
+    "nmse_affine_refit": 2.0779734012542352e-05,
+    "expression": "cos(cos(x1)/(0.15597793 - cos(cos(1.2304103/cos(cos(sin(x1)/((cos(cos(sin(sin(sin(x1)*(-1.6973828)))))/(-0.46510875)))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000052",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(sin(x1)**3))",
+    "runtime_sec": 7.351272142957896
+  },
+  "symbolicgpt_large/test/task_000053": {
+    "r2": 0.9997817153982089,
+    "r2_raw": 0.9997817153982089,
+    "r2_affine_refit": 0.999778170141014,
+    "nmse": 0.00021828460179109727,
+    "nmse_affine_refit": 0.00022182985898598582,
+    "expression": "-x2 + exp((cos(x1*0.565735)*(-0.57732844) + cos(0.56068933/(x1*x1 + 0.54214054))*1.6390952)*cos(x2))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000053",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "-x2 + exp(cos(x2)*sqrt(Abs(x1)))",
+    "runtime_sec": 12.447348587680608
+  },
+  "symbolicgpt_large/test/task_000054": {
+    "r2": 0.9999999999999996,
+    "r2_raw": 0.9999999999999996,
+    "r2_affine_refit": 0.9999999999999996,
+    "nmse": 4.186915561084818e-16,
+    "nmse_affine_refit": 4.3982190772936586e-16,
+    "expression": "x0 + x1*(-0.18727714) - (x0 + x1*(-0.18727714) - exp(x0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000054",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0)",
+    "runtime_sec": 9.011170723009855
+  },
+  "symbolicgpt_large/test/task_000055": {
+    "r2": 0.999999999999996,
+    "r2_raw": 0.999999999999996,
+    "r2_affine_refit": 0.999999999999996,
+    "nmse": 4.010028369854946e-15,
+    "nmse_affine_refit": 4.049365118434063e-15,
+    "expression": "exp(cos(x0)*cos(x0)*cos(x0*cos(x1*x1*1.5467882e-5/x0)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000055",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(cos(x0)**3)",
+    "runtime_sec": 7.700990340206772
+  },
+  "symbolicgpt_large/test/task_000057": {
+    "r2": 0.9999999999999996,
+    "r2_raw": 0.9999999999999996,
+    "r2_affine_refit": 0.9999999999999994,
+    "nmse": 4.949049858841948e-16,
+    "nmse_affine_refit": 5.598625852245814e-16,
+    "expression": "-(-1.8182467e-10)*x0*exp(x0 + x1 - x2/(exp(x1) + 0.50206405)) + exp(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000057",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0)",
+    "runtime_sec": 7.870087251998484
+  },
+  "symbolicgpt_large/test/task_000059": {
+    "r2": 0.9999999999999976,
+    "r2_raw": 0.9999999999999976,
+    "r2_affine_refit": 0.9999999999999971,
+    "nmse": 2.400994319037551e-15,
+    "nmse_affine_refit": 2.8434851333131575e-15,
+    "expression": "x1 - x2*x2*x2 + 1.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000059",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1 - x2**3 + 1.0",
+    "runtime_sec": 11.131729733198881
+  },
+  "symbolicgpt_large/test/task_000060": {
+    "r2": -1.5333664888891598,
+    "r2_raw": -1.5333664888891598,
+    "r2_affine_refit": -1.1826663036199991,
+    "nmse": 2.5333664888832264,
+    "nmse_affine_refit": 2.1826663036148872,
+    "expression": "sin(-0.3761701/cos(-exp(x1) - exp(x1*(-0.5466835)) - 0.29019585 + 0.49067715/(x2 + x2)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000060",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin((x1**3 - log(Abs(x2)))**2)",
+    "runtime_sec": 8.63736861711368
+  },
+  "symbolicgpt_large/test/task_000061": {
+    "r2": 0.2978351895715382,
+    "r2_raw": 0.2978351895715382,
+    "r2_affine_refit": 0.24234046728067615,
+    "nmse": 0.7021648104267059,
+    "nmse_affine_refit": 0.7576595327174291,
+    "expression": "sin(cos(-(-0.058351178)*x2*(-1*(-1.4988359) + 0.53352916/((x1*x1))) + (-x1 - 1.2811819/x1)*(-3.327006)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000061",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(sqrt(Abs(x1**3 + x2)))",
+    "runtime_sec": 7.271981693804264
+  },
+  "symbolicgpt_large/test/task_000062": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 6.733205871852984e-33,
+    "nmse_affine_refit": 3.2022547926027687e-31,
+    "expression": "x2 + 1.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000062",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2 + 1",
+    "runtime_sec": 7.61588674178347
+  },
+  "symbolicgpt_large/test/task_000063": {
+    "r2": 0.9999999999999931,
+    "r2_raw": 0.9999999999999931,
+    "r2_affine_refit": 0.9999999999999926,
+    "nmse": 6.843743924947887e-15,
+    "nmse_affine_refit": 7.402319296393712e-15,
+    "expression": "(sin(x0) - 1.5297892e-9/sin(x1))*sin(x0)*sin(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000063",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0)**3",
+    "runtime_sec": 11.08862133976072
+  },
+  "symbolicgpt_large/test/task_000064": {
+    "r2": 0.9999999999999984,
+    "r2_raw": 0.9999999999999984,
+    "r2_affine_refit": 0.9999999999999982,
+    "nmse": 1.5363874650624647e-15,
+    "nmse_affine_refit": 1.7633253129653227e-15,
+    "expression": "cos(-x0 - 2.2632534e-8)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000064",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(x0)",
+    "runtime_sec": 8.799097740091383
+  },
+  "symbolicgpt_large/test/task_000066": {
+    "r2": 0.9999993517552916,
+    "r2_raw": 0.9999993517552916,
+    "r2_affine_refit": 0.99999969811577,
+    "nmse": 6.48244708371475e-07,
+    "nmse_affine_refit": 3.0188422988886975e-07,
+    "expression": "sqrt(cos(1.57075490606446*sin(x2))/cos(sin(x2)*sin(cos(cos(cos(cos(cos(cos(cos(cos(cos(sin(x2)))))))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000066",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "Abs(cos(x2))",
+    "runtime_sec": 9.598877228796482
+  },
+  "symbolicgpt_large/test/task_000067": {
+    "r2": 0.9999999999999991,
+    "r2_raw": 0.9999999999999991,
+    "r2_affine_refit": 0.9999999999999984,
+    "nmse": 8.828139585780918e-16,
+    "nmse_affine_refit": 1.5086708437178052e-15,
+    "expression": "(x0 + 0.9999976)*(x0 - 1*(-1.0000024))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000067",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x0 + 1.0)**2",
+    "runtime_sec": 7.798041957896203
+  },
+  "symbolicgpt_large/test/task_000068": {
+    "r2": 0.9997450153641494,
+    "r2_raw": 0.9997450153641494,
+    "r2_affine_refit": 0.9997964887248941,
+    "nmse": 0.0002549846358505744,
+    "nmse_affine_refit": 0.00020351127510581595,
+    "expression": "x0 + (cos(x2*cos(cos(sin(2.00519/x2)))) + cos(exp(cos(0.477367/x2))))*(-0.80330193)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000068",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0 + log(Abs(x2))",
+    "runtime_sec": 8.306850490160286
+  },
+  "symbolicgpt_large/test/task_000069": {
+    "r2": 0.9999999999999752,
+    "r2_raw": 0.9999999999999752,
+    "r2_affine_refit": 0.999999999999961,
+    "nmse": 2.475991719929668e-14,
+    "nmse_affine_refit": 3.891596595803087e-14,
+    "expression": "-x0 + x0 + exp(x0 - cos(x1 + x1)) - (-1)*7.375939e-9/((x1 + 1.7191961)*cos(cos(x2) - 0.7529417))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000069",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0 - cos(2*x1))",
+    "runtime_sec": 7.440142891835421
+  },
+  "symbolicgpt_large/test/task_000070": {
+    "r2": 0.9999999999999515,
+    "r2_raw": 0.9999999999999515,
+    "r2_affine_refit": 0.9999999999999506,
+    "nmse": 4.855821980231025e-14,
+    "nmse_affine_refit": 4.943236622286009e-14,
+    "expression": "cos(sin((0.15200889 - x1)*1.5266232e-9/sin(cos(x1*x1) + 0.04586042 - 1.5038898/x2 - 0.15200889/x2) + cos(x0 - (x0 + x2))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000070",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(1.0*sin(cos(x2)))",
+    "runtime_sec": 11.689580981153995
+  },
+  "symbolicgpt_large/test/task_000071": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 8.453256597311975e-31,
+    "expression": "x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000071",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2",
+    "runtime_sec": 8.338458735961467
+  },
+  "symbolicgpt_large/test/task_000072": {
+    "r2": 0.9999999999998037,
+    "r2_raw": 0.9999999999998037,
+    "r2_affine_refit": 0.9999999999998063,
+    "nmse": 1.9634171715686257e-13,
+    "nmse_affine_refit": 1.9377299026926975e-13,
+    "expression": "cos(-cos(x2) + 1.5699527e-8 + 3.1396152e-9/x2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000072",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "Abs(cos(cos(x2)))**(1/4)",
+    "runtime_sec": 8.133597198873758
+  },
+  "symbolicgpt_large/test/task_000074": {
+    "r2": 0.9999999999999991,
+    "r2_raw": 0.9999999999999991,
+    "r2_affine_refit": 0.9999999999999991,
+    "nmse": 9.304555711937094e-16,
+    "nmse_affine_refit": 8.908031365195479e-16,
+    "expression": "sin(x2) + 9.35735e-10/(((x1/(0.29754782*x2) + 1.7830784)/((x0/(-2.3311596)))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000074",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x2)",
+    "runtime_sec": 8.206908482126892
+  },
+  "symbolicgpt_large/test/task_000075": {
+    "r2": 0.9999999999999986,
+    "r2_raw": 0.9999999999999986,
+    "r2_affine_refit": 0.999999999999998,
+    "nmse": 1.4177175431465495e-15,
+    "nmse_affine_refit": 2.0525139097518807e-15,
+    "expression": "exp(x0 - 4.7274495e-10/(-x0 - 0.6210051)) - 2.4329005e-10/(-x0 - cos(x2) - 1.3143213)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000075",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0)",
+    "runtime_sec": 9.719641299918294
+  },
+  "symbolicgpt_large/test/task_000076": {
+    "r2": -0.11695838587168561,
+    "r2_raw": -0.11695838587168561,
+    "r2_affine_refit": 0.07052696450739271,
+    "nmse": 1.116958385868952,
+    "nmse_affine_refit": 0.9294730354903326,
+    "expression": "sin(sin(x2/(x2 - 1.4623926))/sin(x1/1.5488784 - 0.09766021))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000076",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1/log(Abs(x2))**3)",
+    "runtime_sec": 12.046750369016081
+  },
+  "symbolicgpt_large/test/task_000077": {
+    "r2": 0.9999999999999991,
+    "r2_raw": 0.9999999999999991,
+    "r2_affine_refit": 0.9999999999999989,
+    "nmse": 9.373439951904397e-16,
+    "nmse_affine_refit": 1.156649177422734e-15,
+    "expression": "x0*x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000077",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**2",
+    "runtime_sec": 6.5721529219299555
+  },
+  "symbolicgpt_large/test/task_000078": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 3.1118328839547216e-32,
+    "expression": "x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000078",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2",
+    "runtime_sec": 10.987582687754184
+  },
+  "symbolicgpt_large/test/task_000079": {
+    "r2": 0.9999999999999994,
+    "r2_raw": 0.9999999999999994,
+    "r2_affine_refit": 0.9999999999999993,
+    "nmse": 5.918051116133366e-16,
+    "nmse_affine_refit": 6.268170590253165e-16,
+    "expression": "1.0 - x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000079",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1 - x2",
+    "runtime_sec": 9.285977155901492
+  },
+  "symbolicgpt_large/test/task_000080": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 1.7235729205668805e-31,
+    "expression": "x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000080",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0",
+    "runtime_sec": 8.858115976210684
+  },
+  "symbolicgpt_large/test/task_000081": {
+    "r2": 0.9999999999999988,
+    "r2_raw": 0.9999999999999988,
+    "r2_affine_refit": 0.9999999999999981,
+    "nmse": 1.2067289013169814e-15,
+    "nmse_affine_refit": 1.8752277912222417e-15,
+    "expression": "x2*x2*x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000081",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2**3",
+    "runtime_sec": 7.522618893068284
+  },
+  "symbolicgpt_large/test/task_000082": {
+    "r2": 0.999817101326025,
+    "r2_raw": 0.999817101326025,
+    "r2_affine_refit": 0.9998264025195926,
+    "nmse": 0.000182898673973976,
+    "nmse_affine_refit": 0.00017359748040628642,
+    "expression": "sin(cos((x2 + sin(sin(x2 + sin(sin(x2 + sin(sin(sin(sin(sin(sin(x2 + sin(x2)*0.5499715)))))))))/0.93551075))*(-0.60980076))) + 0.13081118",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000082",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(sqrt(Abs(x2)))",
+    "runtime_sec": 9.25338772404939
+  },
+  "symbolicgpt_large/test/task_000084": {
+    "r2": 0.9999999999999961,
+    "r2_raw": 0.9999999999999961,
+    "r2_affine_refit": 0.9999999999999958,
+    "nmse": 3.885593693165567e-15,
+    "nmse_affine_refit": 4.202410703262121e-15,
+    "expression": "x1 + (x0 + x1 + x2*0.6711835 + cos(x0))*(-2.2683682e-8)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000084",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0*x1",
+    "runtime_sec": 10.409444814082235
+  },
+  "symbolicgpt_large/test/task_000085": {
+    "r2": 0.9999999999999996,
+    "r2_raw": 0.9999999999999996,
+    "r2_affine_refit": 0.9999999999999994,
+    "nmse": 4.594318498869279e-16,
+    "nmse_affine_refit": 5.061934590694516e-16,
+    "expression": "x0 + x0 + x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000085",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "2*x0 + x1",
+    "runtime_sec": 7.301854912191629
+  },
+  "symbolicgpt_large/test/task_000086": {
+    "r2": 0.9999999999999994,
+    "r2_raw": 0.9999999999999994,
+    "r2_affine_refit": 0.9999999999999996,
+    "nmse": 5.2678971027203e-16,
+    "nmse_affine_refit": 4.92298745672816e-16,
+    "expression": "sqrt(exp(2*x1)) + 7.682342e-9*(x1 + 0.8174082)/((x1 - 1.783107)*(x1 - 0.428810558708941*sqrt(exp(x0 - x1))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000086",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x1)",
+    "runtime_sec": 7.7561786086298525
+  },
+  "symbolicgpt_large/test/task_000087": {
+    "r2": 0.9829724850792253,
+    "r2_raw": 0.9829724850792253,
+    "r2_affine_refit": 0.9822260762731414,
+    "nmse": 0.017027514920763376,
+    "nmse_affine_refit": 0.01777392372684683,
+    "expression": "(cos(0.035865225/x1) - cos(x1/(-1.404557)) - 0.52479666/(0.14332367 + (x1 - 0.07078427)/((0.52479666/x1))))*0.7533903",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000087",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x1))",
+    "runtime_sec": 8.38489909376949
+  },
+  "symbolicgpt_large/test/task_000088": {
+    "r2": 0.9999999999999952,
+    "r2_raw": 0.9999999999999952,
+    "r2_affine_refit": 0.9999999999999949,
+    "nmse": 4.7922853482379566e-15,
+    "nmse_affine_refit": 5.1431665526087884e-15,
+    "expression": "(x0**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000088",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x0))",
+    "runtime_sec": 8.063729495275766
+  },
+  "symbolicgpt_large/test/task_000089": {
+    "r2": 0.9932892351954073,
+    "r2_raw": 0.9932892351954073,
+    "r2_affine_refit": 0.9932432914567476,
+    "nmse": 0.006710764804552279,
+    "nmse_affine_refit": 0.0067567085432117275,
+    "expression": "exp(exp((x0*x0/(-0.08668355) - cos(0.33220336/((x0/0.2432354))))*0.31492832) + x0/((-5.592321/x0)))*(-0.8488074) - 1*(-0.7440484)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000089",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x0))/2",
+    "runtime_sec": 8.876467288006097
+  },
+  "symbolicgpt_large/test/task_000090": {
+    "r2": 0.9999975761369971,
+    "r2_raw": 0.9999975761369971,
+    "r2_affine_refit": 0.999997598172155,
+    "nmse": 2.4238630028728827e-06,
+    "nmse_affine_refit": 2.4018278451078156e-06,
+    "expression": "2.1770256 + cos(x0/0.364089)*(-3.0012085/x1 - 109.9151/x0)*(-19.187464)/(x0*(x0*x0*2091.4946))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000090",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x0**2*sqrt(Abs(x1)) - 1)**2/x0**4",
+    "runtime_sec": 10.310356850270182
+  },
+  "symbolicgpt_large/test/task_000091": {
+    "r2": 0.9999999999999906,
+    "r2_raw": 0.9999999999999906,
+    "r2_affine_refit": 0.9999999999999896,
+    "nmse": 9.385024992466086e-15,
+    "nmse_affine_refit": 1.0472766905013335e-14,
+    "expression": "(x2**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000091",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x2))",
+    "runtime_sec": 7.266880162991583
+  },
+  "symbolicgpt_large/test/task_000092": {
+    "r2": 0.6145351735831468,
+    "r2_raw": 0.6145351735831468,
+    "r2_affine_refit": 0.6147243639910758,
+    "nmse": 0.38546482640971347,
+    "nmse_affine_refit": 0.385275636001788,
+    "expression": "-0.37401265 + 0.3350325/sin(sin(cos(x1)/(-0.28053564)) - 1*(-1.2632239))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000092",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1**3)**3/x1",
+    "runtime_sec": 7.569609651342034
+  },
+  "symbolicgpt_large/test/task_000093": {
+    "r2": 0.7794725342044418,
+    "r2_raw": 0.7794725342044418,
+    "r2_affine_refit": 0.7724375425272434,
+    "nmse": 0.2205274657954528,
+    "nmse_affine_refit": 0.22756245747264786,
+    "expression": "-0.5271141*cos(x2) + 1.6837496/(0.5864764 + 0.20874527/(0.54786146 + x1/x0) + x1/x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000093",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(sqrt(x2)*(x0 + x1)/x1))",
+    "runtime_sec": 9.19190321676433
+  },
+  "symbolicgpt_large/test/task_000094": {
+    "r2": 0.9999139728213721,
+    "r2_raw": 0.9999139728213721,
+    "r2_affine_refit": 0.9999108072680959,
+    "nmse": 8.602717862779244e-05,
+    "nmse_affine_refit": 8.919273190397465e-05,
+    "expression": "sqrt(5.61807112960037 - 5.61187351218711*cos(0.53780174*x1)) + 0.1463581*cos(x1 - 0.2273595/x1)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000094",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "Abs(x1)**(3/4)",
+    "runtime_sec": 7.60032603610307
+  },
+  "symbolicgpt_large/test/task_000095": {
+    "r2": 0.9999999999999996,
+    "r2_raw": 0.9999999999999996,
+    "r2_affine_refit": 0.9999999999999996,
+    "nmse": 4.4413394218136425e-16,
+    "nmse_affine_refit": 4.301182184991515e-16,
+    "expression": "x1 + sin(x1) + 0.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000095",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1 + sin(x1)",
+    "runtime_sec": 6.739507322199643
+  },
+  "symbolicgpt_large/test/task_000096": {
+    "r2": 0.9999800263094872,
+    "r2_raw": 0.9999800263094872,
+    "r2_affine_refit": 0.9999816441051004,
+    "nmse": 1.9973690511567237e-05,
+    "nmse_affine_refit": 1.8355894898608687e-05,
+    "expression": "sqrt(sin(sqrt(cos(1.9177452*cos(x2)) + 0.3394989))) - 0.08115057 + 0.066881746/cos(cos(sin(sin(sin(cos(x2))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000096",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(sin(x2)))",
+    "runtime_sec": 8.189185188151896
+  },
+  "symbolicgpt_large/test/task_000097": {
+    "r2": -78.95791356013916,
+    "r2_raw": -78.95791356013916,
+    "r2_affine_refit": -76.76724006567295,
+    "nmse": 79.9579135601363,
+    "nmse_affine_refit": 77.76724006567017,
+    "expression": "x0*(-0.23784326) + exp(0.20345458/cos(x1/(-1.3252971))) - exp(-0.13105184/cos(x2/(-1.3252971))) + sin(x1)*cos(x2/0.265724)/x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000097",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0/(x1 - sqrt(Abs(x1)) - Abs(x2))",
+    "runtime_sec": 9.713679570704699
+  },
+  "symbolicgpt_large/test/task_000098": {
+    "r2": 0.9999506694963355,
+    "r2_raw": 0.9999506694963355,
+    "r2_affine_refit": 0.9999524245573164,
+    "nmse": 4.933050366397214e-05,
+    "nmse_affine_refit": 4.757544268310666e-05,
+    "expression": "cos(x1*0.3143595 + sin(-0.47070786/(x1 + sin(1.5517565/(x1 + sin(0.9515478/(x1 + x1 + x1)))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000098",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(exp(sqrt(Abs(x1))/2))",
+    "runtime_sec": 7.908728684298694
+  },
+  "symbolicgpt_large/test/task_000099": {
+    "r2": 0.9363065799689122,
+    "r2_raw": 0.9363065799689122,
+    "r2_affine_refit": 0.9311438534071548,
+    "nmse": 0.06369342003108779,
+    "nmse_affine_refit": 0.06885614659284517,
+    "expression": "(358.23605 - x0*x1/(0.03302896*exp(cos(x0))))*(x0/(-29.20803) + x1/35.41091)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000099",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "-(x0 - x1)**3*sqrt(Abs(sin(cos(x0))))",
+    "runtime_sec": 9.79579059034586
+  },
+  "symbolicgpt_large/test/task_000100": {
+    "r2": 0.9999452307061056,
+    "r2_raw": 0.9999452307061056,
+    "r2_affine_refit": 0.9999429010269948,
+    "nmse": 5.476929389432068e-05,
+    "nmse_affine_refit": 5.709897300525143e-05,
+    "expression": "x1 - cos(sin(x1/2.604316)) - 0.29044324 - 3.1517675/(x1 - 1*2.4675727) + 3.142901/(x1 + 2.4673288)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000100",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0*x1 + 1.0/cos(sqrt(Abs(x1)))",
+    "runtime_sec": 8.761174708139151
+  },
+  "symbolicgpt_large/test/task_000101": {
+    "r2": 0.9999999999999993,
+    "r2_raw": 0.9999999999999993,
+    "r2_affine_refit": 0.9999999999999993,
+    "nmse": 6.907690147549542e-16,
+    "nmse_affine_refit": 6.916721339025627e-16,
+    "expression": "cos(x2) + 2.7555664e-9/((0.7448354 - x2)*(-x0 + x1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000101",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(x2)",
+    "runtime_sec": 7.661855203099549
+  },
+  "symbolicgpt_large/test/task_000102": {
+    "r2": 0.9999999999999996,
+    "r2_raw": 0.9999999999999996,
+    "r2_affine_refit": 0.9999999999999997,
+    "nmse": 4.860177988568154e-16,
+    "nmse_affine_refit": 3.5596106965570356e-16,
+    "expression": "1.0/(x1*x2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000102",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0/(x1*x2)",
+    "runtime_sec": 7.103359987959266
+  },
+  "symbolicgpt_large/test/task_000104": {
+    "r2": 0.9997490632792836,
+    "r2_raw": 0.9997490632792836,
+    "r2_affine_refit": 0.9997017306099549,
+    "nmse": 0.0002509367207115187,
+    "nmse_affine_refit": 0.00029826939003927566,
+    "expression": "cos(1.57079231078314*cos(cos(x1)/sqrt(sin(cos(cos(1.21653500757098*cos(cos(x1)/sqrt(cos(cos(x1))))))))))**(1/4) + 0.0023537432",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000104",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(cos(x1)))",
+    "runtime_sec": 8.587584100198
+  },
+  "symbolicgpt_large/test/task_000105": {
+    "r2": 0.9998238072711031,
+    "r2_raw": 0.9998238072711031,
+    "r2_affine_refit": 0.9998229592209767,
+    "nmse": 0.00017619272889692796,
+    "nmse_affine_refit": 0.00017704077902319093,
+    "expression": "7.7781057 - (exp(x1/((-0.06746548/x1)))*0.5259305 + exp(x1/((-1.2027496/x1))) + cos(x1/2.666696)*4.9784975)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000105",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(sqrt(Abs(x1)))",
+    "runtime_sec": 7.509348398074508
+  },
+  "symbolicgpt_large/test/task_000106": {
+    "r2": 0.9999953825042563,
+    "r2_raw": 0.9999953825042563,
+    "r2_affine_refit": 0.9999963889681657,
+    "nmse": 4.617495743580123e-06,
+    "nmse_affine_refit": 3.6110318343190675e-06,
+    "expression": "1.1024314*sqrt(sin(sqrt(cos(1.57078984339854*sin(x0))*sqrt(cos(sin(cos(cos(sin(1.48303407534768*sin(x0))))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000106",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(cos(x0)))",
+    "runtime_sec": 9.998180506750941
+  },
+  "symbolicgpt_large/test/task_000107": {
+    "r2": 0.999999999999988,
+    "r2_raw": 0.999999999999988,
+    "r2_affine_refit": 0.9999999999999898,
+    "nmse": 1.1989150428587326e-14,
+    "nmse_affine_refit": 1.0234467442488094e-14,
+    "expression": "(x0 - cos(x1))*(x0 - cos(x1))*(x0 - cos(x1))*(x0 - cos(x1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000107",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x0 - cos(x1))**4",
+    "runtime_sec": 7.859605966601521
+  },
+  "symbolicgpt_large/test/task_000108": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 3.724361221755417e-32,
+    "expression": "x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000108",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0",
+    "runtime_sec": 7.144347030669451
+  },
+  "symbolicgpt_large/test/task_000109": {
+    "r2": 0.9847381064289898,
+    "r2_raw": 0.9847381064289898,
+    "r2_affine_refit": 0.9847953840640715,
+    "nmse": 0.015261893571008926,
+    "nmse_affine_refit": 0.015204615935927233,
+    "expression": "x1*sin(-0.2800895/(x0 + 0.22304665*x0/((x2*x2)))) - 0.42051613*(-x2*x2 + cos(x2)) + 0.8902372",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000109",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x2*(x2**2 - x1/x0)))",
+    "runtime_sec": 8.221820744220167
+  },
+  "symbolicgpt_large/test/task_000110": {
+    "r2": 0.9986688459674029,
+    "r2_raw": 0.9986688459674029,
+    "r2_affine_refit": 0.9984426830583367,
+    "nmse": 0.0013311540325359982,
+    "nmse_affine_refit": 0.001557316941591775,
+    "expression": "(cos(sin(sin(sin(sin(sin(sin(sin(x0*(-0.6319413)))))*(-1.552076))))) - 1*0.0734348)*cos(x0*(-0.25644222))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000110",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(cos(Abs(x0)**(1/4))))",
+    "runtime_sec": 8.19763580802828
+  },
+  "symbolicgpt_large/test/task_000111": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 1.472461182378078e-33,
+    "nmse_affine_refit": 2.972143577005424e-32,
+    "expression": "x0 + x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000111",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "2*x0",
+    "runtime_sec": 7.320417464710772
+  },
+  "symbolicgpt_large/test/task_000112": {
+    "r2": 0.9999999999999993,
+    "r2_raw": 0.9999999999999993,
+    "r2_affine_refit": 0.9999999999999993,
+    "nmse": 6.31395585383138e-16,
+    "nmse_affine_refit": 6.616883037390114e-16,
+    "expression": "cos(x0 + x0 - (-1)*4.0663517e-9/cos(x0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000112",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(2*x0)",
+    "runtime_sec": 6.8317816038616
+  },
+  "symbolicgpt_large/test/task_000113": {
+    "r2": 0.9999999999999997,
+    "r2_raw": 0.9999999999999997,
+    "r2_affine_refit": 0.9999999999999996,
+    "nmse": 3.372507627801252e-16,
+    "nmse_affine_refit": 4.006263769465601e-16,
+    "expression": "x0*x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000113",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**2",
+    "runtime_sec": 7.329401319846511
+  },
+  "symbolicgpt_large/test/task_000114": {
+    "r2": 0.9999999999999998,
+    "r2_raw": 0.9999999999999998,
+    "r2_affine_refit": 0.9999999999999997,
+    "nmse": 2.1939160629266353e-16,
+    "nmse_affine_refit": 2.860198808299664e-16,
+    "expression": "exp(x0) + exp(x0*0.72491324 - cos(exp(x2 - 1*0.5490621)))*9.61772e-9/cos(x0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000114",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0)",
+    "runtime_sec": 7.7447232669219375
+  },
+  "symbolicgpt_large/test/task_000115": {
+    "r2": 0.9999999999999848,
+    "r2_raw": 0.9999999999999848,
+    "r2_affine_refit": 0.9999999999999851,
+    "nmse": 1.5161082179506756e-14,
+    "nmse_affine_refit": 1.4869306481892852e-14,
+    "expression": "exp(x2)*(2.750654 - 0.21276027/sin(x1 + x2))*cos(x0)*1.1123269e-8/(x1 + 0.4851658) + exp(x2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000115",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x2)",
+    "runtime_sec": 7.6778465285897255
+  },
+  "symbolicgpt_large/test/task_000116": {
+    "r2": 0.4730908390063766,
+    "r2_raw": 0.4730908390063766,
+    "r2_affine_refit": 0.4735204147668479,
+    "nmse": 0.5269091609935266,
+    "nmse_affine_refit": 0.5264795852330555,
+    "expression": "cos(0.450396552070999*cos(2.1082096*x0)/(x0**2)**(1/4)) + 1.4797881 - 5.91069897931669/(sqrt(x0**2) + 1.3929306)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000116",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x0))",
+    "runtime_sec": 7.217535110190511
+  },
+  "symbolicgpt_large/test/task_000117": {
+    "r2": 0.9999999999999992,
+    "r2_raw": 0.9999999999999992,
+    "r2_affine_refit": 0.9999999999999977,
+    "nmse": 8.303965922710223e-16,
+    "nmse_affine_refit": 2.3284292417070587e-15,
+    "expression": "exp(x2) + 4.6866133e-10/exp(x0*cos(x0/(x2 + exp(x0*0.9409039 + cos(x1))) + 1.3427279)*1.8870244)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000117",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x2)",
+    "runtime_sec": 7.810245374217629
+  },
+  "symbolicgpt_large/test/task_000118": {
+    "r2": 0.9999934405040367,
+    "r2_raw": 0.9999934405040367,
+    "r2_affine_refit": 0.9999934176973966,
+    "nmse": 6.559495963236241e-06,
+    "nmse_affine_refit": 6.582302603404538e-06,
+    "expression": "(1.0153173 - cos(x1*0.5433513))*(3.9156134 - sin(3.9022431 - (-0.25713602)*cos(x1*0.9239741))*cos(x1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000118",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(1)**2*sqrt(Abs(x1**3))",
+    "runtime_sec": 7.308038847986609
+  },
+  "symbolicgpt_large/test/task_000120": {
+    "r2": 0.9999999999999979,
+    "r2_raw": 0.9999999999999979,
+    "r2_affine_refit": 0.999999999999994,
+    "nmse": 2.1085786426787313e-15,
+    "nmse_affine_refit": 5.969609426454099e-15,
+    "expression": "(x0 + x1)/x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000120",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x0 + x1)/x2",
+    "runtime_sec": 7.440619129221886
+  },
+  "symbolicgpt_large/test/task_000121": {
+    "r2": 0.9999999999999958,
+    "r2_raw": 0.9999999999999958,
+    "r2_affine_refit": 0.9999999999999959,
+    "nmse": 4.1796654741918415e-15,
+    "nmse_affine_refit": 4.162803323767222e-15,
+    "expression": "x0*x0*x0*x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000121",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**4",
+    "runtime_sec": 6.737006304319948
+  },
+  "symbolicgpt_large/test/task_000122": {
+    "r2": 0.9989525269381078,
+    "r2_raw": 0.9989525269381078,
+    "r2_affine_refit": 0.9989645232381092,
+    "nmse": 0.0010474730618906733,
+    "nmse_affine_refit": 0.001035476761889222,
+    "expression": "(0.3591106 - 1.9702588*sin(sin(sin(x2*0.8832285 + (sin(x2 - 0.20401333) - 0.14386572)*0.411499)))/(x2 - 0.03841486))/1.0480152",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000122",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x2)) - 1.0",
+    "runtime_sec": 7.797951761167496
+  },
+  "symbolicgpt_large/test/task_000124": {
+    "r2": 0.9999999999999994,
+    "r2_raw": 0.9999999999999994,
+    "r2_affine_refit": 0.9999999999999993,
+    "nmse": 6.092471626397091e-16,
+    "nmse_affine_refit": 6.541487116457083e-16,
+    "expression": "sin(x1) - 2.6692035e-10*exp(-x1)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000124",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1)",
+    "runtime_sec": 7.525390523951501
+  },
+  "symbolicgpt_large/test/task_000125": {
+    "r2": 0.9999999999999993,
+    "r2_raw": 0.9999999999999993,
+    "r2_affine_refit": 0.9999999999999993,
+    "nmse": 6.417459523009581e-16,
+    "nmse_affine_refit": 6.491854026731706e-16,
+    "expression": "sin(x2) + 3.1841335e-10/((x0 + 0.40761495)*sin(x0/(-0.45061776)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000125",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x2)",
+    "runtime_sec": 7.313019901979715
+  },
+  "symbolicgpt_large/test/task_000126": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 4.4493247808039286e-32,
+    "expression": "x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000126",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1",
+    "runtime_sec": 7.373137474060059
+  },
+  "symbolicgpt_large/test/task_000127": {
+    "r2": 0.6874126264081732,
+    "r2_raw": 0.6874126264081732,
+    "r2_affine_refit": 0.6895338226338135,
+    "nmse": 0.31258737359182664,
+    "nmse_affine_refit": 0.31046617736618637,
+    "expression": "(x1*0.5943689 + exp(x2 - 1*0.34114262 - 0.92972183/(x0 + x2*x2)))*((x1 - 0.42201328)/(x1 + cos(x1 + 1.0129473)) - 1*(-0.25795683))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000127",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x1 + exp(x2))/log(Abs(x1))",
+    "runtime_sec": 8.345076534897089
+  },
+  "symbolicgpt_large/test/task_000128": {
+    "r2": 0.1979065240219381,
+    "r2_raw": 0.1979065240219381,
+    "r2_affine_refit": 0.18676079292708136,
+    "nmse": 0.8020934759777276,
+    "nmse_affine_refit": 0.8132392070725797,
+    "expression": "(-(1.7563223 - (-1)*0.042408038/(x2*x2)) + sin((x0 - 1.5636684)*(-6.8835497)))*cos(cos(x0*(-0.73684055))*3.088982 + 1.2197868) - 0.18283436",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000128",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(log(Abs(log(Abs(x0))**3))))",
+    "runtime_sec": 10.205615181941539
+  },
+  "symbolicgpt_large/test/task_000129": {
+    "r2": 0.9999999999999998,
+    "r2_raw": 0.9999999999999998,
+    "r2_affine_refit": 0.9999999999999998,
+    "nmse": 2.0690715575525845e-16,
+    "nmse_affine_refit": 1.9701698744665946e-16,
+    "expression": "x0 + x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000129",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0 + x1",
+    "runtime_sec": 6.619816663209349
+  },
+  "symbolicgpt_large/test/task_000130": {
+    "r2": 0.9999999999999987,
+    "r2_raw": 0.9999999999999987,
+    "r2_affine_refit": 0.9999999999999986,
+    "nmse": 1.346350646798101e-15,
+    "nmse_affine_refit": 1.4126452429855662e-15,
+    "expression": "cos(x0*(-2.1818756e-9)/sin(x1) + x2 - (-1)*2.1818756e-9/(0.8779396 - x2))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000130",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(x2)",
+    "runtime_sec": 7.816058619413525
+  },
+  "symbolicgpt_large/test/task_000131": {
+    "r2": 0.9999999999998941,
+    "r2_raw": 0.9999999999998941,
+    "r2_affine_refit": 0.9999999999998971,
+    "nmse": 1.059423324087429e-13,
+    "nmse_affine_refit": 1.028644216926539e-13,
+    "expression": "sin(x1*(x0 - 1*(-0.6406172))*1.289527e-9/(x0 - x1) + sin(x1*x1))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000131",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(sin(x1**2))",
+    "runtime_sec": 7.05844493675977
+  },
+  "symbolicgpt_large/test/task_000132": {
+    "r2": 0.9999999999999971,
+    "r2_raw": 0.9999999999999971,
+    "r2_affine_refit": 0.9999999999999971,
+    "nmse": 2.8888270449384008e-15,
+    "nmse_affine_refit": 2.891710295088497e-15,
+    "expression": "x0*x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000132",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**2",
+    "runtime_sec": 6.603471522219479
+  },
+  "symbolicgpt_large/test/task_000133": {
+    "r2": 0.9999515246855746,
+    "r2_raw": 0.9999515246855746,
+    "r2_affine_refit": 0.9999593907331239,
+    "nmse": 4.847531442407974e-05,
+    "nmse_affine_refit": 4.060926687494269e-05,
+    "expression": "(cos(0.9271286/cos(cos(sin(x1)))) + 0.14734173)**(1/4) + cos(1.245073/cos(cos(cos(cos(0.77305883/cos(cos(cos(x1))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000133",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(sin(x1)))",
+    "runtime_sec": 7.155245776288211
+  },
+  "symbolicgpt_large/test/task_000134": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 0.0,
+    "expression": "x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000134",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2",
+    "runtime_sec": 6.786821290850639
+  },
+  "symbolicgpt_large/test/task_000135": {
+    "r2": 0.9346208382982375,
+    "r2_raw": 0.9346208382982375,
+    "r2_affine_refit": 0.9454796085243622,
+    "nmse": 0.06537916170174508,
+    "nmse_affine_refit": 0.054520391475623216,
+    "expression": "(2.8441138 - (0.48385215 + (x1 - x2)/((-1.84977)*((-7.5877414/x2)))))*(cos(-7.5877414/((-4.93646)*(x2*(x1 - x2) + 0.5256736))) - 0.25059152)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000135",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x2*(x1 - 1.0*x2)))",
+    "runtime_sec": 7.182304100133479
+  },
+  "symbolicgpt_large/test/task_000136": {
+    "r2": 0.9999999999999949,
+    "r2_raw": 0.9999999999999949,
+    "r2_affine_refit": 0.9999999999999946,
+    "nmse": 5.106076178463891e-15,
+    "nmse_affine_refit": 5.441453451741862e-15,
+    "expression": "sin(x0 - (-1)*5.950732e-9/cos(x0))*sin(x0 - (-1)*5.950732e-9/cos(x0 + x1*x1*0.3068509) - (-1)*5.950732e-9/cos(x0))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000136",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x0)**2",
+    "runtime_sec": 8.378354641608894
+  },
+  "symbolicgpt_large/test/task_000138": {
+    "r2": 0.9999999999999983,
+    "r2_raw": 0.9999999999999983,
+    "r2_affine_refit": 0.9999999999999984,
+    "nmse": 1.7143049177611194e-15,
+    "nmse_affine_refit": 1.5976737025636237e-15,
+    "expression": "x1*x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000138",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0*x1**2",
+    "runtime_sec": 6.348072363063693
+  },
+  "symbolicgpt_large/test/task_000140": {
+    "r2": 0.9999999999999984,
+    "r2_raw": 0.9999999999999984,
+    "r2_affine_refit": 0.999999999999999,
+    "nmse": 1.5916399513727956e-15,
+    "nmse_affine_refit": 9.65238965215412e-16,
+    "expression": "x2*x2*(x2 - 1*(-3.0)) + x2 + x2 + x2 + cos(x2)*(-6.8419274e-7) + 1.0000002",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000140",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "(x2 + 1.0)**3",
+    "runtime_sec": 8.78692554216832
+  },
+  "symbolicgpt_large/test/task_000141": {
+    "r2": 0.7193567707553987,
+    "r2_raw": 0.7193567707553987,
+    "r2_affine_refit": 0.7017465552329858,
+    "nmse": 0.28064322924455803,
+    "nmse_affine_refit": 0.29825344476696813,
+    "expression": "(-x2*exp(exp(x0*(-0.32382822)*(x0 - 1*(-0.6096949)))) + x2/0.2805597)*sin(-1*(-0.088851705) + 0.8584627/(x1 - 0.16278689/x2))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000141",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2*sqrt(Abs(x0))/(x1 - log(Abs(x1)))",
+    "runtime_sec": 8.809122216887772
+  },
+  "symbolicgpt_large/test/task_000143": {
+    "r2": 0.9999999999999984,
+    "r2_raw": 0.9999999999999984,
+    "r2_affine_refit": 0.9999999999999984,
+    "nmse": 1.5111040727111332e-15,
+    "nmse_affine_refit": 1.5097072919463071e-15,
+    "expression": "-x1 + x2*x2*x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000143",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "-x1 + x2**3",
+    "runtime_sec": 6.4489074889570475
+  },
+  "symbolicgpt_large/test/task_000144": {
+    "r2": 0.999999999999995,
+    "r2_raw": 0.999999999999995,
+    "r2_affine_refit": 0.999999999999995,
+    "nmse": 4.9503670147480865e-15,
+    "nmse_affine_refit": 5.011395633112271e-15,
+    "expression": "(x0**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000144",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x0))",
+    "runtime_sec": 7.450665172189474
+  },
+  "symbolicgpt_large/test/task_000145": {
+    "r2": 0.9978479431503711,
+    "r2_raw": 0.9978479431503711,
+    "r2_affine_refit": 0.9975997252679218,
+    "nmse": 0.0021520568496176083,
+    "nmse_affine_refit": 0.0024002747320656086,
+    "expression": "3.72658664425426 - 6.28536316638885/((x0**2)**(1/4) + cos(sin(sqrt(cos(sin(sin(sin(1.6721116194702*sin(0.29648358/x0)))))))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000145",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x0))",
+    "runtime_sec": 7.959771296940744
+  },
+  "symbolicgpt_large/test/task_000146": {
+    "r2": 0.9876625043261344,
+    "r2_raw": 0.9876625043261344,
+    "r2_affine_refit": 0.9880305860607953,
+    "nmse": 0.01233749567384257,
+    "nmse_affine_refit": 0.01196941393918247,
+    "expression": "(cos(cos(cos(sin(sin(sin(sin(sin(sin(sin(x1*(-0.08181712)*x2)))))*(-4.27303))))*(-2.5302687))) - 0.60328346)/0.14621246",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000146",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(sin(log(Abs(x1*x2))))",
+    "runtime_sec": 7.447478083893657
+  },
+  "symbolicgpt_large/test/task_000147": {
+    "r2": 0.5345032194651449,
+    "r2_raw": 0.5345032194651449,
+    "r2_affine_refit": 0.5370097567604276,
+    "nmse": 0.46549678053405896,
+    "nmse_affine_refit": 0.46299024323878046,
+    "expression": "sin(1.0910532/((cos(-0.44404414/x0)*cos(0.77116764/((x1*x1)))/sin(0.9605864/cos(x0*0.42267093)))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000147",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(exp(log(Abs(x0))**2))",
+    "runtime_sec": 7.759571745991707
+  },
+  "symbolicgpt_large/test/task_000148": {
+    "r2": 0.9999999999999996,
+    "r2_raw": 0.9999999999999996,
+    "r2_affine_refit": 0.9999999999999993,
+    "nmse": 4.886490090757169e-16,
+    "nmse_affine_refit": 6.141053372434629e-16,
+    "expression": "x0*x0*x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000148",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**3",
+    "runtime_sec": 6.938916299957782
+  },
+  "symbolicgpt_large/test/task_000149": {
+    "r2": 0.9999999999999915,
+    "r2_raw": 0.9999999999999915,
+    "r2_affine_refit": 0.9999999999999906,
+    "nmse": 8.589690375583692e-15,
+    "nmse_affine_refit": 9.46107057598346e-15,
+    "expression": "(x0**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000149",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x0))",
+    "runtime_sec": 6.755890957079828
+  },
+  "symbolicgpt_large/test/task_000150": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 1.092430973027608e-32,
+    "nmse_affine_refit": 5.743504501248084e-18,
+    "expression": "x1 + x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000150",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1 + x2",
+    "runtime_sec": 7.726937144994736
+  },
+  "symbolicgpt_large/test/task_000151": {
+    "r2": 0.9999999999999993,
+    "r2_raw": 0.9999999999999993,
+    "r2_affine_refit": 0.9999999999999992,
+    "nmse": 6.976271033527736e-16,
+    "nmse_affine_refit": 7.480570883725632e-16,
+    "expression": "sqrt(exp(2*x0)) - 1.9581814e-8/((exp(x2) + cos(x2 - 0.61635536))*(x0 + x2 - 0.61635536))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000151",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(x0)",
+    "runtime_sec": 7.961193114053458
+  },
+  "symbolicgpt_large/test/task_000153": {
+    "r2": 0.3465173868034135,
+    "r2_raw": 0.3465173868034135,
+    "r2_affine_refit": 0.31455420304058324,
+    "nmse": 0.6534826131907775,
+    "nmse_affine_refit": 0.6854457969533237,
+    "expression": "(0.54862523 + 0.0040975744/x0)*cos((x0 - 1*(-0.06408543))*2.570219/(x1 + 0.18555582)) + 0.8185205",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000153",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(log(Abs(x0/x1))))",
+    "runtime_sec": 7.824115255847573
+  },
+  "symbolicgpt_large/test/task_000154": {
+    "r2": 0.9999999999999993,
+    "r2_raw": 0.9999999999999993,
+    "r2_affine_refit": 0.9999999999999993,
+    "nmse": 6.42231647198027e-16,
+    "nmse_affine_refit": 7.056769635655602e-16,
+    "expression": "x2*x2*x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000154",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2**3",
+    "runtime_sec": 7.5735175418667495
+  },
+  "symbolicgpt_large/test/task_000155": {
+    "r2": 0.9999999999999994,
+    "r2_raw": 0.9999999999999994,
+    "r2_affine_refit": 0.9999999999999994,
+    "nmse": 5.176349391703707e-16,
+    "nmse_affine_refit": 5.887922877662089e-16,
+    "expression": "x2 + sin(x2 + x2)*(-0.84147096)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000155",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2 - sin(1)*sin(2*x2)",
+    "runtime_sec": 9.051330426707864
+  },
+  "symbolicgpt_large/test/task_000156": {
+    "r2": 0.9999999999999951,
+    "r2_raw": 0.9999999999999951,
+    "r2_affine_refit": 0.9999999999999937,
+    "nmse": 4.938891611941804e-15,
+    "nmse_affine_refit": 6.28822443978051e-15,
+    "expression": "1.6487212509167*(x2**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000156",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(1/2)*sqrt(Abs(x2))",
+    "runtime_sec": 8.669620364904404
+  },
+  "symbolicgpt_large/test/task_000157": {
+    "r2": 0.9999014395958934,
+    "r2_raw": 0.9999014395958934,
+    "r2_affine_refit": 0.9999009199493588,
+    "nmse": 9.856040410609903e-05,
+    "nmse_affine_refit": 9.908005064060279e-05,
+    "expression": "cos(x0*(-0.6184628))*cos(sin(-x0 + (x0 - sin(sin(sin(x0) + sin(x0 + sin(x0)))))*0.50563526)*1.0324857) - 0.015823586",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000157",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(sqrt(Abs(x0)))",
+    "runtime_sec": 8.1023775129579
+  },
+  "symbolicgpt_large/test/task_000158": {
+    "r2": 0.9999999999999956,
+    "r2_raw": 0.9999999999999956,
+    "r2_affine_refit": 0.9999999999999954,
+    "nmse": 4.488498976882572e-15,
+    "nmse_affine_refit": 4.579714245855357e-15,
+    "expression": "(x0**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000158",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x0))",
+    "runtime_sec": 6.691365770064294
+  },
+  "symbolicgpt_large/test/task_000159": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 0.0,
+    "expression": "x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000159",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2",
+    "runtime_sec": 7.398647977039218
+  },
+  "symbolicgpt_large/test/task_000160": {
+    "r2": 0.999999995385461,
+    "r2_raw": 0.999999995385461,
+    "r2_affine_refit": 0.9999999956927854,
+    "nmse": 4.614538928602122e-09,
+    "nmse_affine_refit": 4.307214578149371e-09,
+    "expression": "sin(sin(sin(x2)*0.7983755))*1.5230237*cos(cos(x2)/(0.6439622 + cos(x2 + x2)*(-0.0072809877)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000160",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x2)**3",
+    "runtime_sec": 8.664415235165507
+  },
+  "symbolicgpt_large/test/task_000161": {
+    "r2": 0.997300100099851,
+    "r2_raw": 0.997300100099851,
+    "r2_affine_refit": 0.9971977295029076,
+    "nmse": 0.002699899900148984,
+    "nmse_affine_refit": 0.002802270497092333,
+    "expression": "x1*(x1*x1*cos(sin(x2)*(-1.5082395)*sin(x2)) - sin(cos(x2/0.50117916)*3.135744))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000161",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1**3*Abs(cos(x2))",
+    "runtime_sec": 7.670253395102918
+  },
+  "symbolicgpt_large/test/task_000162": {
+    "r2": 0.9999999999992475,
+    "r2_raw": 0.9999999999992475,
+    "r2_affine_refit": 0.9999999999991764,
+    "nmse": 7.525462633508824e-13,
+    "nmse_affine_refit": 8.235785348694648e-13,
+    "expression": "0.5 + cos(x1*(x1 + x1))*(-0.5)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000162",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1**2)**2",
+    "runtime_sec": 6.267214788123965
+  },
+  "symbolicgpt_large/test/task_000163": {
+    "r2": 0.2346159082125594,
+    "r2_raw": 0.2346159082125594,
+    "r2_affine_refit": 0.2763578630108907,
+    "nmse": 0.7653840917858582,
+    "nmse_affine_refit": 0.7236421369876131,
+    "expression": "sin(0.43026915/((0.075689636/exp(cos(x1)/(-0.7776974)))))*0.6873107",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000163",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1*(2*x1 - 1.0))",
+    "runtime_sec": 9.144500475842506
+  },
+  "symbolicgpt_large/test/task_000164": {
+    "r2": 0.9194025827991493,
+    "r2_raw": 0.9194025827991493,
+    "r2_affine_refit": 0.9378424484647725,
+    "nmse": 0.08059741719984773,
+    "nmse_affine_refit": 0.06215755153445407,
+    "expression": "sin(0.5765708 - 0.15347333/cos(1.1043843/((x0/(-0.58580273))))) + cos(2.9774163/x0)/1.8612428 + 0.37422085",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000164",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(log(Abs(x0))))",
+    "runtime_sec": 7.543289459776133
+  },
+  "symbolicgpt_large/test/task_000165": {
+    "r2": -0.7709304370479089,
+    "r2_raw": -0.7709304370479089,
+    "r2_affine_refit": -0.7698387171922647,
+    "nmse": 1.7709304370479082,
+    "nmse_affine_refit": 1.7698387171922638,
+    "expression": "sqrt(exp(1.5424902*x0) + 0.00234853863900758*exp((2*x0 + 10.468251)*cos(x1) + cos(13.304851*x1)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000165",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0*exp(x0)/Abs(sqrt(x1**2))",
+    "runtime_sec": 8.884790557902306
+  },
+  "symbolicgpt_large/test/task_000167": {
+    "r2": 0.7803838743495692,
+    "r2_raw": 0.7803838743495692,
+    "r2_affine_refit": 0.7804140949993643,
+    "nmse": 0.21961612564888894,
+    "nmse_affine_refit": 0.21958590499909403,
+    "expression": "cos(cos(x2 + sin(-0.34915927/x2) + sin(x2/1.0939546))*(-1.3106931))*1.5845482",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000167",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(log(Abs(log(Abs(x2))))))",
+    "runtime_sec": 8.180105820763856
+  },
+  "symbolicgpt_large/test/task_000168": {
+    "r2": 0.9999999999999949,
+    "r2_raw": 0.9999999999999949,
+    "r2_affine_refit": 0.9999999999999946,
+    "nmse": 5.064662944829009e-15,
+    "nmse_affine_refit": 5.407442550266503e-15,
+    "expression": "(x2**2)**(1/4)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000168",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x2))",
+    "runtime_sec": 6.633511135820299
+  },
+  "symbolicgpt_large/test/task_000169": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 5.32967784011479e-32,
+    "expression": "x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000169",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2",
+    "runtime_sec": 12.147756795864552
+  },
+  "symbolicgpt_large/test/task_000170": {
+    "r2": 0.9999999999999983,
+    "r2_raw": 0.9999999999999983,
+    "r2_affine_refit": 0.9999999999999983,
+    "nmse": 1.6449663387655171e-15,
+    "nmse_affine_refit": 1.6202442596245838e-15,
+    "expression": "x0*x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000170",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**2",
+    "runtime_sec": 7.540025363210589
+  },
+  "symbolicgpt_large/test/task_000171": {
+    "r2": 0.999999732481949,
+    "r2_raw": 0.999999732481949,
+    "r2_affine_refit": 0.9999997329349407,
+    "nmse": 2.67518051017225e-07,
+    "nmse_affine_refit": 2.670650593014102e-07,
+    "expression": "sin(1.2944646/sin(sin(sin(sin(exp(cos(sin(x1)*0.40324315))))))) + sin(sin(cos(sin(sin(x1*3.0130024)))))*(-0.0086645065)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000171",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(1.0/cos(cos(x1)))",
+    "runtime_sec": 7.792164626065642
+  },
+  "symbolicgpt_large/test/task_000172": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 2.798846337782511e-32,
+    "expression": "x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000172",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2",
+    "runtime_sec": 7.444676811806858
+  },
+  "symbolicgpt_large/test/task_000174": {
+    "r2": 0.9999999999999978,
+    "r2_raw": 0.9999999999999978,
+    "r2_affine_refit": 0.9999999999999979,
+    "nmse": 2.2479429981975868e-15,
+    "nmse_affine_refit": 2.1117053451501946e-15,
+    "expression": "1.4239969e-10*(-x0 - 1.123521)/((x1 + x2 + 0.9795054)*exp(-x1 + x2 - 1*(-0.24423435))) + exp(x1)/x1",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000174",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "1.0*exp(1.0*x1)/x1",
+    "runtime_sec": 7.275452948175371
+  },
+  "symbolicgpt_large/test/task_000175": {
+    "r2": 0.999999999996357,
+    "r2_raw": 0.999999999996357,
+    "r2_affine_refit": 0.9999999999963931,
+    "nmse": 3.643020273831517e-12,
+    "nmse_affine_refit": 3.606906585729697e-12,
+    "expression": "exp(cos(exp(x2) + exp((x0 + x1 - 16.4022)*1.941425) + exp(-x2 - 18.836184)))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000175",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "exp(cos(1.0*exp(x2)))",
+    "runtime_sec": 6.660425745416433
+  },
+  "symbolicgpt_large/test/task_000176": {
+    "r2": 0.9987345796820879,
+    "r2_raw": 0.9987345796820879,
+    "r2_affine_refit": 0.9987326213447849,
+    "nmse": 0.0012654203179110737,
+    "nmse_affine_refit": 0.0012673786552140445,
+    "expression": "(-(cos(x1*(-0.62523687))/2.06594 + 0.313405) + cos(cos(cos(sin(x1/((cos(cos(x1))*0.7349646))))*(-1.3181144))/x1))*1.345401",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000176",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x1))",
+    "runtime_sec": 7.4817526480183005
+  },
+  "symbolicgpt_large/test/task_000177": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 0.0,
+    "nmse_affine_refit": 4.214073740185614e-31,
+    "expression": "x0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000177",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0",
+    "runtime_sec": 6.9489170061424375
+  },
+  "symbolicgpt_large/test/task_000178": {
+    "r2": 0.9926419780239638,
+    "r2_raw": 0.9926419780239638,
+    "r2_affine_refit": 0.9926714919806859,
+    "nmse": 0.007358021976036157,
+    "nmse_affine_refit": 0.007328508019314061,
+    "expression": "(x0 + x1)*(x0*(2.526851 + (x0 + x1)/((7.4285975/x1))) + x1/0.39251572 - sin(x0) - sin(x1))/0.60220766 - 3.316576",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000178",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "Abs(x0 + x1)**3",
+    "runtime_sec": 7.551834053825587
+  },
+  "symbolicgpt_large/test/task_000179": {
+    "r2": 0.999999999999999,
+    "r2_raw": 0.999999999999999,
+    "r2_affine_refit": 0.9999999999999949,
+    "nmse": 9.573284728878772e-16,
+    "nmse_affine_refit": 5.054434540116126e-15,
+    "expression": "sin(1.0/(x1 - x2 + x2))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000179",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(1.0/x1)",
+    "runtime_sec": 6.93652771320194
+  },
+  "symbolicgpt_large/test/task_000180": {
+    "r2": 0.9972648188871472,
+    "r2_raw": 0.9972648188871472,
+    "r2_affine_refit": 0.9972506417690125,
+    "nmse": 0.0027351811128522286,
+    "nmse_affine_refit": 0.002749358230987008,
+    "expression": "4.872425 - exp((cos(sin(sin(x2)/sin(exp(cos(sin(x2)*1.4235395))))*3.5876446) - 1*(-4.4646764))*cos(x2*0.4583245)/2.046824)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000180",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x2**3))",
+    "runtime_sec": 7.77253688313067
+  },
+  "symbolicgpt_large/test/task_000182": {
+    "r2": 0.9933624642996464,
+    "r2_raw": 0.9933624642996464,
+    "r2_affine_refit": 0.9961501188884949,
+    "nmse": 0.00663753570033203,
+    "nmse_affine_refit": 0.003849881111492616,
+    "expression": "sqrt(-2.09693312416845*cos(0.53731155*x0 - 0.53731155*sin(x2)) + 2.09693312416845*cos(cos(sin(sin(0.87544394*x0 - 0.87544394*sin(x2))))) + 0.964622054120879) + 0.16789143",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000182",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sqrt(Abs(x0 - sin(x2)))",
+    "runtime_sec": 8.235644156113267
+  },
+  "symbolicgpt_large/test/task_000183": {
+    "r2": 0.9998914096168061,
+    "r2_raw": 0.9998914096168061,
+    "r2_affine_refit": 0.9998819325649418,
+    "nmse": 0.00010859038319384169,
+    "nmse_affine_refit": 0.00011806743505818355,
+    "expression": "x2 - cos(x0) + cos(1.8082622*cos(cos(cos(cos(x1))) - 1*(-0.63666844))/sin(x1)) - 0.32196322 - 0.18405542/cos(cos(cos(cos(x1))) - 1*(-0.62689483))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000183",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2 + log(Abs(sin(x1))) - cos(x0)",
+    "runtime_sec": 8.609074111096561
+  },
+  "symbolicgpt_large/test/task_000185": {
+    "r2": 0.9999999999999978,
+    "r2_raw": 0.9999999999999978,
+    "r2_affine_refit": 0.9999999999999977,
+    "nmse": 2.2724812292305573e-15,
+    "nmse_affine_refit": 2.370653210293855e-15,
+    "expression": "x2*x2*x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000185",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2**3",
+    "runtime_sec": 6.8049270757474005
+  },
+  "symbolicgpt_large/test/task_000186": {
+    "r2": 0.9991503478738633,
+    "r2_raw": 0.9991503478738633,
+    "r2_affine_refit": 0.9991551153576245,
+    "nmse": 0.0008496521261350813,
+    "nmse_affine_refit": 0.0008448846423738428,
+    "expression": "exp(x1*(x1 - sin(sin(-0.39881143/x1)))/(-0.5793075))*(-2.2821686) + exp(x1*(-0.11974501)*x1 - 1*0.53835315)*(-2.6911466) + 1.6372123",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000186",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs(x1))",
+    "runtime_sec": 7.161233047954738
+  },
+  "symbolicgpt_large/test/task_000187": {
+    "r2": 0.9999999999999565,
+    "r2_raw": 0.9999999999999565,
+    "r2_affine_refit": 0.9999999999999579,
+    "nmse": 4.35525165795481e-14,
+    "nmse_affine_refit": 4.2110632082557667e-14,
+    "expression": "x2*4.5065587e-10/(x1/((x2*0.37173873/sin(x0 + cos(x2*x2))))) + cos(x1*x2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000187",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(x1*x2)",
+    "runtime_sec": 7.329815024975687
+  },
+  "symbolicgpt_large/test/task_000188": {
+    "r2": -28.496658818502308,
+    "r2_raw": -28.496658818502308,
+    "r2_affine_refit": -26.835066280924025,
+    "nmse": 29.496658818499927,
+    "nmse_affine_refit": 27.835066280921783,
+    "expression": "sqrt(x2**2) + sin(0.370919055818125*x2) - sin(1.7059435/(0.37901327 - x2)) - 0.06098209 + 0.8462802/(0.46867076 - x2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000188",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "log(Abs((x2 + log(Abs(x2)))**3))",
+    "runtime_sec": 7.596405040938407
+  },
+  "symbolicgpt_large/test/task_000189": {
+    "r2": 0.8002713996697154,
+    "r2_raw": 0.8002713996697154,
+    "r2_affine_refit": 0.7989608800693531,
+    "nmse": 0.1997286003302341,
+    "nmse_affine_refit": 0.20103911993059612,
+    "expression": "-(x2 + sin(x2 + x2 + sin(x2))*(-1.777703))*sin(x0)/(-1.1257553) - 0.6816183/(1.4689488*1.8248976*(x1 - 1*1.7925894))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000189",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x2*sin(x0)/log(Abs(x2))",
+    "runtime_sec": 7.9164224388077855
+  },
+  "symbolicgpt_large/test/task_000191": {
+    "r2": 0.9999998164928582,
+    "r2_raw": 0.9999998164928582,
+    "r2_affine_refit": 0.9999998167636512,
+    "nmse": 1.8350714179990693e-07,
+    "nmse_affine_refit": 1.832363487387166e-07,
+    "expression": "(cos(cos(x1)*(-1.6432664)) - 1*(-0.07434586))*sin(sin(x1 - (-0.0021352374)*sin(x1*3.9820154))*1.1964886)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000191",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(x1)**3",
+    "runtime_sec": 8.130583230871707
+  },
+  "symbolicgpt_large/test/task_000192": {
+    "r2": 0.9999999999999983,
+    "r2_raw": 0.9999999999999983,
+    "r2_affine_refit": 0.9999999999999984,
+    "nmse": 1.6847275906090394e-15,
+    "nmse_affine_refit": 1.5160118081363743e-15,
+    "expression": "-x0 + x1 + sin(x0*x0) - 1.7564741e-9/sin(x2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000192",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "-x0 + x1 + sin(x0**2)",
+    "runtime_sec": 6.800809376873076
+  },
+  "symbolicgpt_large/test/task_000193": {
+    "r2": 0.5337758964496832,
+    "r2_raw": 0.5337758964496832,
+    "r2_affine_refit": 0.5332991780541194,
+    "nmse": 0.4662241035486776,
+    "nmse_affine_refit": 0.4667008219442397,
+    "expression": "sin(sin(0.4729093 - sin(x2/1.8552672 + sin((0.25815263 - x2)*(2.958889 - x0)*sin(x1 + 1.0342695)/1.6421419))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000193",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "sin(exp(exp(x2**3)))",
+    "runtime_sec": 7.810457489918917
+  },
+  "symbolicgpt_large/test/task_000194": {
+    "r2": 0.9999999999999909,
+    "r2_raw": 0.9999999999999909,
+    "r2_affine_refit": 0.9999999999999901,
+    "nmse": 9.069602368342098e-15,
+    "nmse_affine_refit": 9.881905361672152e-15,
+    "expression": "cos(sin(x0)*cos(4.9600298e-5*(-x2 + sin(-x1 + x2) - 1*1.9060616)*cos(x1*x2 - 1*(-1.2528414))))",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000194",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "cos(sin(x0))",
+    "runtime_sec": 7.085119175724685
+  },
+  "symbolicgpt_large/test/task_000195": {
+    "r2": 0.9999999999999777,
+    "r2_raw": 0.9999999999999777,
+    "r2_affine_refit": 0.9999999999999776,
+    "nmse": 2.233800607914425e-14,
+    "nmse_affine_refit": 2.246458138861923e-14,
+    "expression": "sqrt(x2**2)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000195",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "Abs(x2)",
+    "runtime_sec": 6.789358383975923
+  },
+  "symbolicgpt_large/test/task_000196": {
+    "r2": 1.0,
+    "r2_raw": 1.0,
+    "r2_affine_refit": 1.0,
+    "nmse": 5.797950379173562e-33,
+    "nmse_affine_refit": 2.695181744812644e-18,
+    "expression": "x0 - x2",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000196",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0 - x2",
+    "runtime_sec": 7.315528268925846
+  },
+  "symbolicgpt_large/test/task_000197": {
+    "r2": 0.9999999999999979,
+    "r2_raw": 0.9999999999999979,
+    "r2_affine_refit": 0.999999999999997,
+    "nmse": 2.1544275990299798e-15,
+    "nmse_affine_refit": 2.9783188160176484e-15,
+    "expression": "x1 + x2 - 1*1.0",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000197",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x1 + x2 - 1.0",
+    "runtime_sec": 7.100969194434583
+  },
+  "symbolicgpt_large/test/task_000198": {
+    "r2": 0.9999994218460831,
+    "r2_raw": 0.9999994218460831,
+    "r2_affine_refit": 0.9999994754199169,
+    "nmse": 5.7815391685439e-07,
+    "nmse_affine_refit": 5.245800831594779e-07,
+    "expression": "(x0 + sin(x0) + 3.690711)*4.4313335 - exp(x0 + 3.6907048) + exp(x0*0.784543 + x0 + sin(x0)*(-0.12926988) + 2.4520726)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000198",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "x0**4*exp(x0) - x1**2",
+    "runtime_sec": 9.203759930562228
+  },
+  "symbolicgpt_large/test/task_000199": {
+    "r2": 0.9999999999999846,
+    "r2_raw": 0.9999999999999846,
+    "r2_affine_refit": 0.9999999999999851,
+    "nmse": 1.5382324870866958e-14,
+    "nmse_affine_refit": 1.4899969350614456e-14,
+    "expression": "exp(sin((x2 + x2/x1)*(-4.3888377e-9)/0.43790156 + x2/x1) - 1.0)",
+    "status": "ok",
+    "error": "",
+    "error_type": "",
+    "task_id": "symbolicgpt_large/test/task_000199",
+    "method": "PySR",
+    "suite": "symbolicgpt_large",
+    "domain": "synthetic_symbolicgpt",
+    "split": "test",
+    "has_dummy_vars": false,
+    "n_train": 80,
+    "n_test": 20,
+    "n_vars": 3,
+    "variable_names": [
+      "x0",
+      "x1",
+      "x2"
+    ],
+    "budget": {
+      "niterations": 100
+    },
+    "ground_truth": "0.367879441171442*exp(sin(x2/x1))",
+    "runtime_sec": 6.967766192741692
+  }
+}
