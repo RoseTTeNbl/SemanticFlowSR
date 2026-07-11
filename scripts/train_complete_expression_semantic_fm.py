@@ -4881,8 +4881,6 @@ def _train_semantic_base_flow(
                 for example, theta_t, predicted, target in zip(selected_examples, theta_batch, predicted_batch, target_batch):
                     active = example.active_mask.to(device)
                     weights = active.float()
-                    bootstrap_gate = active.repeat_interleave(int(base.template.source_count)).to(predicted.dtype)
-                    predicted = predicted * bootstrap_gate
                     active_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, weights, eps=float(args.fisher_eps))
                     inactive = ~active
                     inactive_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, inactive.float(), eps=float(args.fisher_eps))
