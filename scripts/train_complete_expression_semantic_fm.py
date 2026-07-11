@@ -8970,6 +8970,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         template.num_vars,
         device=torch.device("cpu"),
     )
+    if require_trace_cache:
+        cached_ids = set(cached_records or {})
+        missing_train = [str(task.name) for task in train_raw if str(task.name) not in cached_ids]
+        missing_eval = [str(task.name) for task in eval_raw if str(task.name) not in cached_ids]
+        train_raw = [task for task in train_raw if str(task.name) in cached_ids]
+        eval_raw = [task for task in eval_raw if str(task.name) in cached_ids]
+        source_counts["trace_cache_skipped_train_task_count"] = len(missing_train)
+        source_counts["trace_cache_skipped_eval_task_count"] = len(missing_eval)
+        source_counts["trace_cache_skipped_task_ids"] = missing_train + missing_eval
+        if not train_raw:
+            raise RuntimeError("compiled trace cache leaves no training tasks")
     print(
         json.dumps(
             {

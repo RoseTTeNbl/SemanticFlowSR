@@ -38,6 +38,7 @@ def main() -> None:
     parser.add_argument("--eval-fraction", type=float, default=0.2)
     parser.add_argument("--task-id-filter", default="")
     parser.add_argument("--allow-empty-eval", action="store_true")
+    parser.add_argument("--allow-incomplete", action="store_true")
     parser.add_argument("--num-vars", type=int, default=3)
     parser.add_argument("--num-layers", type=int, default=12)
     parser.add_argument("--num-registers", type=int, default=17)
@@ -66,10 +67,13 @@ def main() -> None:
             copy_assignment=args.trace_copy_assignment,
         ))
     failed = [task.task_id for task in bundles if not task.traces]
-    if failed:
+    if failed and not args.allow_incomplete:
         raise RuntimeError(f"cannot build strict trace cache; tasks without valid traces: {failed[:8]}")
     records = [trace_record(task, template, task.traces, task.compile_failures) for task in bundles]
     manifest = write_trace_cache(Path(args.out), template, records)
+    manifest["skipped_task_ids"] = failed
+    manifest_path = Path(args.out) / "compiled_trace_families_v1.manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(json.dumps({"status": "ok", "source_counts": counts, **manifest}, indent=2))
 
 
