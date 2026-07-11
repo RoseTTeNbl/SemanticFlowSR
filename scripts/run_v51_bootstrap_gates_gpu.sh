@@ -39,7 +39,9 @@ run_gate() {
 for gate_seed in 20260711 20260712 20260713; do
   SEED="$gate_seed" run_gate A "livermore/Livermore-5" "gate_a_livermore5_seed${gate_seed}"
 done
-run_gate B "livermore/Livermore-5,livermore/Livermore-8,nguyen/Nguyen-1,nguyen/Nguyen-3,nguyen/Nguyen-5,nguyen/Nguyen-6,nguyen/Nguyen-7,nguyen/Nguyen-8" gate_b_8tasks
+run_gate B "livermore/Livermore-3,livermore/Livermore-4,livermore/Livermore-5,nguyen/Nguyen-1,nguyen/Nguyen-3,nguyen/Nguyen-5,nguyen/Nguyen-6,nguyen/Nguyen-7" gate_b_8tasks
 "$PY" scripts/train_complete_expression_semantic_fm.py \
   --out "$BASE/gate_c_24_8" --bootstrap-gate C --suites nguyen constant livermore jin \
-  --train-task-limit 24 --eval-task-limit 8 "${COMMON[@]}"
+  --symbolicgpt-root data/generated/symbolicgpt_large_2000_200_200 \
+  --symbolicgpt-train-limit 20 --symbolicgpt-eval-limit 8 \
+  --train-task-limit 4 --eval-task-limit 0 "${COMMON[@]}"
