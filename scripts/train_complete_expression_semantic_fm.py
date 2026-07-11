@@ -1858,30 +1858,43 @@ class TaskConditionedVelocityNetV5(FixedSymbolConditionedVelocityNet):
         return self._predict_field(x, y, theta, float(t), theta)
 
 
-class ResidualVelocityHeadV5(nn.Module):
-    """Lightweight task-conditioned residual head with no route input."""
+class ResidualFeatureTrunkV5(nn.Module):
+    """Shared task/state feature map evaluated once for all residual stages."""
 
     def __init__(self, template: Any, hidden: int):
         super().__init__()
         self.template = template
         self.theta_dim = theta_dim(template)
         stat_dim = _task_stat_dim(int(template.num_vars))
-        width = max(int(hidden) // 2, 64)
+        self.width = max(int(hidden) // 2, 64)
         self.net = nn.Sequential(
-            nn.Linear(self.theta_dim + stat_dim + 1, width),
+            nn.Linear(self.theta_dim + stat_dim + 1, self.width),
             nn.SiLU(),
-            nn.Linear(width, width),
+            nn.Linear(self.width, self.width),
             nn.SiLU(),
-            nn.Linear(width, self.theta_dim),
         )
-        nn.init.zeros_(self.net[-1].weight)
-        nn.init.zeros_(self.net[-1].bias)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
         state = theta.float().flatten()
         stats = task_stat_features(x.to(state.device), y.to(state.device), int(self.template.num_vars)).to(state.device)
         time_feature = state.new_tensor([float(t)])
-        raw = self.net(torch.cat([state / 8.0, stats, time_feature], dim=0))
+        return self.net(torch.cat([state / 8.0, stats, time_feature], dim=0))
+
+
+class ResidualVelocityHeadV5(nn.Module):
+    """One inexpensive output head on the shared residual feature trunk."""
+
+    def __init__(self, template: Any, hidden: int):
+        super().__init__()
+        self.template = template
+        self.theta_dim = theta_dim(template)
+        self.feature_width = max(int(hidden) // 2, 64)
+        self.output = nn.Linear(self.feature_width, self.theta_dim)
+        nn.init.zeros_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        raw = self.output(features)
         return center_theta(20.0 * torch.tanh(raw / 20.0), self.template)
 
 
@@ -1923,6 +1936,7 @@ class PoissonResidualVelocityV5(nn.Module):
         self.hidden = base.hidden
         self.semantic_features = False
         self.active_node_semantic_features = False
+        self.residual_trunk = ResidualFeatureTrunkV5(self.template, int(self.hidden))
         self.residual_heads = nn.ModuleList()
         self.register_buffer("residual_step_sizes", torch.zeros(0, dtype=torch.float32))
 
@@ -1936,8 +1950,10 @@ class PoissonResidualVelocityV5(nn.Module):
 
     def forward(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
         velocity = self.base(x, y, theta, float(t))
-        for index, head in enumerate(self.residual_heads):
-            velocity = velocity + self.residual_step_sizes[index].to(velocity) * head(x, y, theta, float(t))
+        if self.residual_heads:
+            features = self.residual_trunk(x, y, theta, float(t))
+            for index, head in enumerate(self.residual_heads):
+                velocity = velocity + self.residual_step_sizes[index].to(velocity) * head(features)
         return center_theta(velocity, self.template)
 
 
@@ -7825,12 +7841,24 @@ def _train_v5_residual_head(
     for parameter in flow.parameters():
         parameter.requires_grad_(False)
     head = ResidualVelocityHeadV5(flow.template, int(args.hidden)).to(device)
-    optimizer = torch.optim.AdamW(head.parameters(), lr=float(args.cycle_flow_lr), weight_decay=float(args.weight_decay))
+    train_trunk = len(flow.residual_heads) == 0
+    if train_trunk:
+        for parameter in flow.residual_trunk.parameters():
+            parameter.requires_grad_(True)
+    trainable_parameters = list(head.parameters())
+    if train_trunk:
+        trainable_parameters.extend(flow.residual_trunk.parameters())
+    optimizer = torch.optim.AdamW(
+        trainable_parameters,
+        lr=float(args.cycle_flow_lr),
+        weight_decay=float(args.weight_decay),
+    )
     rng = random.Random(int(args.seed) + 120_011 * int(iteration))
     step_size = float(args.cycle_correction_step)
     curve: list[dict[str, Any]] = []
     best = float("inf")
     best_state: dict[str, torch.Tensor] | None = None
+    best_trunk_state: dict[str, torch.Tensor] | None = None
     for epoch in range(max(int(args.cycle_flow_epochs), 1)):
         losses: list[float] = []
         zero_losses: list[float] = []
@@ -7861,12 +7889,13 @@ def _train_v5_residual_head(
                         float(t),
                     )
                     target_residual = (corrected_velocity - reference_velocity) / max(step_size, 1.0e-8)
-                predicted = head(
+                features = flow.residual_trunk(
                     example.task.x_train.to(device),
                     example.task.y_train.to(device),
                     theta_t,
                     float(t),
                 )
+                predicted = head(features)
                 block_weights = torch.ones(len(flow.template.blocks), dtype=torch.float32, device=device)
                 loss, _ = stage1_velocity_loss(
                     theta_t,
@@ -7888,7 +7917,7 @@ def _train_v5_residual_head(
                 zero_losses.append(float(zero.detach().cpu()))
             objective = torch.stack(batch).mean()
             objective.backward()
-            torch.nn.utils.clip_grad_norm_(head.parameters(), float(args.grad_clip))
+            torch.nn.utils.clip_grad_norm_(trainable_parameters, float(args.grad_clip))
             optimizer.step()
             losses.append(float(objective.detach().cpu()))
         mean_loss = float(np.mean(losses)) if losses else 0.0
@@ -7896,6 +7925,11 @@ def _train_v5_residual_head(
         if mean_loss < best:
             best = mean_loss
             best_state = {key: value.detach().cpu().clone() for key, value in head.state_dict().items()}
+            if train_trunk:
+                best_trunk_state = {
+                    key: value.detach().cpu().clone()
+                    for key, value in flow.residual_trunk.state_dict().items()
+                }
         row = {
             "phase": "v5_residual_fisher_matching",
             "iteration": int(iteration),
@@ -7909,6 +7943,8 @@ def _train_v5_residual_head(
             print(json.dumps(row), flush=True)
     if best_state is not None:
         head.load_state_dict({key: value.to(device) for key, value in best_state.items()})
+    if best_trunk_state is not None:
+        flow.residual_trunk.load_state_dict({key: value.to(device) for key, value in best_trunk_state.items()})
     for parameter in flow.parameters():
         parameter.requires_grad_(False)
     return head, curve, dict(curve[-1])

@@ -59,6 +59,31 @@ def test_v5_base_and_residual_field_are_finite_and_route_free():
     assert flow.velocity_parameterization == "direct_velocity"
 
 
+def test_v5_residual_stages_share_one_feature_trunk_call():
+    template = _template()
+    base = TaskConditionedVelocityNetV5(
+        template,
+        32,
+        global_state_mode="full",
+        metadata_embedding_dim=0,
+        task_encoder_mode="stats",
+        task_conditioning="xy",
+    )
+    flow = PoissonResidualVelocityV5(base)
+    flow.add_residual(ResidualVelocityHeadV5(template, 32), 0.1)
+    flow.add_residual(ResidualVelocityHeadV5(template, 32), 0.1)
+    calls = []
+    hook = flow.residual_trunk.register_forward_hook(lambda *_args: calls.append(1))
+    theta = random_theta(template, scale=0.5, device=torch.device("cpu"))
+    x = torch.linspace(-1.0, 1.0, 12).unsqueeze(1)
+    y = x[:, 0].square()
+
+    flow(x, y, theta, 0.4)
+    hook.remove()
+
+    assert len(calls) == 1
+
+
 def test_v5_potential_depends_on_task_and_endpoint_probabilities():
     template = _template()
     theta = torch.stack([
