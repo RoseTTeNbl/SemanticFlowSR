@@ -28,6 +28,11 @@ from semflow_sr.data.benchmark_loader import SRTask, load_materialized_task
 from semflow_sr.data.benchmark_manifest import load_benchmark_manifest
 from semflow_sr.data.symbolicgpt_subset import load_symbolicgpt_subset_tasks
 from semflow_sr.eval.metrics import accuracy_rate, nmse, r2_score
+from semflow_sr.flow.semantic_poisson import (
+    exponential_fisher_correction,
+    poisson_summary,
+    weighted_poisson_loss,
+)
 from semflow_sr.one_step_fisher import (
     CorrectionBudgetError,
     FISHER_TIME_BINS,
@@ -87,6 +92,8 @@ DEFAULT_OPS = (
     "protected_sqrt",
     "exp",
 )
+
+V5_OBJECTIVE_VERSION = "semantic_poisson_residual_fisher_v5"
 
 
 @dataclass(frozen=True)
@@ -429,6 +436,17 @@ class CycleCoupledExample:
     sample_weight: float = 1.0
     target_choices: tuple[int, ...] | None = None
     is_gt_anchor: bool = False
+
+
+@dataclass
+class V5ResidualExample:
+    task: TaskBundle
+    theta0: torch.Tensor
+    reference_theta1: torch.Tensor
+    corrected_theta1: torch.Tensor
+    source_index: int
+    energy: float
+    diagnostics: dict[str, Any]
 
 
 def _resolve_device(name: str) -> torch.device:
@@ -1815,6 +1833,129 @@ class FixedSymbolConditionedVelocityNet(nn.Module):
         return center_theta(20.0 * torch.tanh(out / 20.0), self.template)
 
 
+class TaskConditionedVelocityNetV5(FixedSymbolConditionedVelocityNet):
+    """Route-free direct field used by the v5 Poisson residual cycle."""
+
+    route_free = True
+
+    def __init__(self, template: Any, hidden: int, **kwargs: Any):
+        kwargs.pop("velocity_parameterization", None)
+        kwargs.pop("active_node_semantic_features", None)
+        # The old online register semantic path contains hard-prefix and signed
+        # pair work.  V5 evaluates complete semantics once at the endpoint.
+        kwargs["semantic_features"] = False
+        super().__init__(
+            template,
+            hidden,
+            velocity_parameterization="direct_velocity",
+            active_node_semantic_features=False,
+            **kwargs,
+        )
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
+        # Reuse the established state/task trunk while making every former
+        # seed channel a deterministic function of the current Eulerian state.
+        return self._predict_field(x, y, theta, float(t), theta)
+
+
+class ResidualVelocityHeadV5(nn.Module):
+    """Lightweight task-conditioned residual head with no route input."""
+
+    def __init__(self, template: Any, hidden: int):
+        super().__init__()
+        self.template = template
+        self.theta_dim = theta_dim(template)
+        stat_dim = _task_stat_dim(int(template.num_vars))
+        width = max(int(hidden) // 2, 64)
+        self.net = nn.Sequential(
+            nn.Linear(self.theta_dim + stat_dim + 1, width),
+            nn.SiLU(),
+            nn.Linear(width, width),
+            nn.SiLU(),
+            nn.Linear(width, self.theta_dim),
+        )
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
+        state = theta.float().flatten()
+        stats = task_stat_features(x.to(state.device), y.to(state.device), int(self.template.num_vars)).to(state.device)
+        time_feature = state.new_tensor([float(t)])
+        raw = self.net(torch.cat([state / 8.0, stats, time_feature], dim=0))
+        return center_theta(20.0 * torch.tanh(raw / 20.0), self.template)
+
+
+class ConditionalSemanticPotentialV5(nn.Module):
+    """Scalar endpoint potential conditioned only on the task and endpoint."""
+
+    def __init__(self, template: Any, hidden: int):
+        super().__init__()
+        self.template = template
+        self.theta_dim = theta_dim(template)
+        stat_dim = _task_stat_dim(int(template.num_vars))
+        width = max(int(hidden) // 2, 64)
+        self.net = nn.Sequential(
+            nn.Linear(self.theta_dim + stat_dim, width),
+            nn.SiLU(),
+            nn.Linear(width, width),
+            nn.SiLU(),
+            nn.Linear(width, 1),
+        )
+
+    def forward(self, probabilities: torch.Tensor, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+        particles = probabilities if probabilities.ndim == 3 else probabilities.unsqueeze(0)
+        stats = task_stat_features(x.to(particles.device), y.to(particles.device), int(self.template.num_vars))
+        stats = stats.unsqueeze(0).expand(int(particles.shape[0]), -1)
+        features = torch.cat([particles.flatten(start_dim=1), stats], dim=1)
+        return self.net(features).squeeze(-1)
+
+
+class PoissonResidualVelocityV5(nn.Module):
+    """One route-free base field plus inexpensive frozen residual stages."""
+
+    route_free = True
+    velocity_parameterization = "direct_velocity"
+
+    def __init__(self, base: TaskConditionedVelocityNetV5):
+        super().__init__()
+        self.base = base
+        self.template = base.template
+        self.hidden = base.hidden
+        self.semantic_features = False
+        self.active_node_semantic_features = False
+        self.residual_heads = nn.ModuleList()
+        self.register_buffer("residual_step_sizes", torch.zeros(0, dtype=torch.float32))
+
+    def add_residual(self, head: ResidualVelocityHeadV5, step_size: float) -> None:
+        self.residual_heads.append(head)
+        steps = torch.cat([
+            self.residual_step_sizes.detach().cpu(),
+            torch.tensor([float(step_size)], dtype=torch.float32),
+        ])
+        self.residual_step_sizes = steps.to(next(self.parameters()).device)
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor, theta: torch.Tensor, t: float) -> torch.Tensor:
+        velocity = self.base(x, y, theta, float(t))
+        for index, head in enumerate(self.residual_heads):
+            velocity = velocity + self.residual_step_sizes[index].to(velocity) * head(x, y, theta, float(t))
+        return center_theta(velocity, self.template)
+
+
+def _call_velocity_field(
+    model: nn.Module,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    theta: torch.Tensor,
+    t: float,
+    theta0: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if bool(getattr(model, "route_free", False)):
+        return model(x, y, theta, float(t))
+    if theta0 is None:
+        raise ValueError("legacy route-conditioned field requires theta0")
+    return model(x, y, theta, float(t), theta0)
+
+
 def _meta_rows(template: FixedSymbolTemplate) -> tuple[torch.Tensor, torch.Tensor]:
     block_rows, action_rows = [], []
     max_layer = max(float(template.num_layers), 1.0)
@@ -2553,9 +2694,16 @@ def rollout(
             model.template,
         )
         with torch.no_grad():
-            velocity = model(task.x_train, task.y_train, theta, min(t, 1.0), theta0)
+            velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, min(t, 1.0), theta0)
             mid_theta = integrate(theta, velocity, model.template, dt=0.5 * dt)
-            mid_velocity = model(task.x_train, task.y_train, mid_theta, min(t + 0.5 * dt, 1.0), theta0)
+            mid_velocity = _call_velocity_field(
+                model,
+                task.x_train,
+                task.y_train,
+                mid_theta,
+                min(t + 0.5 * dt, 1.0),
+                theta0,
+            )
             theta = integrate(theta, mid_velocity, model.template, dt=dt)
             after_probability = masked_block_softmax(
                 theta.view(len(model.template.blocks), int(model.template.source_count)),
@@ -2606,9 +2754,10 @@ def rollout_with_snapshots(
             model.template,
         )
         with torch.no_grad():
-            velocity = model(task.x_train, task.y_train, theta, t, theta0)
+            velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, t, theta0)
             midpoint = integrate(theta, velocity, model.template, dt=0.5 * dt)
-            midpoint_velocity = model(
+            midpoint_velocity = _call_velocity_field(
+                model,
                 task.x_train,
                 task.y_train,
                 midpoint,
@@ -2747,7 +2896,7 @@ def temporal_action_weight_rows(
         if step < total_steps and endpoint is None:
             mid_t = (float(step) + 0.5) / float(total_steps)
             with torch.no_grad():
-                velocity = model(task.x_train, task.y_train, theta, mid_t, theta0)
+                velocity = _call_velocity_field(model, task.x_train, task.y_train, theta, mid_t, theta0)
                 theta = integrate(theta, velocity, model.template, dt=1.0 / float(total_steps))
     return rows
 
@@ -3038,11 +3187,12 @@ def _candidate_train_selection_score(metrics: dict[str, Any], expr: Expr) -> flo
     term_train = float(metrics.get("term_linear_fit_train_r2", metrics.get("train_r2", -1.0e9)))
     global_train = float(metrics.get("train_r2", -1.0e9))
     fitted_gap = max(0.0, max(term_train, global_train) - raw_train - 0.25)
+    raw_guard = max(raw_train, -1.0)
     return float(
-        0.55 * raw_train
-        + 0.35 * term_train
-        + 0.10 * global_train
-        - 0.50 * fitted_gap
+        0.70 * term_train
+        + 0.25 * global_train
+        + 0.05 * raw_guard
+        - 0.02 * fitted_gap
         - 1.0e-3 * float(expr.complexity)
     )
 
@@ -3341,7 +3491,7 @@ def select_best_rollout(
         semantic_matrix = torch.stack([row["_semantic_vector"] for row in candidate_records], dim=0).float()
         pairwise = (semantic_matrix[:, None, :] - semantic_matrix[None, :, :]).square().mean(dim=-1)
         medoid_distance = pairwise.mean(dim=1)
-        selected_index = min(
+        medoid_index = min(
             range(len(candidate_records)),
             key=lambda index: (
                 float(medoid_distance[index]),
@@ -3349,14 +3499,38 @@ def select_best_rollout(
                 int(candidate_records[index]["expr"].complexity),
             ),
         )
+        fit_index = max(
+            range(len(candidate_records)),
+            key=lambda index: (
+                float(candidate_records[index].get("diagnostic_affine_term_selection_score", -1.0e9)),
+                float(candidate_records[index].get("term_linear_fit_train_r2", -1.0e9)),
+                float(candidate_records[index].get("train_r2", -1.0e9)),
+                -int(candidate_records[index]["expr"].complexity),
+            ),
+        )
+        selection_mode = str(getattr(args, "eval_oracle_free_selection_mode", "train_fit"))
+        selected_index = medoid_index if selection_mode == "semantic_medoid" else fit_index
         for index, population_row in enumerate(population_rows):
             population_row["oracle_free_population_medoid_distance"] = float(medoid_distance[index])
-            population_row["oracle_free_population_medoid_selected"] = float(index == selected_index)
+            population_row["oracle_free_population_medoid_selected"] = float(index == medoid_index)
+            population_row["oracle_free_population_train_fit_selected"] = float(index == fit_index)
+            population_row["oracle_free_population_selected"] = float(index == selected_index)
         best = dict(candidate_records[selected_index])
         best.pop("_semantic_vector", None)
-        best["selection_score"] = -float(medoid_distance[selected_index])
-        best["eval_oracle_free_selection"] = "raw_semantic_population_medoid"
+        if selection_mode == "semantic_medoid":
+            best["selection_score"] = -float(medoid_distance[selected_index])
+            best["eval_oracle_free_selection"] = "raw_semantic_population_medoid"
+        else:
+            best["selection_score"] = float(best.get("diagnostic_affine_term_selection_score", -1.0e9))
+            best["eval_oracle_free_selection"] = "train_fit_score"
         best["eval_oracle_free_medoid_distance"] = float(medoid_distance[selected_index])
+        best["eval_oracle_free_selection_mode"] = selection_mode
+        best["eval_oracle_free_medoid_candidate_expression"] = str(candidate_records[medoid_index]["raw_expression"])
+        best["eval_oracle_free_train_fit_candidate_expression"] = str(candidate_records[fit_index]["raw_expression"])
+        best["eval_oracle_free_train_fit_score"] = float(
+            candidate_records[fit_index].get("diagnostic_affine_term_selection_score", -1.0e9)
+        )
+        best["eval_oracle_free_medoid_score"] = -float(medoid_distance[medoid_index])
         selected_expression = str(best["raw_expression"])
         best["eval_oracle_free_medoid_expression_share"] = float(
             hard_mode_counts.get(selected_expression, 0) / max(sum(hard_mode_counts.values()), 1)
@@ -4108,9 +4282,10 @@ def _inherit_graph_architecture_from_checkpoint(
         or objective_version == "one_step_semantic_fisher_cycle_v3_constrained_single_expression"
     )
     legacy_allowed = bool(getattr(args, "legacy_v2_eval", False)) and bool(args.eval_only) and legacy_objective
-    if objective_version != ONE_STEP_FISHER_OBJECTIVE_VERSION and not legacy_allowed:
+    current_objective = objective_version in {ONE_STEP_FISHER_OBJECTIVE_VERSION, V5_OBJECTIVE_VERSION}
+    if not current_objective and not legacy_allowed:
         raise ValueError(
-            "checkpoint objective is incompatible with lineage-proximal training; legacy cycles require "
+            "checkpoint objective is incompatible with semantic Fisher training; legacy cycles require "
             "--eval-only --legacy-cycle-eval"
         )
     setattr(args, "_legacy_v2_checkpoint", bool(legacy_allowed))
@@ -4299,6 +4474,7 @@ def _v3_aggregate_trace_particles(
     gt_particles: list[dict[str, Any]],
     *,
     gt_anchor_alpha: float,
+    semantic_energy_mode: str = "fit_r2_first",
     semantic_scorer: Any | None = None,
 ) -> list[dict[str, Any]]:
     if not flow_particles:
@@ -4365,16 +4541,44 @@ def _v3_aggregate_trace_particles(
     raw_signature = torch.tensor([float(row["v3_raw_signature_distance"]) for row in atoms], dtype=torch.float32)
     reachability = torch.tensor([float(row["v3_register_reachability_mean"]) for row in atoms], dtype=torch.float32)
     complexity = torch.tensor([float(row["v3_complexity_over_layers"]) for row in atoms], dtype=torch.float32)
-    energy = (
-        0.55 * _v3_robust_unit_scale(raw_nmse)
-        + 0.30 * _v3_robust_unit_scale(raw_signature)
-        + 0.10 * reachability
-        + 0.05 * complexity
-    )
+    mode = str(semantic_energy_mode)
+    if mode == "raw_semantic":
+        energy = (
+            0.55 * _v3_robust_unit_scale(raw_nmse)
+            + 0.30 * _v3_robust_unit_scale(raw_signature)
+            + 0.10 * reachability
+            + 0.05 * complexity
+        )
+    elif mode == "fit_r2_first":
+        term_nmse = torch.tensor(
+            [
+                float(row.get("heldout_term_linear_fit_nmse", row.get("heldout_fitted_nmse", row["v3_raw_nmse"])))
+                for row in atoms
+            ],
+            dtype=torch.float32,
+        )
+        affine_nmse = torch.tensor(
+            [float(row.get("heldout_fitted_nmse", row["v3_raw_nmse"])) for row in atoms],
+            dtype=torch.float32,
+        )
+        best_fit_nmse = torch.minimum(term_nmse, affine_nmse)
+        fit_gap = torch.tensor([float(row.get("fitted_only_gap_penalty", 0.0)) for row in atoms], dtype=torch.float32)
+        coeff_penalty = torch.tensor([float(row.get("coefficient_stability_penalty", 0.0)) for row in atoms], dtype=torch.float32)
+        energy = (
+            0.70 * _v3_robust_unit_scale(best_fit_nmse)
+            + 0.10 * _v3_robust_unit_scale(raw_nmse)
+            + 0.08 * reachability
+            + 0.05 * complexity
+            + 0.04 * _v3_robust_unit_scale(fit_gap)
+            + 0.03 * _v3_robust_unit_scale(coeff_penalty)
+        )
+    else:
+        raise ValueError(f"unknown cycle semantic energy mode: {mode}")
     for index, atom in enumerate(atoms):
         atom["prior_weight"] = float(prior[index])
         atom["v3_raw_nmse_normalized"] = float(_v3_robust_unit_scale(raw_nmse)[index])
         atom["v3_raw_signature_normalized"] = float(_v3_robust_unit_scale(raw_signature)[index])
+        atom["v3_semantic_energy_mode"] = mode
         atom["v3_semantic_energy"] = float(energy[index])
     return atoms
 
@@ -5417,6 +5621,7 @@ def collect_v3_semantic_fisher_couplings(
                 flow_particles,
                 gt_particles,
                 gt_anchor_alpha=gt_anchor_alpha,
+                semantic_energy_mode=str(getattr(args, "cycle_semantic_energy_mode", "fit_r2_first")),
                 semantic_scorer=lambda atom: _v3_trace_particle(
                     flow.template,
                     [int(value) for value in atom["choices"]],
@@ -6868,7 +7073,7 @@ def write_outer_iteration_coupling_figure(
     usable = [
         dict(row)
         for row in rows
-        if str(row.get("point_kind", "")) in {"flow", "proximal_target", "gt_cell"}
+        if str(row.get("point_kind", "")) in {"flow", "semantic_target", "proximal_target", "gt_cell"}
         and isinstance(row.get("parameter_vector"), list)
         and isinstance(row.get("semantic_vector"), list)
     ]
@@ -7001,7 +7206,9 @@ def write_outer_iteration_coupling_figure(
                 if time_index != len(times) - 1:
                     continue
                 endpoint = lineage[-1]
-                proximal = rows_for(iteration, source_index, "proximal_target")
+                proximal = rows_for(iteration, source_index, "semantic_target")
+                if not proximal:
+                    proximal = rows_for(iteration, source_index, "proximal_target")
                 gt_cells = rows_for(iteration, source_index, "gt_cell")
                 for axis, key in (
                     (parameter_axis, "_parameter_xy"),
@@ -7042,7 +7249,7 @@ def write_outer_iteration_coupling_figure(
     legend = [
         Line2D([0], [0], color="#475569", linewidth=1.4, label="learned ODE trajectory"),
         Line2D([0], [0], marker="o", color="none", markerfacecolor="white", markeredgecolor="#475569", label=r"source $\theta_0$"),
-        Line2D([0], [0], marker="D", color="none", markerfacecolor="white", markeredgecolor="#475569", label="accepted local proximal target"),
+        Line2D([0], [0], marker="D", color="none", markerfacecolor="white", markeredgecolor="#475569", label="Poisson semantic correction"),
         Line2D([0], [0], marker="*", color="none", markerfacecolor="#f59e0b", markeredgecolor="#7c2d12", markersize=10, label="nearest compiled GT cell (diagnostic)"),
     ]
     figure.legend(
@@ -7055,7 +7262,7 @@ def write_outer_iteration_coupling_figure(
     )
     figure.suptitle(
         f"Outer-iteration Fisher flow coupling landscape — {task_id}\n"
-        "color = fixed source lineage; dashed = accepted local correction; dotted = GT diagnostic gap",
+        "color = fixed source particle; dashed = same-particle semantic correction; dotted = GT diagnostic gap",
         fontsize=11,
     )
     svg_path = out_dir / "outer_iteration_flow_coupling.svg"
@@ -7199,7 +7406,515 @@ def _cycle_eval_summary(records: list[dict[str, Any]], *, model_role: str) -> di
     }
 
 
-def run_one_step_semantic_fisher_cycle(
+def _v5_crossfit_expression_energy(
+    expr: Expr,
+    task: TaskBundle,
+    *,
+    max_abs: float,
+) -> dict[str, Any]:
+    """Evaluate one decoded expression with a deterministic 80/20 fit split."""
+    try:
+        values = sanitize_values(eval_expr(expr, task.x_train), clip=float(max_abs)).float()
+        target = sanitize_values(task.y_train.float(), clip=float(max_abs)).to(values.device)
+        count = int(values.numel())
+        if count < 4:
+            raise ValueError("cross-fit energy requires at least four task points")
+        generator = torch.Generator(device=values.device).manual_seed(_stable_task_seed(task.task_id) + 50_021)
+        order = torch.randperm(count, generator=generator, device=values.device)
+        support_count = min(max(int(round(0.8 * count)), 2), count - 1)
+        support = order[:support_count]
+        query = order[support_count:]
+        support_values = values.index_select(0, support)
+        support_target = target.index_select(0, support)
+        query_values = values.index_select(0, query)
+        query_target = target.index_select(0, query)
+        fitted_query, coefficients = fit_affine(support_values, support_target, query_values)
+        fitted_r2 = float(r2_score(query_target.detach().cpu().numpy(), fitted_query.detach().cpu().numpy()))
+        raw_r2 = float(r2_score(query_target.detach().cpu().numpy(), query_values.detach().cpu().numpy()))
+        if not math.isfinite(fitted_r2):
+            raise ValueError("non-finite cross-fit R2")
+        return {
+            "semantic_energy": float(min(max(1.0 - fitted_r2, 0.0), 10.0)),
+            "crossfit_fitted_r2": fitted_r2,
+            "crossfit_raw_r2": raw_r2 if math.isfinite(raw_r2) else -1.0e9,
+            "crossfit_scale": float(coefficients[0]),
+            "crossfit_intercept": float(coefficients[1]),
+            "crossfit_support_count": int(support_count),
+            "crossfit_query_count": int(query.numel()),
+            "semantic_invalid": 0.0,
+        }
+    except Exception as exc:  # noqa: BLE001 - invalid symbolic programs are finite-energy particles.
+        return {
+            "semantic_energy": 10.0,
+            "crossfit_fitted_r2": -1.0e9,
+            "crossfit_raw_r2": -1.0e9,
+            "crossfit_scale": 0.0,
+            "crossfit_intercept": 0.0,
+            "crossfit_support_count": 0,
+            "crossfit_query_count": 0,
+            "semantic_invalid": 1.0,
+            "semantic_error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _train_v5_base_flow(
+    base: TaskConditionedVelocityNetV5,
+    examples: list[CycleCoupledExample],
+    args: argparse.Namespace,
+    device: torch.device,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if not examples:
+        raise RuntimeError("v5 GT bootstrap requires compiled bridge examples")
+    optimizer = torch.optim.AdamW(base.parameters(), lr=float(args.lr), weight_decay=float(args.weight_decay))
+    rng = random.Random(int(args.seed) + 91_001)
+    curve: list[dict[str, Any]] = []
+    best = float("inf")
+    best_state: dict[str, torch.Tensor] | None = None
+    for epoch in range(max(int(args.epochs), 1)):
+        losses: list[float] = []
+        zero_losses: list[float] = []
+        for _step in range(max(int(args.steps_per_epoch), 1)):
+            optimizer.zero_grad(set_to_none=True)
+            batch: list[torch.Tensor] = []
+            for _ in range(max(int(args.train_batch_size), 1)):
+                example = rng.choice(examples)
+                t = sample_cycle_time(
+                    rng,
+                    len(losses) + len(batch),
+                    "stratified_fisher",
+                    inherited_mode="uniform",
+                    low_prob=0.0,
+                    low_max=0.1,
+                )
+                theta_t, target = stage1_simplex_path(
+                    example.theta0.to(device),
+                    example.theta1.to(device),
+                    base.template,
+                    float(t),
+                )
+                predicted = base(example.task.x_train.to(device), example.task.y_train.to(device), theta_t, float(t))
+                weights = example.active_mask.to(device).float()
+                loss, _ = stage1_velocity_loss(
+                    theta_t,
+                    predicted,
+                    target,
+                    base.template,
+                    weights,
+                    eps=float(args.fisher_eps),
+                )
+                zero, _ = stage1_velocity_loss(
+                    theta_t,
+                    torch.zeros_like(target),
+                    target,
+                    base.template,
+                    weights,
+                    eps=float(args.fisher_eps),
+                )
+                batch.append(loss)
+                zero_losses.append(float(zero.detach().cpu()))
+            objective = torch.stack(batch).mean()
+            objective.backward()
+            torch.nn.utils.clip_grad_norm_(base.parameters(), float(args.grad_clip))
+            optimizer.step()
+            losses.append(float(objective.detach().cpu()))
+        mean_loss = float(np.mean(losses)) if losses else 0.0
+        if mean_loss < best:
+            best = mean_loss
+            best_state = {key: value.detach().cpu().clone() for key, value in base.state_dict().items()}
+        row = {
+            "phase": "v5_gt_bootstrap",
+            "epoch": int(epoch + 1),
+            "flow_fisher_velocity_loss": mean_loss,
+            "flow_zero_predictor_loss": float(np.mean(zero_losses)) if zero_losses else 0.0,
+            "flow_relative_fisher_loss": float(mean_loss / max(float(np.mean(zero_losses)), 1.0e-12)) if zero_losses else None,
+        }
+        curve.append(row)
+        if bool(args.log_epochs):
+            print(json.dumps(row), flush=True)
+    if best_state is not None:
+        base.load_state_dict({key: value.to(device) for key, value in best_state.items()})
+    summary = dict(curve[-1])
+    summary["best_flow_fisher_velocity_loss"] = float(best)
+    return curve, summary
+
+
+def _collect_v5_endpoint_populations(
+    flow: PoissonResidualVelocityV5,
+    tasks: list[TaskBundle],
+    args: argparse.Namespace,
+    device: torch.device,
+    *,
+    iteration: int,
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]], dict[str, Any]]:
+    started = time.perf_counter()
+    task_limit = int(getattr(args, "cycle_collection_task_limit", 0))
+    selected_tasks = list(tasks[:task_limit]) if task_limit > 0 else list(tasks)
+    particle_count = max(int(args.cycle_particles_per_task), 1)
+    generator = torch.Generator(device=device).manual_seed(int(args.seed) + 100_003 * int(iteration))
+    populations: dict[str, list[dict[str, Any]]] = {}
+    landscape: list[dict[str, Any]] = []
+    energies: list[float] = []
+    fitted_r2: list[float] = []
+    raw_r2: list[float] = []
+    invalid: list[float] = []
+    for task_index, task in enumerate(selected_tasks):
+        rows: list[dict[str, Any]] = []
+        capture = task_index < max(int(getattr(args, "cycle_landscape_task_limit", 1)), 0)
+        for source_index in range(particle_count):
+            theta0 = random_theta(
+                flow.template,
+                scale=float(args.theta0_noise_scale),
+                device=device,
+                generator=generator,
+            )
+            if capture and source_index < max(int(getattr(args, "cycle_landscape_sources", 4)), 0):
+                endpoint, rollout_diag, snapshots = rollout_with_snapshots(
+                    flow,
+                    task,
+                    theta0,
+                    steps=int(args.cycle_proposer_rollout_steps),
+                    snapshot_count=int(args.cycle_landscape_time_points),
+                )
+                for snapshot_t, snapshot in snapshots:
+                    landscape.append(_lineage_landscape_row(
+                        flow.template,
+                        task,
+                        snapshot,
+                        iteration=int(iteration),
+                        source_index=int(source_index),
+                        t=float(snapshot_t),
+                        point_kind="flow",
+                    ))
+            else:
+                endpoint, rollout_diag = rollout(
+                    flow,
+                    None,
+                    task,
+                    theta0,
+                    steps=int(args.cycle_proposer_rollout_steps),
+                    mode="off",
+                    args=args,
+                    generator=generator,
+                )
+            choices = hard_decode_choices(endpoint, flow.template)
+            expr, terms, _layers = execute_choices(flow.template, choices)
+            energy_diag = _v5_crossfit_expression_energy(
+                expr,
+                task,
+                max_abs=float(args.term_fit_max_abs),
+            )
+            probabilities = masked_block_softmax(
+                endpoint.view(len(flow.template.blocks), int(flow.template.source_count)),
+                flow.template,
+            )
+            row = {
+                "task": task,
+                "task_id": task.task_id,
+                "source_index": int(source_index),
+                "theta0": theta0.detach(),
+                "reference_theta1": endpoint.detach(),
+                "reference_probabilities": probabilities.detach(),
+                "choices": tuple(int(value) for value in choices),
+                "expression": to_string(expr, int(task.num_vars), simplify=False),
+                "terms": terms,
+                **energy_diag,
+                **rollout_diag,
+            }
+            rows.append(row)
+            energies.append(float(energy_diag["semantic_energy"]))
+            fitted_r2.append(float(energy_diag["crossfit_fitted_r2"]))
+            raw_r2.append(float(energy_diag["crossfit_raw_r2"]))
+            invalid.append(float(energy_diag["semantic_invalid"]))
+        populations[task.task_id] = rows
+    summary = {
+        "phase": "v5_endpoint_collection",
+        "iteration": int(iteration),
+        "task_count": int(len(populations)),
+        "particle_count": int(sum(len(rows) for rows in populations.values())),
+        "expression_evaluations": int(sum(len(rows) for rows in populations.values())),
+        "semantic_energy_mean": float(np.mean(energies)) if energies else None,
+        "crossfit_fitted_r2_mean": float(np.mean(fitted_r2)) if fitted_r2 else None,
+        "crossfit_raw_r2_mean": float(np.mean(raw_r2)) if raw_r2 else None,
+        "semantic_invalid_rate": float(np.mean(invalid)) if invalid else None,
+        "collection_runtime_sec": float(time.perf_counter() - started),
+    }
+    return populations, landscape, summary
+
+
+def _fit_v5_semantic_potential(
+    template: Any,
+    populations: dict[str, list[dict[str, Any]]],
+    args: argparse.Namespace,
+    device: torch.device,
+    *,
+    iteration: int,
+) -> tuple[ConditionalSemanticPotentialV5, list[dict[str, Any]], dict[str, Any]]:
+    potential = ConditionalSemanticPotentialV5(template, int(args.hidden)).to(device)
+    optimizer = torch.optim.Adam(potential.parameters(), lr=float(args.cycle_poisson_lr))
+    rng = random.Random(int(args.seed) + 110_017 * int(iteration))
+    task_rows = [rows for rows in populations.values() if rows]
+    curve: list[dict[str, Any]] = []
+    if not task_rows:
+        raise RuntimeError("v5 Poisson potential requires endpoint populations")
+    for step in range(max(int(args.cycle_poisson_steps), 1)):
+        optimizer.zero_grad(set_to_none=True)
+        batch_losses: list[torch.Tensor] = []
+        batch_diags: list[dict[str, float]] = []
+        for rows in rng.sample(task_rows, k=min(max(int(args.train_batch_size), 1), len(task_rows))):
+            task = rows[0]["task"]
+            probabilities = torch.stack([row["reference_probabilities"] for row in rows], dim=0).to(device).detach().requires_grad_(True)
+            energy = torch.tensor([float(row["semantic_energy"]) for row in rows], dtype=probabilities.dtype, device=device)
+            phi = potential(probabilities, task.x_train.to(device), task.y_train.to(device))
+            result = weighted_poisson_loss(
+                phi,
+                probabilities,
+                energy,
+                action_mask=graph_action_mask(template, device=device),
+                create_graph=True,
+                eps=float(args.fisher_eps),
+            )
+            batch_losses.append(result.loss)
+            batch_diags.append(poisson_summary(result))
+        loss = torch.stack(batch_losses).mean()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(potential.parameters(), float(args.grad_clip))
+        optimizer.step()
+        row = {
+            "phase": "v5_weighted_poisson",
+            "iteration": int(iteration),
+            "step": int(step + 1),
+            "poisson_loss": float(loss.detach().cpu()),
+            "poisson_dirichlet": float(np.mean([diag["dirichlet"] for diag in batch_diags])),
+            "poisson_source": float(np.mean([diag["source"] for diag in batch_diags])),
+            "poisson_energy_variance": float(np.mean([diag["energy_variance"] for diag in batch_diags])),
+            "poisson_tangent_mass_error": float(max(diag["tangent_mass_error"] for diag in batch_diags)),
+        }
+        curve.append(row)
+        if bool(args.log_epochs) and (step + 1 == int(args.cycle_poisson_steps) or (step + 1) % 16 == 0):
+            print(json.dumps(row), flush=True)
+    return potential, curve, dict(curve[-1])
+
+
+def _correct_v5_populations(
+    template: Any,
+    potential: ConditionalSemanticPotentialV5,
+    populations: dict[str, list[dict[str, Any]]],
+    args: argparse.Namespace,
+    device: torch.device,
+    *,
+    iteration: int,
+) -> tuple[list[V5ResidualExample], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    examples: list[V5ResidualExample] = []
+    correction_rows: list[dict[str, Any]] = []
+    landscape: list[dict[str, Any]] = []
+    collapse_count = 0
+    step_size = float(args.cycle_correction_step)
+    fisher_steps: list[float] = []
+    for rows in populations.values():
+        task = rows[0]["task"]
+        probabilities = torch.stack([row["reference_probabilities"] for row in rows], dim=0).to(device).detach().requires_grad_(True)
+        energies = torch.tensor([float(row["semantic_energy"]) for row in rows], dtype=probabilities.dtype, device=device)
+        variance = float(energies.var(unbiased=False).detach().cpu())
+        collapsed = variance < float(args.cycle_support_variance_eps)
+        if collapsed:
+            collapse_count += 1
+            tangent = torch.zeros_like(probabilities)
+            corrected = probabilities.detach()
+            poisson_diag = {"energy_variance": variance, "tangent_mass_error": 0.0}
+        else:
+            phi = potential(probabilities, task.x_train.to(device), task.y_train.to(device))
+            result = weighted_poisson_loss(
+                phi,
+                probabilities,
+                energies,
+                action_mask=graph_action_mask(template, device=device),
+                create_graph=False,
+                eps=float(args.fisher_eps),
+            )
+            tangent = result.tangent.detach()
+            corrected = exponential_fisher_correction(
+                probabilities.detach(),
+                tangent,
+                step_size,
+                action_mask=graph_action_mask(template, device=device),
+                eps=float(args.fisher_eps),
+            )
+            poisson_diag = poisson_summary(result)
+        for particle_index, row in enumerate(rows):
+            corrected_theta = logits_from_block_probabilities(
+                [corrected[particle_index, block] for block in range(int(corrected.shape[1]))],
+                template,
+                eps=float(args.fisher_eps),
+            )
+            source_probability = probabilities.detach()[particle_index]
+            target_probability = corrected[particle_index]
+            step_blocks = torch.sqrt(
+                torch.stack([
+                    block_fisher_squared_distance(
+                        source_probability[block:block + 1],
+                        target_probability[block:block + 1],
+                        torch.ones(1, dtype=torch.bool, device=device),
+                    )
+                    for block in range(int(source_probability.shape[0]))
+                ]).clamp_min(0.0)
+            )
+            fisher_step = float(torch.sqrt(step_blocks.square().mean()).detach().cpu())
+            fisher_steps.append(fisher_step)
+            examples.append(V5ResidualExample(
+                task=task,
+                theta0=row["theta0"].detach(),
+                reference_theta1=row["reference_theta1"].detach(),
+                corrected_theta1=corrected_theta.detach(),
+                source_index=int(row["source_index"]),
+                energy=float(row["semantic_energy"]),
+                diagnostics={
+                    "support_collapsed": float(collapsed),
+                    "semantic_energy_variance": variance,
+                    "endpoint_correction_fr_rms": fisher_step,
+                    **poisson_diag,
+                },
+            ))
+            correction_rows.append({
+                "iteration": int(iteration),
+                "task_id": task.task_id,
+                "source_index": int(row["source_index"]),
+                "expression": str(row["expression"]),
+                "semantic_energy": float(row["semantic_energy"]),
+                "crossfit_fitted_r2": float(row["crossfit_fitted_r2"]),
+                "crossfit_raw_r2": float(row["crossfit_raw_r2"]),
+                "support_collapsed": float(collapsed),
+                "endpoint_correction_fr_rms": fisher_step,
+            })
+            if int(row["source_index"]) < max(int(getattr(args, "cycle_landscape_sources", 4)), 0):
+                landscape.append(_lineage_landscape_row(
+                    template,
+                    task,
+                    corrected_theta,
+                    iteration=int(iteration),
+                    source_index=int(row["source_index"]),
+                    t=1.0,
+                    point_kind="semantic_target",
+                ))
+    summary = {
+        "phase": "v5_same_particle_correction",
+        "iteration": int(iteration),
+        "residual_example_count": int(len(examples)),
+        "support_collapse_task_count": int(collapse_count),
+        "support_collapse_task_rate": float(collapse_count / max(len(populations), 1)),
+        "endpoint_correction_fr_rms_mean": float(np.mean(fisher_steps)) if fisher_steps else 0.0,
+        "endpoint_correction_fr_rms_p95": float(np.quantile(fisher_steps, 0.95)) if fisher_steps else 0.0,
+    }
+    return examples, correction_rows, landscape, summary
+
+
+def _train_v5_residual_head(
+    flow: PoissonResidualVelocityV5,
+    examples: list[V5ResidualExample],
+    args: argparse.Namespace,
+    device: torch.device,
+    *,
+    iteration: int,
+) -> tuple[ResidualVelocityHeadV5 | None, list[dict[str, Any]], dict[str, Any]]:
+    usable = [example for example in examples if float(example.diagnostics.get("support_collapsed", 0.0)) < 0.5]
+    if not usable:
+        return None, [], {
+            "phase": "v5_residual_skipped",
+            "iteration": int(iteration),
+            "skip_reason": "all_task_populations_have_zero_semantic_variance",
+        }
+    for parameter in flow.parameters():
+        parameter.requires_grad_(False)
+    head = ResidualVelocityHeadV5(flow.template, int(args.hidden)).to(device)
+    optimizer = torch.optim.AdamW(head.parameters(), lr=float(args.cycle_flow_lr), weight_decay=float(args.weight_decay))
+    rng = random.Random(int(args.seed) + 120_011 * int(iteration))
+    step_size = float(args.cycle_correction_step)
+    curve: list[dict[str, Any]] = []
+    best = float("inf")
+    best_state: dict[str, torch.Tensor] | None = None
+    for epoch in range(max(int(args.cycle_flow_epochs), 1)):
+        losses: list[float] = []
+        zero_losses: list[float] = []
+        for step in range(max(int(args.cycle_steps_per_epoch), 1)):
+            optimizer.zero_grad(set_to_none=True)
+            batch: list[torch.Tensor] = []
+            for batch_index in range(max(int(args.train_batch_size), 1)):
+                example = rng.choice(usable)
+                t = sample_cycle_time(
+                    rng,
+                    epoch * max(int(args.cycle_steps_per_epoch), 1) + step + batch_index,
+                    str(args.cycle_time_sampling),
+                    inherited_mode=str(args.time_sampling),
+                    low_prob=float(args.low_t_sampling_prob),
+                    low_max=float(args.low_t_max),
+                )
+                theta_t, corrected_velocity = stage1_simplex_path(
+                    example.theta0.to(device),
+                    example.corrected_theta1.to(device),
+                    flow.template,
+                    float(t),
+                )
+                with torch.no_grad():
+                    reference_velocity = flow(
+                        example.task.x_train.to(device),
+                        example.task.y_train.to(device),
+                        theta_t,
+                        float(t),
+                    )
+                    target_residual = (corrected_velocity - reference_velocity) / max(step_size, 1.0e-8)
+                predicted = head(
+                    example.task.x_train.to(device),
+                    example.task.y_train.to(device),
+                    theta_t,
+                    float(t),
+                )
+                block_weights = torch.ones(len(flow.template.blocks), dtype=torch.float32, device=device)
+                loss, _ = stage1_velocity_loss(
+                    theta_t,
+                    predicted,
+                    target_residual,
+                    flow.template,
+                    block_weights,
+                    eps=float(args.fisher_eps),
+                )
+                zero, _ = stage1_velocity_loss(
+                    theta_t,
+                    torch.zeros_like(target_residual),
+                    target_residual,
+                    flow.template,
+                    block_weights,
+                    eps=float(args.fisher_eps),
+                )
+                batch.append(loss)
+                zero_losses.append(float(zero.detach().cpu()))
+            objective = torch.stack(batch).mean()
+            objective.backward()
+            torch.nn.utils.clip_grad_norm_(head.parameters(), float(args.grad_clip))
+            optimizer.step()
+            losses.append(float(objective.detach().cpu()))
+        mean_loss = float(np.mean(losses)) if losses else 0.0
+        zero_mean = float(np.mean(zero_losses)) if zero_losses else 0.0
+        if mean_loss < best:
+            best = mean_loss
+            best_state = {key: value.detach().cpu().clone() for key, value in head.state_dict().items()}
+        row = {
+            "phase": "v5_residual_fisher_matching",
+            "iteration": int(iteration),
+            "epoch": int(epoch + 1),
+            "residual_fisher_loss": mean_loss,
+            "residual_zero_predictor_loss": zero_mean,
+            "residual_relative_fisher_loss": float(mean_loss / max(zero_mean, 1.0e-12)),
+        }
+        curve.append(row)
+        if bool(args.log_epochs):
+            print(json.dumps(row), flush=True)
+    if best_state is not None:
+        head.load_state_dict({key: value.to(device) for key, value in best_state.items()})
+    for parameter in flow.parameters():
+        parameter.requires_grad_(False)
+    return head, curve, dict(curve[-1])
+
+
+def run_legacy_one_step_semantic_fisher_cycle(
     args: argparse.Namespace,
     *,
     template: Any,
@@ -7292,7 +8007,7 @@ def run_one_step_semantic_fisher_cycle(
             iteration=0,
         )
         train_curve.extend({**row, "phase": "flow_gt_bootstrap_v4"} for row in flow_bootstrap_curve)
-        for iteration in range(1, max(int(args.cycle_iterations), 1) + 1):
+        for iteration in range(1, max(int(args.cycle_iterations), 0) + 1):
             examples, iteration_proposals, iteration_couplings, iteration_proximal, iteration_graph_rows, collection_summary = collect_lineage_proximal_couplings(
                 flow,
                 train_tasks,
@@ -7427,13 +8142,19 @@ def run_one_step_semantic_fisher_cycle(
             else "analytic_fisher_bridge_between_same_source_and_local_target"
         ),
         "endpoint_decode": str(getattr(args, "eval_endpoint_decode_mode", "hard_argmax")),
+        "eval_oracle_free_selection_mode": str(getattr(args, "eval_oracle_free_selection_mode", "train_fit")),
         "eval_terminal_retraction": bool(getattr(args, "eval_terminal_retraction", True)),
         "eval_terminal_retraction_eps": float(getattr(args, "eval_terminal_retraction_eps", -1.0)),
         "hard_endpoint_population": True,
         "cycle_soft_endpoint_samples_enabled": False,
         "semantic_tilt": "none_global_reweighting_local_raw_semantic_map_only",
         "semantic_tilt_distance": "not_used",
-        "semantic_coefficient_fit_mode": "diagnostic_only_not_in_v4_local_objective",
+        "cycle_semantic_energy_mode": str(getattr(args, "cycle_semantic_energy_mode", "fit_r2_first")),
+        "semantic_coefficient_fit_mode": (
+            "train_split_term_affine_fit_in_v4_local_objective"
+            if str(getattr(args, "cycle_semantic_energy_mode", "fit_r2_first")) == "fit_r2_first"
+            else "diagnostic_only_not_in_v4_local_objective"
+        ),
         "endpoint_projection": "nearest_local_single_expression_cell_from_reference_endpoint",
         "endpoint_projection_eps": float(args.cycle_projection_eps),
         "endpoint_projection_sharpness": 1.0,
@@ -7559,6 +8280,233 @@ def run_one_step_semantic_fisher_cycle(
     return {"summary": summary}
 
 
+def run_one_step_semantic_fisher_cycle(
+    args: argparse.Namespace,
+    *,
+    template: Any,
+    graph_family: str,
+    train_tasks: list[TaskBundle],
+    eval_tasks: list[TaskBundle],
+    source_counts: dict[str, int],
+    loaded_ckpt: dict[str, Any] | None,
+    device: torch.device,
+) -> dict[str, Any]:
+    """Run the route-free v5 weighted-Poisson residual Fisher cycle."""
+    if not _is_register_template(template):
+        raise ValueError("v5 requires register_categorical_blocks")
+    if int(template.output_terms) != 1:
+        raise ValueError("v5 requires --output-terms 1")
+    if str(getattr(args, "velocity_parameterization", "direct_velocity")) != "direct_velocity":
+        raise ValueError("v5 supports direct_velocity only")
+    if any(int(getattr(args, name, 0)) != 0 for name in ("cycle_mutation_samples", "cycle_elite_modes", "cycle_archive_size")):
+        raise ValueError("v5 forbids mutation, elite selection, and archives")
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model_kwargs = {
+        "global_state_mode": "full",
+        "metadata_embedding_dim": int(args.metadata_embedding_dim),
+        "task_encoder_mode": str(args.task_encoder_mode),
+        "task_conditioning": "xy",
+    }
+    base = TaskConditionedVelocityNetV5(template, int(args.hidden), **model_kwargs).to(device)
+    flow = PoissonResidualVelocityV5(base).to(device)
+    train_curve: list[dict[str, Any]] = []
+    correction_rows: list[dict[str, Any]] = []
+    landscape_rows: list[dict[str, Any]] = []
+    cycle_history: list[dict[str, Any]] = []
+    iteration_eval_records: list[dict[str, Any]] = []
+    iteration_eval_summaries: list[dict[str, Any]] = []
+    bootstrap_summary: dict[str, Any] = {}
+    bootstrap_count = 0
+
+    if loaded_ckpt is not None:
+        objective = str(loaded_ckpt.get("objective_version", ""))
+        if objective != V5_OBJECTIVE_VERSION:
+            raise ValueError("only semantic_poisson_residual_fisher_v5 checkpoints can resume v5")
+        stage_count = int(loaded_ckpt.get("residual_stage_count", 0))
+        raw_steps = loaded_ckpt.get("residual_step_sizes", [float(args.cycle_correction_step)] * stage_count)
+        for index in range(stage_count):
+            flow.add_residual(
+                ResidualVelocityHeadV5(template, int(args.hidden)).to(device),
+                float(raw_steps[index]),
+            )
+        flow.load_state_dict(loaded_ckpt["flow_model"])
+        loaded_summary = loaded_ckpt.get("summary", {})
+        if isinstance(loaded_summary, dict):
+            cycle_history = list(loaded_summary.get("cycle_history", []))
+            bootstrap_summary = dict(loaded_summary.get("bootstrap_training_summary", {}))
+    elif bool(args.eval_only):
+        raise ValueError("--eval-only requires a v5 checkpoint")
+    else:
+        bootstrap_examples = build_v3_gt_bootstrap_examples(base, train_tasks, args, device)
+        bootstrap_count = len(bootstrap_examples)
+        bootstrap_curve, bootstrap_summary = _train_v5_base_flow(base, bootstrap_examples, args, device)
+        train_curve.extend(bootstrap_curve)
+        for parameter in base.parameters():
+            parameter.requires_grad_(False)
+        for iteration in range(1, max(int(args.cycle_iterations), 0) + 1):
+            populations, iteration_landscape, collection_summary = _collect_v5_endpoint_populations(
+                flow,
+                train_tasks,
+                args,
+                device,
+                iteration=iteration,
+            )
+            landscape_rows.extend(iteration_landscape)
+            timeout = float(getattr(args, "cycle_collection_timeout_sec", 300.0))
+            if timeout > 0 and float(collection_summary["collection_runtime_sec"]) > timeout:
+                raise RuntimeError(
+                    f"v5 endpoint collection exceeded {timeout:.1f}s: "
+                    f"{float(collection_summary['collection_runtime_sec']):.1f}s"
+                )
+            potential, potential_curve, potential_summary = _fit_v5_semantic_potential(
+                template,
+                populations,
+                args,
+                device,
+                iteration=iteration,
+            )
+            train_curve.extend(potential_curve)
+            residual_examples, iteration_corrections, correction_landscape, correction_summary = _correct_v5_populations(
+                template,
+                potential,
+                populations,
+                args,
+                device,
+                iteration=iteration,
+            )
+            correction_rows.extend(iteration_corrections)
+            landscape_rows.extend(correction_landscape)
+            head, residual_curve, residual_summary = _train_v5_residual_head(
+                flow,
+                residual_examples,
+                args,
+                device,
+                iteration=iteration,
+            )
+            train_curve.extend(residual_curve)
+            if head is not None:
+                for parameter in head.parameters():
+                    parameter.requires_grad_(False)
+                flow.add_residual(head, float(args.cycle_correction_step))
+            cycle_summary = {
+                "iteration": int(iteration),
+                **collection_summary,
+                **potential_summary,
+                **correction_summary,
+                **residual_summary,
+                "residual_stage_count": int(len(flow.residual_heads)),
+            }
+            if not bool(args.train_only) and bool(args.cycle_eval_each_iteration):
+                records, _endpoints, _sweep = evaluate_model(
+                    flow,
+                    None,
+                    eval_tasks,
+                    args,
+                    device,
+                    progress_out_dir=out_dir / f"cycle_eval_iter_{iteration}_progress",
+                    progress_prefix=f"cycle_eval_iter_{iteration}",
+                )
+                records = [
+                    {**_cycle_eval_record(row, model_role="v5_poisson_residual_field"), "cycle_iteration": int(iteration)}
+                    for row in records
+                ]
+                iteration_summary = _cycle_eval_summary(records, model_role="v5_poisson_residual_field")
+                iteration_summary["iteration"] = int(iteration)
+                iteration_eval_records.extend(records)
+                iteration_eval_summaries.append(iteration_summary)
+                cycle_summary["iteration_eval"] = iteration_summary
+                _write_cycle_jsonl(out_dir / f"cycle_eval_iter_{iteration}_samples.jsonl", records)
+                (out_dir / f"cycle_eval_iter_{iteration}_summary.json").write_text(
+                    json.dumps(_jsonable(iteration_summary), indent=2, ensure_ascii=False) + "\n"
+                )
+            cycle_history.append(cycle_summary)
+            if bool(args.log_epochs):
+                print(json.dumps({"phase": "v5_cycle_complete", **cycle_summary}), flush=True)
+
+    flow_records: list[dict[str, Any]] = []
+    if not bool(args.train_only):
+        flow_records, _flow_endpoints, _flow_sweep = evaluate_model(
+            flow,
+            None,
+            eval_tasks,
+            args,
+            device,
+            progress_out_dir=out_dir / "flow_eval",
+            progress_prefix="flow",
+        )
+        flow_records = [_cycle_eval_record(row, model_role="v5_poisson_residual_field") for row in flow_records]
+    flow_summary = _cycle_eval_summary(flow_records, model_role="v5_poisson_residual_field")
+    summary = {
+        "algorithm": "complete_expression_semantic_fm",
+        "training_flow": "semantic_poisson_residual_fisher_cycle",
+        "objective_version": V5_OBJECTIVE_VERSION,
+        "construction_graph": str(args.construction_graph),
+        "construction_family": str(graph_family),
+        "task_conditioning": "xy",
+        "theta0_conditioning": "none",
+        "route_conditioning": "none",
+        "velocity_parameterization": "direct_velocity_residual",
+        "semantic_update": "weighted_poisson_minimum_fisher_kinetic",
+        "coupling": "same_particle_no_matching",
+        "matching": "none",
+        "mutation": "none",
+        "archive": "none",
+        "output_terms": 1,
+        "cycle_particles_per_task": int(args.cycle_particles_per_task),
+        "expressions_per_endpoint": 1,
+        "cycle_correction_step": float(args.cycle_correction_step),
+        "cycle_poisson_steps": int(args.cycle_poisson_steps),
+        "cycle_poisson_lr": float(args.cycle_poisson_lr),
+        "bootstrap_example_count": int(bootstrap_count),
+        "bootstrap_training_summary": bootstrap_summary,
+        "residual_stage_count": int(len(flow.residual_heads)),
+        "cycle_history": cycle_history,
+        "cycle_eval_history": iteration_eval_summaries,
+        "flow_eval": flow_summary,
+        "train_compiler": _cycle_compiler_metrics(train_tasks),
+        "eval_compiler": _cycle_compiler_metrics(eval_tasks),
+        "data_source_counts": source_counts,
+        "eval_terminal_retraction": bool(args.eval_terminal_retraction),
+        "eval_oracle_free_selection_mode": str(args.eval_oracle_free_selection_mode),
+        "train_only": bool(args.train_only),
+        "eval_only": bool(args.eval_only),
+    }
+    task_split = make_task_split(train_tasks, eval_tasks)
+    checkpoint = {
+        "algorithm": "complete_expression_semantic_fm",
+        "objective_version": V5_OBJECTIVE_VERSION,
+        "template": {
+            "construction_graph": str(args.construction_graph),
+            "num_vars": int(template.num_vars),
+            "num_layers": int(template.num_layers),
+            "num_registers": int(template.register_count),
+            "ops": list(template.ops),
+            "output_terms": 1,
+        },
+        "model_cfg": {
+            "hidden": int(args.hidden),
+            "metadata_embedding_dim": int(args.metadata_embedding_dim),
+            "task_encoder_mode": str(args.task_encoder_mode),
+            "theta0_conditioning": "none",
+        },
+        "residual_stage_count": int(len(flow.residual_heads)),
+        "residual_step_sizes": [float(value) for value in flow.residual_step_sizes.detach().cpu().tolist()],
+        "flow_model": flow.state_dict(),
+        "summary": summary,
+    }
+    _write_cycle_jsonl(out_dir / "one_step_cycle_train_curve.jsonl", train_curve)
+    _write_cycle_jsonl(out_dir / "v5_semantic_corrections.jsonl", correction_rows)
+    _write_cycle_jsonl(out_dir / "outer_iteration_flow_landscape.jsonl", landscape_rows)
+    _write_cycle_jsonl(out_dir / "cycle_eval_iterations.jsonl", iteration_eval_records)
+    _write_cycle_jsonl(out_dir / "one_step_cycle_samples.jsonl", flow_records)
+    summary["outer_iteration_flow_landscape"] = write_outer_iteration_coupling_figure(out_dir, landscape_rows)
+    (out_dir / "one_step_cycle_summary.json").write_text(json.dumps(_jsonable(summary), indent=2, ensure_ascii=False) + "\n")
+    (out_dir / "task_split.json").write_text(json.dumps(_jsonable(task_split), indent=2, ensure_ascii=False) + "\n")
+    torch.save(checkpoint, out_dir / "one_step_cycle_checkpoint.pt")
+    return {"summary": summary}
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if str(args.training_flow) != "one_step_semantic_fisher_cycle":
         raise ValueError("only one_step_semantic_fisher_cycle is supported")
@@ -7599,7 +8547,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         split="eval",
         copy_assignment=str(args.trace_copy_assignment),
     )
-    return run_one_step_semantic_fisher_cycle(
+    runner = run_legacy_one_step_semantic_fisher_cycle if bool(getattr(args, "legacy_v2_eval", False)) else run_one_step_semantic_fisher_cycle
+    return runner(
         args,
         template=template,
         graph_family=graph_family,
@@ -7613,7 +8562,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default="results/clean_benchmark_20260701/ablations/complete_expression_semantic_fm_20260707/runs/smoke_stage1")
+    parser.add_argument("--out", default="results/clean_benchmark/semantic_poisson_residual_fisher_v5/run")
     parser.add_argument("--manifest", default="data/benchmark_suites/benchmark_manifest.json")
     parser.add_argument("--manifest-root", default="data/benchmark_suites")
     parser.add_argument("--suites", nargs="+", default=["nguyen", "constant", "livermore", "jin"])
@@ -7646,7 +8595,7 @@ def main() -> None:
     parser.add_argument("--reference-state-sampler", choices=["bridge_path", "bridge_plus_random"], default="bridge_path")
     parser.add_argument("--reference-random-state-prob", type=float, default=0.0)
     parser.add_argument("--endpoint-attractor-min-remaining", type=float, default=0.05)
-    parser.add_argument("--velocity-parameterization", choices=["direct_velocity", "endpoint_bridge"], default="endpoint_bridge")
+    parser.add_argument("--velocity-parameterization", choices=["direct_velocity", "endpoint_bridge"], default="direct_velocity")
     parser.add_argument("--global-state-mode", choices=["summary", "full"], default="full")
     parser.add_argument("--metadata-embedding-dim", type=int, default=0)
     parser.add_argument("--task-encoder-mode", choices=["point_mlp", "stats", "hybrid_stats"], default="hybrid_stats")
@@ -7718,6 +8667,17 @@ def main() -> None:
     parser.add_argument("--cycle-expression-samples", type=int, default=0)
     parser.add_argument("--cycle-semantic-temperature", type=float, default=0.25)
     parser.add_argument("--cycle-semantic-kl-budget", type=float, default=0.10)
+    parser.add_argument("--cycle-poisson-steps", type=int, default=64)
+    parser.add_argument("--cycle-poisson-lr", type=float, default=1.0e-3)
+    parser.add_argument("--cycle-correction-step", type=float, default=0.10)
+    parser.add_argument("--cycle-support-variance-eps", type=float, default=1.0e-6)
+    parser.add_argument("--cycle-collection-timeout-sec", type=float, default=300.0)
+    parser.add_argument(
+        "--cycle-semantic-energy-mode",
+        choices=["fit_r2_first", "raw_semantic"],
+        default="fit_r2_first",
+        help="trace-posterior energy for the v4 semantic proximal step; raw_semantic keeps the old raw-output objective",
+    )
     parser.add_argument("--cycle-gt-anchor-alpha", type=float, default=-1.0)
     parser.add_argument("--cycle-correction-ratio-limit", type=float, default=0.25)
     parser.add_argument("--cycle-ot-entropy-scale", type=float, default=0.05)
@@ -7770,7 +8730,16 @@ def main() -> None:
     parser.add_argument("--eval-flow-gt-probe-samples", type=int, default=4)
     parser.add_argument("--eval-theta0-mode", choices=["deterministic_random", "random"], default="deterministic_random")
     parser.add_argument("--eval-endpoint-decode-mode", choices=["hard_argmax", "soft_sample"], default="hard_argmax")
-    parser.add_argument("--eval-terminal-retraction", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--eval-oracle-free-selection-mode",
+        choices=["train_fit", "semantic_medoid"],
+        default="train_fit",
+        help=(
+            "oracle-free candidate selection from multiple theta0 rollouts: "
+            "train_fit selects by train-split affine/term-fit score; semantic_medoid keeps the old population medoid diagnostic"
+        ),
+    )
+    parser.add_argument("--eval-terminal-retraction", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--eval-terminal-retraction-eps", type=float, default=-1.0)
     parser.add_argument("--eval-progress-interval", type=int, default=16)
     parser.add_argument("--eval-reference-field-oracle", action=argparse.BooleanOptionalAction, default=False)
