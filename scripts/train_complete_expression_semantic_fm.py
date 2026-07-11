@@ -4719,9 +4719,12 @@ def _train_semantic_base_flow(
                 predicted_batch = base.forward_batch(task.x_train.to(device), task.y_train.to(device), theta_batch, float(t))
                 task_losses: list[torch.Tensor] = []
                 for example, theta_t, predicted, target in zip(selected_examples, theta_batch, predicted_batch, target_batch):
-                    weights = example.active_mask.to(device).float()
+                    active = example.active_mask.to(device)
+                    weights = active.float()
+                    bootstrap_gate = active.repeat_interleave(int(base.template.source_count)).to(predicted.dtype)
+                    predicted = predicted * bootstrap_gate
                     active_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, weights, eps=float(args.fisher_eps))
-                    inactive = ~example.active_mask.to(device)
+                    inactive = ~active
                     inactive_loss, _ = stage1_velocity_loss(theta_t, predicted, target, base.template, inactive.float(), eps=float(args.fisher_eps))
                     loss = active_loss + float(getattr(args, "bootstrap_inactive_weight", 0.20)) * inactive_loss
                     zero, _ = stage1_velocity_loss(theta_t, torch.zeros_like(target), target, base.template, weights, eps=float(args.fisher_eps))
@@ -4732,7 +4735,6 @@ def _train_semantic_base_flow(
                     time_losses[time_key].append(float(active_loss.detach().cpu()))
                     predicted_blocks = stage1_velocity_block_losses(theta_t, predicted, target, base.template, eps=float(args.fisher_eps)).detach()
                     zero_blocks = stage1_velocity_block_losses(theta_t, torch.zeros_like(predicted), target, base.template, eps=float(args.fisher_eps)).detach()
-                    active = example.active_mask.to(device)
                     predicted_active = float(predicted_blocks[active].sum().cpu())
                     zero_active = float(zero_blocks[active].sum().cpu())
                     relative_sums["global"][0] += predicted_active
